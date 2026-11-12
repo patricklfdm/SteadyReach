@@ -33,9 +33,9 @@ def create():
                     return self.send(200,core.view(route.split('/',1)[1]))
                 if route.startswith('file/'):
                     path=safe_path(ROOT,route[5:])
-                    if not path.is_relative_to(ROOT/'projects') or path.suffix.lower() not in ('.pdf','.docx','.json','.txt','.csv','.png','.jpg'):raise ValueError('Unsupported artifact')
+                    if not path.is_relative_to(ROOT/'projects') or path.suffix.lower() not in ('.pdf','.docx','.json','.txt','.csv','.png','.jpg','.jpeg'):raise ValueError('Unsupported artifact')
                     return self.send(200,path.read_bytes(),mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
-                assets={'':('app.html','text/html; charset=utf-8'),'app.js':('app.js','application/javascript; charset=utf-8'),'app_editor.js':('app_editor.js','application/javascript; charset=utf-8'),'app.css':('app.css','text/css; charset=utf-8')}
+                assets={'':('app.html','text/html; charset=utf-8'),'app.js':('app.js','application/javascript; charset=utf-8'),'app_editor.js':('app_editor.js','application/javascript; charset=utf-8'),'app_sources.js':('app_sources.js','application/javascript; charset=utf-8'),'app.css':('app.css','text/css; charset=utf-8')}
                 if route not in assets:return self.send(404,dict(error='Not found'))
                 file,mime=assets[route];self.send(200,(ROOT/'ras_workflow/templates'/file).read_bytes(),mime)
             except Exception as e:self.send(400,dict(error=str(e)))
@@ -60,6 +60,11 @@ def create():
                     elif route=='use-native-values':result=core.use_native_values(key,body)
                     elif route=='candidate':result=core.use_candidate(key,body)
                     elif route=='prepare':result=core.launch(key,'prepare')
+                    elif route in ('acquire','analyze'):result=core.launch(key,route)
+                    elif route.startswith('sources/'):
+                        from . import app_acquisition as acquisition
+                        actions={'folder':acquisition.import_folder,'survey':acquisition.configure_survey,'points':acquisition.select_points}
+                        result=actions[route.split('/')[1]](key,body)
                     elif route=='start':result=core.start(key,body)
                     elif route=='review':
                         from .app_parameters import review

@@ -189,7 +189,8 @@ def rows(m):
         f['evidence_class']=cls;f['basis']=answer.get('basis','Original input / generated terrain; verify its applicability.')
         f['missing']=missing
         f['parameter_candidates']=[dict(candidate=digest(s),**s) for s in f['suggestions']]+extra.get(f['key'],[])
-    return result
+    from .app_acquisition import enrich
+    return enrich(m,result)
 
 def choose(m,selections,missing_only=False):
     from . import app_core as core
@@ -221,6 +222,7 @@ def reviewed_draft(m):
 def binding(m):
     sources=[item(ROOT/m['project'])]+m.get('attachments',[])+m.get('input_choices',[])
     if m.get('road_sample'):sources.append(m['road_sample'])
+    if m.get('source_analysis'):sources.append(m['source_analysis'])
     if m.get('terrain',{}).get('raster'):sources.append(m['terrain']['raster'])
     if m.get('native_review'):
         p=read(ROOT/m['native_review']);sources+=[item(ROOT/m['native_review'])]+list(p['files'].values())
@@ -229,7 +231,7 @@ def binding(m):
         sp,p,d,c,g=objects(m);sources+=[item(sp.parent/'draft.json'),item(sp.parent/'packet.json')]+p['sources']
         if d.get('section_workflow'):sources+=d['section_workflow']['sources']
         sources+=d.get('geometry_edit_sources',[])
-        data=dict(configuration=c,geometry=g,answers=d['answers'],map_picks=m.get('map_picks'))
+        data=dict(configuration=c,geometry=g,answers=d['answers'],map_picks=m.get('map_picks'),survey_settings=m.get('survey_settings'))
     if not intact(sources):raise ValueError('Input/source file changed or disappeared. Review its current copy / 输入或来源文件已改变，请重新核对')
     data.update(project_id=m['id'],revision=m['revision'],metadata=m['metadata'],gis=m['gis'],sources=sources)
     return data

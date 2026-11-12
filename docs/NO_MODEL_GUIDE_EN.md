@@ -18,7 +18,7 @@ Use `start_workflow.cmd`. The supported scope is one reach with one box/circular
 | Sections, banks, flow-path lengths and boundaries | DEM, survey, site observations | Automated sampling/proposals still need flow-path and representativeness checks |
 | Horizontal CRS, elevation datum and units | DEM metadata and survey notes | Read available DEM metadata; do not invent a vertical datum conversion |
 
-Optional supporting files accepts several photos/PDFs at once. Originals are retained; the app does not claim arbitrary photo interpretation of buried geometry. Transcribe known engineering values into the matching fields. A separate evidence questionnaire is unnecessary.
+Start with **Find, import and inspect source material**: public lookup, PDF/text extraction, survey CSV and optional local Windows OCR now produce reviewable candidates. Existing inputs are preserved. Survey points can be inspected on the DEM without a separate QGIS step. See [source assistance](SOURCE_ASSIST_EN.md) for coverage, folder import, units and failed-attempt handling.
 
 ## 1. Create the project and acquire terrain
 
@@ -26,7 +26,7 @@ Select Coordinates / partial information. Enter a name and WGS84 decimal coordin
 
 Progress, completion and errors are visible. Saved drafts survive retries. Missing information pauses input completion without starting the solver.
 
-## 2. Enter known values
+## 2. Inspect extracted candidates and supply remaining values
 
 Use A · Flow and roughness and C · Culvert and road. Each field has an origin label. Source / change input origin lets you choose a transcribed source value, user entry/correction or estimate/assumption. No name or explanation is required.
 

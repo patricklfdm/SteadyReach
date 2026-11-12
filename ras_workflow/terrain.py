@@ -27,7 +27,7 @@ def fetch(url,path,budget):
     part=path.with_name(path.name+'.partial');total=0
     with urllib.request.urlopen(req,timeout=45,context=ctx) as response:
         declared=int(response.headers.get('Content-Length','0'))
-        if declared>budget:raise ValueError('File exceeds remaining download budget')
+        if declared>budget:raise ValueError(f'File exceeds remaining download budget: {Path(parsed.path).name} requires {declared:,} bytes; {budget:,} bytes remain')
         with part.open('wb') as f:
             while chunk:=response.read(1024*1024):
                 total+=len(chunk)
@@ -43,6 +43,14 @@ def bbox_for(lat,lon,radius):
     geod=Geod(ellps='WGS84')
     pts=[geod.fwd(lon,lat,az,radius*math.sqrt(2))[:2] for az in [45,135,225,315]]
     return [min(p[0] for p in pts),min(p[1] for p in pts),max(p[0] for p in pts),max(p[1] for p in pts)]
+
+def _catalog_covers_bbox(product,bbox):
+    """A download-order hint only; raster pixels must still prove coverage."""
+    bounds=product.get('boundingBox')
+    if not isinstance(bounds,dict):return False
+    values=[bounds.get(key) for key in ('minX','minY','maxX','maxY')]
+    if not all(finite(value) for value in values):return False
+    return values[0]<=bbox[0] and values[1]<=bbox[1] and values[2]>=bbox[2] and values[3]>=bbox[3]
 
 def candidates(path,c,folder):
     location=c.get('location')
@@ -77,8 +85,12 @@ def candidates(path,c,folder):
         products=[p for p in products if p['sourceId'] in selected]
         if set(selected)!={p['sourceId'] for p in products}:raise ValueError('Requested products absent from current catalog')
     # Do not mix overlapping projects/epochs without an explicit selection.
-    products=sorted(products,key=lambda p:p.get('publicationDate',''),reverse=True)
-    result=dict(dataset=labels[0],bbox=bbox,products=products,selection='explicit source IDs' if selected else 'newest publication first; stop after actual complete AOI coverage; record all contributing products')
+    # Prefer a candidate covering the AOI among equally recent products. TNM
+    # returns overlapping UTM-zone tiles; downloading partial tiles first can
+    # exhaust the budget before reaching an equally recent complete tile.
+    # Keep publication priority and the actual cell/NoData check in acquire().
+    products=sorted(products,key=lambda p:(p.get('publicationDate') or '',_catalog_covers_bbox(p,bbox)),reverse=True)
+    result=dict(dataset=labels[0],bbox=bbox,products=products,selection='explicit source IDs' if selected else 'newest publication first; within each publication date prefer catalog bounds covering the AOI; actual raster pixels must confirm full coverage; record all contributing products')
     save(folder/'catalog.json',result);return result
 
 def local_info(path,c,folder):

@@ -183,11 +183,11 @@ def prepare(key):
             draft.update(reviewer=None,basis='Local computation inputs; no engineering review asserted.')
             intake.save_draft(sp,draft)
     if not c.get('location'):
-        m['status']='INPUTS_READY';persist(m);return
+        m.update(status='INPUTS_READY',phase='SUPPLY_MISSING_INPUTS',errors=[]);persist(m);return
     # One checkpoint; transient failures can retry without losing the draft.
     old=m.get('terrain')
     if old and old.get('raster') and intact([old['raster']]):
-        m['status']='INPUTS_READY';persist(m);return
+        m.update(status='INPUTS_READY',phase='SUPPLY_MISSING_INPUTS',errors=[]);persist(m);return
     dest=f/'preparation'/unique_id();dest.mkdir(parents=True)
     t=terrain.acquire(cp,c,dest/'terrain');m['terrain']=t
     records=[]
@@ -200,7 +200,7 @@ def prepare(key):
     m['terrain_metadata']=candidate
     if candidate.get('status')=='CANDIDATE_REQUIRES_REVIEW':
         m['metadata'].setdefault('dem_vertical_unit',candidate['unit']);m['metadata'].setdefault('dem_vertical_datum',candidate['datum'])
-    m.update(status='INPUTS_READY',phase='SUPPLY_MISSING_INPUTS');persist(m,'TERRAIN_READY',dict(raster=t.get('raster'),metadata_candidate=candidate))
+    m.update(status='INPUTS_READY',phase='SUPPLY_MISSING_INPUTS',errors=[]);persist(m,'TERRAIN_READY',dict(raster=t.get('raster'),metadata_candidate=candidate))
 
 def native_preview(m):
     if not m.get('native_review'):return None
@@ -285,6 +285,8 @@ def run(key):
         # Carry original attachments and the exact final confirmation into the report source chain.
         d['uploads']+=m.get('attachments',[])+[m['run_confirmation'],m['pending_review']]
         if m.get('road_sample'):d['uploads'].append(m['road_sample'])
+        if m.get('source_analysis'):d['uploads'].append(m['source_analysis'])
+        if m.get('source_analysis'):d['uploads'].append(m['source_analysis'])
         save(sp.parent/'draft.json',d)
         result=intake.apply(ROOT/m['session'],read((ROOT/m['session']).parent/'draft.json')['revision'],direct_start=True,mapping_enabled=m['gis'])
         if result['status']!='APPLIED':raise ValueError(str(result['errors']))
@@ -299,7 +301,7 @@ def run(key):
     persist(m,'FINISHED',dict(calculation=state.get('calculation_status'),exit_code=code,summary=m.get('summary')))
 
 def launch(key,action):
-    if action not in ('prepare','run','report','delivery'):raise ValueError('Unknown task')
+    if action not in ('prepare','run','report','delivery','acquire','analyze'):raise ValueError('Unknown task')
     m=model(key);require_idle(m)
     global_state=ROOT/'status/app/active.json'
     with lock(ROOT/'status/app/launch.lock'):
@@ -326,7 +328,14 @@ def worker(record):
         time.sleep(.05)
     try:
         with lock(ROOT/'status/app/execution.lock'):
-            if job['action']=='prepare':prepare(key)
+            if job['action']=='prepare':
+                try:prepare(key)
+                finally:
+                    from .app_acquisition import analyze
+                    if model(key).get('session'):analyze(key,network=not model(key).get('source_analysis'))
+            elif job['action'] in ('acquire','analyze'):
+                from .app_acquisition import analyze
+                analyze(key,network=job['action']=='acquire')
             elif job['action']=='run':run(key)
             else:regenerate(key,job['action'])
         job['status']='FINISHED'
@@ -357,6 +366,10 @@ def view(key,detail=True):
             if not process_alive(task.get('pid')):result.update(status='INTERRUPTED',errors=['The worker stopped; saved inputs and outputs remain. Retry the task.'])
     if not detail:return result
     result['native']=native_preview(m)
+    from .app_acquisition import snapshot
+    if m.get('source_analysis'):result['acquisition']=snapshot(m)
+    from .app_acquisition import snapshot
+    if m.get('source_analysis'):result['acquisition']=snapshot(m)
     if m.get('session') and not m.get('native_review') and not m.get('active_project'):
         from . import intake
         result['intake']=intake.view(ROOT/m['session'])
@@ -380,16 +393,17 @@ def listing():
     return [view(p.parent.name,False) for p in sorted(BASE.glob('site_*/app.json'),reverse=True)]
 
 def attach(key,files):
+    from .app_acquisition import add_file
     m=model(key);require_idle(m)
+    if len(files)>100:raise ValueError('Choose at most 100 source files')
     for f in files:
         name=f['name']
         if Path(name).name!=name or any(c in name for c in '/\\:'):raise ValueError('Plain filenames only')
         raw=base64.b64decode(f['content'],validate=True)
-        if len(raw)>15_000_000:raise ValueError('Attachment exceeds 15 MB')
-        p=folder(key)/'materials'/unique_id()/name;p.parent.mkdir(parents=True);p.write_bytes(raw)
-        m['attachments'].append(dict(**item(p),original_name=name,usage='User-provided attachment; no automatic parameter extraction claimed'))
-    m['revision']+=1;persist(m,'ADD_OPTIONAL_MATERIALS',dict(count=len(files)))
-    return view(key)
+        add_file(m,name,raw)
+    m['revision']+=1;persist(m,'ADD_SOURCE_MATERIALS',dict(count=len(files)))
+    return launch(key,'analyze') if m.get('session') and not m.get('native_review') and not m.get('active_project') else view(key)
+
 
 def abandon(key):
     m=model(key);require_idle(m);m.update(status='ABANDONED',revision=m['revision']+1)

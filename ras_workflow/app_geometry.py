@@ -6,7 +6,9 @@ def perform(key,action,body):
     m=core.model(key);core.require_idle(m)
     if not m.get('session') or m.get('native_review'):raise ValueError('These operations edit a DEM-derived draft only')
     sp=ROOT/m['session'];d=read(sp.parent/'draft.json')
-    if action=='map':return editor.map_view(sp,body.get('bounds'))
+    if action=='map':
+        from .app_acquisition import overlay
+        return overlay(m,editor.map_view(sp,body.get('bounds')))
     if body.get('revision') is not None and body['revision']!=m['revision']:raise ValueError('Inputs changed; reload the map / 参数已变更，请刷新地图')
     if action=='picks':
         import math

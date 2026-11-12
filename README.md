@@ -24,6 +24,10 @@ A Windows desktop workflow for one-dimensional steady-flow culvert analysis with
 
 The supported calculation scope is one river/reach and one box or circular culvert crossing, potentially with multiple barrel groups. Surface DEM does not establish buried inverts. Successful calculation/package creation is not engineering approval.
 
+## Source-assisted input
+
+The model page now searches supported public sources, parses survey CSV/PDF/text, attempts local OCR, overlays survey points on the DEM and proposes values with provenance. It keeps existing values, distinguishes conflicts and failed attempts, and groups parameters in collapsed sections with a missing-item navigator. See [source assistance](docs/SOURCE_ASSIST_EN.md). Provider coverage is limited; unsupported or ambiguous site information still needs an engineer.
+
 ## Your files
 
 Working projects, downloaded data, local tools and reports are created on your computer and excluded by `.gitignore`. Back up the whole working project when needed. Never publish user attachments, model outputs or machine settings by forcing ignored files into Git.
