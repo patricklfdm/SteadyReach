@@ -1,0 +1,31 @@
+{
+  "source": "USACE Example_Projects_7_0.zip; Applications Guide Example 4",
+  "source_url": "https://www.hec.usace.army.mil/software/hec-ras/download.aspx",
+  "archive": {
+    "role": "artifact",
+    "sha256": "fac04f071e624c841b20e943e3b68f351b4531f565a0c24ab7d885cf9e38d523",
+    "size_bytes": 427304097
+  },
+  "files": [
+    {
+      "path": "ras_workflow/templates/MULTCULV.g01",
+      "role": "validated_native_template",
+      "sha256": "eb7441b7f93efe87e2facbde0636d5c6abf480d578641ee4022ae3d9345a1382",
+      "size_bytes": 8735
+    },
+    {
+      "path": "ras_workflow/templates/MULTCULV.P01",
+      "role": "validated_native_template",
+      "sha256": "bd792074a071d2205d638044393edf61a2bd0b069f859ce6d490b3f351133221",
+      "size_bytes": 459
+    },
+    {
+      "path": "ras_workflow/templates/MULTCULV.prj",
+      "role": "validated_native_template",
+      "sha256": "1bfd019b96c40b1fdbee7a9d3a698efccba3d0cd33592a18bbbee970a1b68e4f",
+      "size_bytes": 546
+    }
+  ],
+  "validated_engine": "7.0.1",
+  "interface_resource": "ras_workflow/resources/hec_ras_701_interface.json"
+}

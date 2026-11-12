@@ -1,0 +1,37 @@
+Flow Title=LidarAEP
+Program Version=6.60
+BEGIN FILE DESCRIPTION:
+Lidar Derived AEP
+END FILE DESCRIPTION:
+Number of Profiles= 5 
+Profile Names=10% AEP,4% AEP,2% AEP,1% AEP,0.2% AEP
+River Rch & RM=Phelps Brook,Phelps Brook    ,189     
+     203     291     369     456     701
+Boundary for River Rch & Prof#=Phelps Brook,Phelps Brook    , 1 
+Up Type= 0 
+Dn Type= 3 
+Dn Slope=0.175
+Boundary for River Rch & Prof#=Phelps Brook,Phelps Brook    , 2 
+Up Type= 0 
+Dn Type= 3 
+Dn Slope=0.175
+Boundary for River Rch & Prof#=Phelps Brook,Phelps Brook    , 3 
+Up Type= 0 
+Dn Type= 3 
+Dn Slope=0.175
+Boundary for River Rch & Prof#=Phelps Brook,Phelps Brook    , 4 
+Up Type= 0 
+Dn Type= 3 
+Dn Slope=0.175
+Boundary for River Rch & Prof#=Phelps Brook,Phelps Brook    , 5 
+Up Type= 0 
+Dn Type= 3 
+Dn Slope=0.175
+DSS Import StartDate=
+DSS Import StartTime=
+DSS Import EndDate=
+DSS Import EndTime=
+DSS Import GetInterval= 0 
+DSS Import Interval=
+DSS Import GetPeak= 0 
+DSS Import FillOption= 0 

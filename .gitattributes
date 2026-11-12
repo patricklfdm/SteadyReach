@@ -1,0 +1,12 @@
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.txt text eol=lf
+*.cmd text eol=crlf
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+# Original native bytes are used in source and template hashes.
+/ras_workflow/templates/MULTCULV.* -text whitespace=-blank-at-eol,cr-at-eol
+/examples/phelps_brook/inputs/* -text whitespace=-blank-at-eol,cr-at-eol

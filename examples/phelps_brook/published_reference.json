@@ -1,0 +1,76 @@
+{
+  "source": "https://doi.org/10.5066/P14HJGZI",
+  "version": "2.0, 2026-09-02",
+  "archive_sha256": "3ddab567c0a2ba3f9b8af8cddf4d7e65669ab0146513762885a73803b07e00df",
+  "csv_member": "Field_Based_Model_Output.csv",
+  "csv_sha256": "89742a85f180da8ae697efe511282bc823fa9a09655e665cfcf678e277442fcc",
+  "selector": {
+    "Survey_ID": "16",
+    "CrosCode": "xy4272206572942278",
+    "model_geo": "Phelps_River.g01",
+    "design_type": "Existing Design",
+    "Modeled_Flood_Flow": "3"
+  },
+  "profile": "1% AEP",
+  "flow_cfs": 456,
+  "native_length_unit": "US survey foot",
+  "values": {
+    "app_ws_elev": 1113.22,
+    "us_ws_elev": 1113.19,
+    "ds_ws_elev": 1094.4,
+    "exit_ws_elev": 1082.35,
+    "Cul_Vel_US": 18.25,
+    "Cul_Vel_DS": 31.15
+  },
+  "metrics": [
+    {
+      "station": "189",
+      "node_type": "",
+      "column": "app_ws_elev",
+      "variable": "W.S. Elev",
+      "tolerance": 0.00501,
+      "unit": "source ft"
+    },
+    {
+      "station": "110",
+      "node_type": "",
+      "column": "us_ws_elev",
+      "variable": "W.S. Elev",
+      "tolerance": 0.00501,
+      "unit": "source ft"
+    },
+    {
+      "station": "42",
+      "node_type": "",
+      "column": "ds_ws_elev",
+      "variable": "W.S. Elev",
+      "tolerance": 0.00501,
+      "unit": "source ft"
+    },
+    {
+      "station": "14",
+      "node_type": "",
+      "column": "exit_ws_elev",
+      "variable": "W.S. Elev",
+      "tolerance": 0.00501,
+      "unit": "source ft"
+    },
+    {
+      "station": "89",
+      "node_type": "Culv",
+      "column": "Cul_Vel_US",
+      "variable": "Culv Vel US",
+      "tolerance": 0.00501,
+      "unit": "source ft/s"
+    },
+    {
+      "station": "89",
+      "node_type": "Culv",
+      "column": "Cul_Vel_DS",
+      "variable": "Culv Vel DS",
+      "tolerance": 0.00501,
+      "unit": "source ft/s"
+    }
+  ],
+  "interpretation": "Published reference numbers only; not generated results. Reproduction is not field calibration or design acceptance."
+}

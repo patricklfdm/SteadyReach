@@ -1,0 +1,45 @@
+{
+  "source_doi": "https://doi.org/10.5066/P14HJGZI",
+  "source_version": "2.0, 2026-09-02",
+  "archive_url": "https://www.sciencebase.gov/catalog/file/get/6a626ccc1ba49bb7d9d060bc?f=__disk__dd%2F35%2Fa2%2Fdd35a21307eb97193b25ccd4a57321432c06cff4",
+  "archive_sha256": "3ddab567c0a2ba3f9b8af8cddf4d7e65669ab0146513762885a73803b07e00df",
+  "original_inputs": [
+    {
+      "path": "examples/phelps_brook/inputs/Phelps_River.prj",
+      "archive_member": "16_Phelps_Brook/Phelps_River.prj",
+      "sha256": "f65c7bcdfcde81e83c732a15af017af0bb18841e17565982c3ec531b5cdea0e6",
+      "size_bytes": 1007
+    },
+    {
+      "path": "examples/phelps_brook/inputs/Phelps_River.g01",
+      "archive_member": "16_Phelps_Brook/Phelps_River.g01",
+      "sha256": "be0f761007153371e8f2dfc25d9b9cf72d7896e06e22c51ce50826ac091b7d2c",
+      "size_bytes": 8942
+    },
+    {
+      "path": "examples/phelps_brook/inputs/Phelps_River.p01",
+      "archive_member": "16_Phelps_Brook/Phelps_River.p01",
+      "sha256": "d1155f8bc9caadadba804705165fcbb206870c60caccf21215c2fe7667cd170f",
+      "size_bytes": 5872
+    },
+    {
+      "path": "examples/phelps_brook/inputs/Phelps_River.f01",
+      "archive_member": "16_Phelps_Brook/Phelps_River.f01",
+      "sha256": "6635abaa764caa1f0f4c4decee1c646c0893d0bb1527f1afa13890a58f5be176",
+      "size_bytes": 1013
+    }
+  ],
+  "latitude": 42.72205615,
+  "longitude": -72.94222811,
+  "native_length_unit": "US survey foot",
+  "vertical_datum": "NAVD88",
+  "selected_plan": "p01",
+  "original_saved_plan": "p04",
+  "rights": "USGS data release marked CC0 1.0 Universal; separate from this application MIT license",
+  "source_page": "https://www.usgs.gov/data/hydraulic-models-and-supplementary-data-30-stream-crossing-sites-massachusetts-0",
+  "notes": [
+    "Original input bytes retained, including duplicate carriage returns and original current-plan selector.",
+    "Select p01 explicitly in the app; only its g01/f01 dependencies are included.",
+    "No computed output, HDF, GIS data or local review record is included."
+  ]
+}

@@ -1,0 +1,4398 @@
+{
+  "typelib_attributes": [
+    "{6FE13A98-08B6-41A9-A638-77E36FBC23F3}",
+    0,
+    1,
+    3,
+    0,
+    8
+  ],
+  "interfaces": [
+    {
+      "name": "_HECRASController",
+      "functions": [
+        {
+          "names": [
+            "QueryInterface",
+            "riid",
+            "ppvObj"
+          ],
+          "description": [
+            "QueryInterface",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, (29, 16777216)), 1, None), ((26, (26, 24)), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610612736",
+            "oVft": "0",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "AddRef"
+          ],
+          "description": [
+            "AddRef",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610612737",
+            "oVft": "8",
+            "rettype": "(19, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "Release"
+          ],
+          "description": [
+            "Release",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610612738",
+            "oVft": "16",
+            "rettype": "(19, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "GetTypeInfoCount",
+            "pctinfo"
+          ],
+          "description": [
+            "GetTypeInfoCount",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 23), 2, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678272",
+            "oVft": "24",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "GetTypeInfo",
+            "itinfo",
+            "lcid",
+            "pptinfo"
+          ],
+          "description": [
+            "GetTypeInfo",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "((23, 1, None), (19, 1, None), ((26, (26, 24)), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678273",
+            "oVft": "32",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "GetIDsOfNames",
+            "riid",
+            "rgszNames",
+            "cNames",
+            "lcid",
+            "rgdispid"
+          ],
+          "description": [
+            "GetIDsOfNames",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, (29, 33554432)), 1, None), ((26, (26, 16)), 1, None), (23, 1, None), (19, 1, None), ((26, 3), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678274",
+            "oVft": "40",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "Invoke",
+            "dispidMember",
+            "riid",
+            "lcid",
+            "wFlags",
+            "pdispparams",
+            "pvarResult",
+            "pexcepinfo",
+            "puArgErr"
+          ],
+          "description": [
+            "Invoke",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "((3, 1, None), ((26, (29, 33554432)), 1, None), (19, 1, None), (18, 1, None), ((26, (29, 33554560)), 1, None), ((26, 12), 2, None), ((26, (29, 33554688)), 2, None), ((26, 23), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678275",
+            "oVft": "48",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "ComputeStartedFromController"
+          ],
+          "description": [
+            "ComputeStartedFromController",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "2",
+            "memid": "1073938433",
+            "oVft": "56",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "ComputeStartedFromController"
+          ],
+          "description": [
+            "ComputeStartedFromController",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "((11, 1, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "4",
+            "memid": "1073938433",
+            "oVft": "64",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "QuitRas"
+          ],
+          "description": [
+            "QuitRas",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809346",
+            "oVft": "72",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "ShowRas"
+          ],
+          "description": [
+            "ShowRas",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809347",
+            "oVft": "80",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "ShowRasMapper"
+          ],
+          "description": [
+            "ShowRasMapper",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809348",
+            "oVft": "88",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Compute_Cancel"
+          ],
+          "description": [
+            "Compute_Cancel",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809350",
+            "oVft": "96",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Compute_Complete"
+          ],
+          "description": [
+            "Compute_Complete",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809351",
+            "oVft": "104",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Create_WATPlanName",
+            "HECBasePlanName",
+            "SimulationName"
+          ],
+          "description": [
+            "Create_WATPlanName",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809352",
+            "oVft": "112",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Compute_WATPlan",
+            "RasBasePlanTitle",
+            "SimulationName",
+            "newFPart",
+            "DestinationDirectory",
+            "InputDSSFile",
+            "OutputDSSFile",
+            "StartDate",
+            "StartTime",
+            "EndDate",
+            "EndTime",
+            "ShowMessageList"
+          ],
+          "description": [
+            "Compute_WATPlan",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 11), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809353",
+            "oVft": "120",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Compute_ShowComputationWindow"
+          ],
+          "description": [
+            "Compute_ShowComputationWindow",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809354",
+            "oVft": "128",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Compute_HideComputationWindow"
+          ],
+          "description": [
+            "Compute_HideComputationWindow",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809355",
+            "oVft": "136",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Compute_CurrentPlan",
+            "nmsg",
+            "msg",
+            "BlockingMode"
+          ],
+          "description": [
+            "Compute_CurrentPlan",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, (27, 8)), 3, None), ((26, 11), 51, True))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809357",
+            "oVft": "144",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "ProjectionSRSFilename"
+          ],
+          "description": [
+            "ProjectionSRSFilename",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809362",
+            "oVft": "152",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Schematic_StorageAreaPolygon",
+            "Name",
+            "Count",
+            "x",
+            "y"
+          ],
+          "description": [
+            "Schematic_StorageAreaPolygon",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 3), 3, None), ((26, (27, 5)), 3, None), ((26, (27, 5)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809363",
+            "oVft": "160",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Schematic_D2FlowAreaPolygon",
+            "Name",
+            "Count",
+            "x",
+            "y"
+          ],
+          "description": [
+            "Schematic_D2FlowAreaPolygon",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 3), 3, None), ((26, (27, 5)), 3, None), ((26, (27, 5)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809364",
+            "oVft": "168",
+            "rettype": "(12, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Schematic_ReachCount"
+          ],
+          "description": [
+            "Schematic_ReachCount",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809365",
+            "oVft": "176",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Schematic_ReachPointCount"
+          ],
+          "description": [
+            "Schematic_ReachPointCount",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809366",
+            "oVft": "184",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Schematic_ReachPoints",
+            "RiverName_0",
+            "ReachName_0",
+            "ReachStartIndex_0",
+            "ReachPointCount_0",
+            "ReachPointX_0",
+            "ReachPointY_0"
+          ],
+          "description": [
+            "Schematic_ReachPoints",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, (27, 8)), 3, None), ((26, (27, 8)), 3, None), ((26, (27, 3)), 3, None), ((26, (27, 3)), 3, None), ((26, (27, 5)), 3, None), ((26, (27, 5)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809367",
+            "oVft": "192",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Schematic_XSCount"
+          ],
+          "description": [
+            "Schematic_XSCount",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809368",
+            "oVft": "200",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Schematic_XSPointCount"
+          ],
+          "description": [
+            "Schematic_XSPointCount",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809369",
+            "oVft": "208",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Schematic_XSPoints",
+            "RSName_0",
+            "ReachIndex_0",
+            "XSStartIndex_0",
+            "XSPointCount_0",
+            "XSPointX_0",
+            "XSPointY_0"
+          ],
+          "description": [
+            "Schematic_XSPoints",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, (27, 8)), 3, None), ((26, (27, 3)), 3, None), ((26, (27, 3)), 3, None), ((26, (27, 3)), 3, None), ((26, (27, 5)), 3, None), ((26, (27, 5)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809370",
+            "oVft": "216",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "ExportGIS"
+          ],
+          "description": [
+            "ExportGIS",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809371",
+            "oVft": "224",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "SteadyFlow_ClearFlowData"
+          ],
+          "description": [
+            "SteadyFlow_ClearFlowData",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809372",
+            "oVft": "232",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "SteadyFlow_nProfile"
+          ],
+          "description": [
+            "SteadyFlow_nProfile",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "((3, 1, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "4",
+            "memid": "1745027072",
+            "oVft": "240",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "SteadyFlow_nProfile"
+          ],
+          "description": [
+            "SteadyFlow_nProfile",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "2",
+            "memid": "1745027072",
+            "oVft": "248",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "SteadyFlow_SetFlow",
+            "River",
+            "Reach",
+            "RS",
+            "Flow"
+          ],
+          "description": [
+            "SteadyFlow_SetFlow",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, (27, 4)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809373",
+            "oVft": "256",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "SteadyFlow_FixedWSBoundary",
+            "River",
+            "Reach",
+            "Downstream",
+            "WSElev"
+          ],
+          "description": [
+            "SteadyFlow_FixedWSBoundary",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 11), 3, None), ((26, (27, 4)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809374",
+            "oVft": "264",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "UnsteadyFlow_SetGateOpening_Constant",
+            "River",
+            "Reach",
+            "RS",
+            "GateName",
+            "OpenHeight",
+            "errMsg"
+          ],
+          "description": [
+            "UnsteadyFlow_SetGateOpening_Constant",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 4), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809375",
+            "oVft": "272",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_XS",
+            "River",
+            "Reach",
+            "RS"
+          ],
+          "description": [
+            "Edit_XS",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809376",
+            "oVft": "280",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_BC",
+            "River",
+            "Reach",
+            "RS"
+          ],
+          "description": [
+            "Edit_BC",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809377",
+            "oVft": "288",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_IW",
+            "River",
+            "Reach",
+            "RS"
+          ],
+          "description": [
+            "Edit_IW",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809378",
+            "oVft": "296",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_LW",
+            "River",
+            "Reach",
+            "RS"
+          ],
+          "description": [
+            "Edit_LW",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809379",
+            "oVft": "304",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_AddXS",
+            "River",
+            "Reach",
+            "RS",
+            "errMsg"
+          ],
+          "description": [
+            "Edit_AddXS",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809382",
+            "oVft": "312",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_AddBC",
+            "River",
+            "Reach",
+            "RS",
+            "errMsg"
+          ],
+          "description": [
+            "Edit_AddBC",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809383",
+            "oVft": "320",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_AddIW",
+            "River",
+            "Reach",
+            "RS",
+            "errMsg"
+          ],
+          "description": [
+            "Edit_AddIW",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809384",
+            "oVft": "328",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_AddLW",
+            "River",
+            "Reach",
+            "RS",
+            "errMsg"
+          ],
+          "description": [
+            "Edit_AddLW",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809385",
+            "oVft": "336",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_GeometricData"
+          ],
+          "description": [
+            "Edit_GeometricData",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809386",
+            "oVft": "344",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_SteadyFlowData"
+          ],
+          "description": [
+            "Edit_SteadyFlowData",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809387",
+            "oVft": "352",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_QuasiUnsteadyFlowData"
+          ],
+          "description": [
+            "Edit_QuasiUnsteadyFlowData",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809388",
+            "oVft": "360",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_UnsteadyFlowData"
+          ],
+          "description": [
+            "Edit_UnsteadyFlowData",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809389",
+            "oVft": "368",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_SedimentData"
+          ],
+          "description": [
+            "Edit_SedimentData",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809390",
+            "oVft": "376",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_WaterQualityData"
+          ],
+          "description": [
+            "Edit_WaterQualityData",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809391",
+            "oVft": "384",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_PlanData"
+          ],
+          "description": [
+            "Edit_PlanData",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809392",
+            "oVft": "392",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Edit_MultipleRun"
+          ],
+          "description": [
+            "Edit_MultipleRun",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809393",
+            "oVft": "400",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "PlotXS",
+            "River",
+            "Reach",
+            "RS"
+          ],
+          "description": [
+            "PlotXS",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809394",
+            "oVft": "408",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "PlotRatingCurve",
+            "River",
+            "Reach",
+            "RS"
+          ],
+          "description": [
+            "PlotRatingCurve",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809395",
+            "oVft": "416",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "PlotPF",
+            "River",
+            "Reach"
+          ],
+          "description": [
+            "PlotPF",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809396",
+            "oVft": "424",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "PlotPFGeneral",
+            "River",
+            "Reach"
+          ],
+          "description": [
+            "PlotPFGeneral",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809397",
+            "oVft": "432",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "PlotXYZ",
+            "River",
+            "Reach"
+          ],
+          "description": [
+            "PlotXYZ",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809398",
+            "oVft": "440",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "PlotStageFlow",
+            "River",
+            "Reach",
+            "RS"
+          ],
+          "description": [
+            "PlotStageFlow",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809399",
+            "oVft": "448",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "PlotStageFlow_SA",
+            "saName"
+          ],
+          "description": [
+            "PlotStageFlow_SA",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809400",
+            "oVft": "456",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "PlotHydraulicTables",
+            "River",
+            "Reach",
+            "RS"
+          ],
+          "description": [
+            "PlotHydraulicTables",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809401",
+            "oVft": "464",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "TableXS",
+            "River",
+            "Reach",
+            "RS"
+          ],
+          "description": [
+            "TableXS",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809402",
+            "oVft": "472",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "TablePF",
+            "River",
+            "Reach"
+          ],
+          "description": [
+            "TablePF",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809403",
+            "oVft": "480",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "CurrentProjectFile"
+          ],
+          "description": [
+            "CurrentProjectFile",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809404",
+            "oVft": "488",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "CurrentProjectTitle"
+          ],
+          "description": [
+            "CurrentProjectTitle",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809405",
+            "oVft": "496",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "CurrentPlanFile"
+          ],
+          "description": [
+            "CurrentPlanFile",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809406",
+            "oVft": "504",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "CurrentGeomFile"
+          ],
+          "description": [
+            "CurrentGeomFile",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809407",
+            "oVft": "512",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "CurrentGeomHDFFile"
+          ],
+          "description": [
+            "CurrentGeomHDFFile",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809408",
+            "oVft": "520",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "CurrentSteadyFile"
+          ],
+          "description": [
+            "CurrentSteadyFile",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809409",
+            "oVft": "528",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "CurrentUnSteadyFile"
+          ],
+          "description": [
+            "CurrentUnSteadyFile",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809410",
+            "oVft": "536",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Output_Variables",
+            "nVar",
+            "VarName",
+            "VarDesc"
+          ],
+          "description": [
+            "Output_Variables",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, (27, 8)), 3, None), ((26, (27, 8)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809411",
+            "oVft": "544",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Output_Initialize"
+          ],
+          "description": [
+            "Output_Initialize",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809412",
+            "oVft": "552",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Output_GetProfiles",
+            "nProfile",
+            "profileName"
+          ],
+          "description": [
+            "Output_GetProfiles",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, (27, 8)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809413",
+            "oVft": "560",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Output_GetRivers",
+            "nRiver",
+            "River"
+          ],
+          "description": [
+            "Output_GetRivers",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, (27, 8)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809414",
+            "oVft": "568",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Output_GetRiver",
+            "River"
+          ],
+          "description": [
+            "Output_GetRiver",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809415",
+            "oVft": "576",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Output_GetReach",
+            "riv",
+            "Reach"
+          ],
+          "description": [
+            "Output_GetReach",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809416",
+            "oVft": "584",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Output_GetReaches",
+            "riv",
+            "nReach",
+            "Reach"
+          ],
+          "description": [
+            "Output_GetReaches",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, (27, 8)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809417",
+            "oVft": "592",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Output_GetNodes",
+            "riv",
+            "rch",
+            "nRS",
+            "RS",
+            "NodeType"
+          ],
+          "description": [
+            "Output_GetNodes",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, (27, 8)), 3, None), ((26, (27, 8)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809418",
+            "oVft": "600",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Output_GetNode",
+            "riv",
+            "rch",
+            "RS"
+          ],
+          "description": [
+            "Output_GetNode",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809419",
+            "oVft": "608",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Output_NodeOutput",
+            "riv",
+            "rch",
+            "n",
+            "updn",
+            "prof",
+            "nVar"
+          ],
+          "description": [
+            "Output_NodeOutput",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809420",
+            "oVft": "616",
+            "rettype": "(4, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Output_ReachOutput",
+            "riv",
+            "rch",
+            "prof",
+            "nVar",
+            "nRS",
+            "RS",
+            "ChannelDist",
+            "value"
+          ],
+          "description": [
+            "Output_ReachOutput",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, (27, 8)), 3, None), ((26, (27, 4)), 3, None), ((26, (27, 4)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809421",
+            "oVft": "624",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Output_VelDist",
+            "riv",
+            "rch",
+            "n",
+            "updn",
+            "prof",
+            "nv",
+            "LeftSta",
+            "RightSta",
+            "ConvPerc",
+            "Area",
+            "WP",
+            "Flow",
+            "HydrDepth",
+            "Velocity"
+          ],
+          "description": [
+            "Output_VelDist",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, (27, 4)), 3, None), ((26, (27, 4)), 3, None), ((26, (27, 4)), 3, None), ((26, (27, 4)), 3, None), ((26, (27, 4)), 3, None), ((26, (27, 4)), 3, None), ((26, (27, 4)), 3, None), ((26, (27, 4)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809422",
+            "oVft": "632",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Output_ComputationLevel_Export",
+            "Filename",
+            "errMsg",
+            "WriteFlow",
+            "WriteStage",
+            "WriteArea",
+            "WriteTopWidth"
+          ],
+          "description": [
+            "Output_ComputationLevel_Export",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 11), 19, None), ((26, 11), 19, None), ((26, 11), 19, None), ((26, 11), 19, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809423",
+            "oVft": "640",
+            "rettype": "(12, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "OutputDSS_GetStageFlowSA",
+            "StorageArea",
+            "nvalue",
+            "ValueDateTime",
+            "Stage",
+            "Flow",
+            "errMsg"
+          ],
+          "description": [
+            "OutputDSS_GetStageFlowSA",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 3), 3, None), ((26, (27, 5)), 3, None), ((26, (27, 5)), 3, None), ((26, (27, 5)), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809424",
+            "oVft": "648",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "OutputDSS_GetStageFlow",
+            "River",
+            "Reach",
+            "RS",
+            "nvalue",
+            "ValueDateTime",
+            "Stage",
+            "Flow",
+            "errMsg"
+          ],
+          "description": [
+            "OutputDSS_GetStageFlow",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 3), 3, None), ((26, (27, 5)), 3, None), ((26, (27, 5)), 3, None), ((26, (27, 5)), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809425",
+            "oVft": "656",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Project_New",
+            "Title",
+            "Filename"
+          ],
+          "description": [
+            "Project_New",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809426",
+            "oVft": "664",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Project_Open",
+            "projectFilename"
+          ],
+          "description": [
+            "Project_Open",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "((8, 1, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809427",
+            "oVft": "672",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Project_Current"
+          ],
+          "description": [
+            "Project_Current",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809428",
+            "oVft": "680",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Project_Save"
+          ],
+          "description": [
+            "Project_Save",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809429",
+            "oVft": "688",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Project_SaveAs",
+            "newProjectName"
+          ],
+          "description": [
+            "Project_SaveAs",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809430",
+            "oVft": "696",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Project_Close"
+          ],
+          "description": [
+            "Project_Close",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809431",
+            "oVft": "704",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Plan_Names",
+            "PlanCount",
+            "PlanNames",
+            "IncludeOnlyPlansInBaseDirectory"
+          ],
+          "description": [
+            "Plan_Names",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, (27, 8)), 3, None), ((26, 11), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809432",
+            "oVft": "712",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Plan_Reports",
+            "ReportCount",
+            "ReportNames"
+          ],
+          "description": [
+            "Plan_Reports",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, (27, 8)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809433",
+            "oVft": "720",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Plan_InformationXML",
+            "requestXML"
+          ],
+          "description": [
+            "Plan_InformationXML",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809434",
+            "oVft": "728",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Plan_BreachesGetXML"
+          ],
+          "description": [
+            "Plan_BreachesGetXML",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809436",
+            "oVft": "736",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Plan_BreachesSetXML",
+            "xmlText"
+          ],
+          "description": [
+            "Plan_BreachesSetXML",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809437",
+            "oVft": "744",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Plan_GetFilename",
+            "planName"
+          ],
+          "description": [
+            "Plan_GetFilename",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809440",
+            "oVft": "752",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Plan_SetCurrent",
+            "PlanTitleToSet"
+          ],
+          "description": [
+            "Plan_SetCurrent",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809441",
+            "oVft": "760",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "PlanOutput_IsCurrent",
+            "PlanTitleToCheck",
+            "ShowMessageList",
+            "errMsg"
+          ],
+          "description": [
+            "PlanOutput_IsCurrent",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 11), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809442",
+            "oVft": "768",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "PlanOutput_SetCurrent",
+            "PlanTitleToSet"
+          ],
+          "description": [
+            "PlanOutput_SetCurrent",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809443",
+            "oVft": "776",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "PlanOutput_SetMultiple",
+            "nPlanTitleToSet",
+            "PlanTitleToSet_0",
+            "ShowMessageList"
+          ],
+          "description": [
+            "PlanOutput_SetMultiple",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, (27, 8)), 3, None), ((26, 11), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809444",
+            "oVft": "784",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry_GetRivers",
+            "nRiver",
+            "River"
+          ],
+          "description": [
+            "Geometry_GetRivers",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, (27, 8)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809445",
+            "oVft": "792",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry"
+          ],
+          "description": [
+            "Geometry",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809446",
+            "oVft": "800",
+            "rettype": "((26, (29, 50331904)), 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry_GetReaches",
+            "riv",
+            "nReach",
+            "Reach"
+          ],
+          "description": [
+            "Geometry_GetReaches",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, (27, 8)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809447",
+            "oVft": "808",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry_GetNodes",
+            "riv",
+            "rch",
+            "nRS",
+            "RS",
+            "NodeType"
+          ],
+          "description": [
+            "Geometry_GetNodes",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, (27, 8)), 3, None), ((26, (27, 8)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809448",
+            "oVft": "816",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry_GetNode",
+            "riv",
+            "rch",
+            "RS"
+          ],
+          "description": [
+            "Geometry_GetNode",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809449",
+            "oVft": "824",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry_GetGateNames",
+            "River",
+            "Reach",
+            "RS",
+            "nGate",
+            "GateName",
+            "errMsg"
+          ],
+          "description": [
+            "Geometry_GetGateNames",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 3), 3, None), ((26, (27, 8)), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809450",
+            "oVft": "832",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry_GetStorageAreas",
+            "Count",
+            "SAnames"
+          ],
+          "description": [
+            "Geometry_GetStorageAreas",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, (27, 8)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809451",
+            "oVft": "840",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry_Get2DFlowAreas",
+            "Count",
+            "D2Names"
+          ],
+          "description": [
+            "Geometry_Get2DFlowAreas",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, (27, 8)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809452",
+            "oVft": "848",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry_GISImport",
+            "Title",
+            "Filename"
+          ],
+          "description": [
+            "Geometry_GISImport",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809453",
+            "oVft": "856",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry_SetSAArea",
+            "saName",
+            "Area",
+            "errMsg"
+          ],
+          "description": [
+            "Geometry_SetSAArea",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 4), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809454",
+            "oVft": "864",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry_RatioMann",
+            "riv",
+            "rchUp",
+            "nup",
+            "rchDn",
+            "ndn",
+            "Ratio",
+            "errMsg"
+          ],
+          "description": [
+            "Geometry_RatioMann",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, 4), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809455",
+            "oVft": "872",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry_GetMann",
+            "River",
+            "Reach",
+            "RS",
+            "nMann",
+            "Mann_n",
+            "station",
+            "errMsg"
+          ],
+          "description": [
+            "Geometry_GetMann",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 3), 3, None), ((26, (27, 4)), 3, None), ((26, (27, 4)), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809457",
+            "oVft": "880",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry_SetMann",
+            "River",
+            "Reach",
+            "RS",
+            "nMann",
+            "Mann_n",
+            "station",
+            "errMsg"
+          ],
+          "description": [
+            "Geometry_SetMann",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 3), 3, None), ((26, (27, 4)), 3, None), ((26, (27, 4)), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809458",
+            "oVft": "888",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry_SetMann_LChR",
+            "River",
+            "Reach",
+            "RS",
+            "MannLOB",
+            "MannChan",
+            "MannROB",
+            "errMsg"
+          ],
+          "description": [
+            "Geometry_SetMann_LChR",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 4), 3, None), ((26, 4), 3, None), ((26, 4), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809459",
+            "oVft": "896",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Geometry_GetGML",
+            "GeomFilename"
+          ],
+          "description": [
+            "Geometry_GetGML",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "((8, 1, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809460",
+            "oVft": "904",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "HECRASVersion"
+          ],
+          "description": [
+            "HECRASVersion",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809461",
+            "oVft": "912",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "GetDataLocations_Output",
+            "planTitle",
+            "DSSFiles",
+            "DSSPathnames",
+            "errMsg"
+          ],
+          "description": [
+            "GetDataLocations_Output",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, (27, 8)), 3, None), ((26, (27, 8)), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809462",
+            "oVft": "920",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "wcf_InputDataLocations_Get",
+            "projectfile",
+            "planTitle"
+          ],
+          "description": [
+            "wcf_InputDataLocations_Get",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809464",
+            "oVft": "928",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "wcf_InputDataLocations_Set",
+            "projectfile",
+            "planTitle",
+            "xmlText"
+          ],
+          "description": [
+            "wcf_InputDataLocations_Set",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809466",
+            "oVft": "936",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "wcf_OutputDataLocations",
+            "projectfile",
+            "PlanFilename",
+            "planTitle",
+            "planShortID"
+          ],
+          "description": [
+            "wcf_OutputDataLocations",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809468",
+            "oVft": "944",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "wcf_CreateNewPlan",
+            "xmlText"
+          ],
+          "description": [
+            "wcf_CreateNewPlan",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809469",
+            "oVft": "952",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "wcf_ComputePlan",
+            "xmlText"
+          ],
+          "description": [
+            "wcf_ComputePlan",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809470",
+            "oVft": "960",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "wcf_SetOutputPlans",
+            "xmlText",
+            "errMessage"
+          ],
+          "description": [
+            "wcf_SetOutputPlans",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809477",
+            "oVft": "968",
+            "rettype": "(11, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Plan_GetParameterUncertaintyXML"
+          ],
+          "description": [
+            "Plan_GetParameterUncertaintyXML",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809478",
+            "oVft": "976",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Plan_SetParameterUncertaintyXML",
+            "xmlText"
+          ],
+          "description": [
+            "Plan_SetParameterUncertaintyXML",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809479",
+            "oVft": "984",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "HECRASController",
+      "functions": []
+    },
+    {
+      "name": "_HECRASGeometry",
+      "functions": [
+        {
+          "names": [
+            "QueryInterface",
+            "riid",
+            "ppvObj"
+          ],
+          "description": [
+            "QueryInterface",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, (29, 16777216)), 1, None), ((26, (26, 24)), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610612736",
+            "oVft": "0",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "AddRef"
+          ],
+          "description": [
+            "AddRef",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610612737",
+            "oVft": "8",
+            "rettype": "(19, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "Release"
+          ],
+          "description": [
+            "Release",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610612738",
+            "oVft": "16",
+            "rettype": "(19, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "GetTypeInfoCount",
+            "pctinfo"
+          ],
+          "description": [
+            "GetTypeInfoCount",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 23), 2, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678272",
+            "oVft": "24",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "GetTypeInfo",
+            "itinfo",
+            "lcid",
+            "pptinfo"
+          ],
+          "description": [
+            "GetTypeInfo",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "((23, 1, None), (19, 1, None), ((26, (26, 24)), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678273",
+            "oVft": "32",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "GetIDsOfNames",
+            "riid",
+            "rgszNames",
+            "cNames",
+            "lcid",
+            "rgdispid"
+          ],
+          "description": [
+            "GetIDsOfNames",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, (29, 33554432)), 1, None), ((26, (26, 16)), 1, None), (23, 1, None), (19, 1, None), ((26, 3), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678274",
+            "oVft": "40",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "Invoke",
+            "dispidMember",
+            "riid",
+            "lcid",
+            "wFlags",
+            "pdispparams",
+            "pvarResult",
+            "pexcepinfo",
+            "puArgErr"
+          ],
+          "description": [
+            "Invoke",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "((3, 1, None), ((26, (29, 33554432)), 1, None), (19, 1, None), (18, 1, None), ((26, (29, 33554560)), 1, None), ((26, 12), 2, None), ((26, (29, 33554688)), 2, None), ((26, 23), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678275",
+            "oVft": "48",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "nRiver"
+          ],
+          "description": [
+            "nRiver",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809344",
+            "oVft": "56",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "RiverName",
+            "riv"
+          ],
+          "description": [
+            "RiverName",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809345",
+            "oVft": "64",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "RiverIndex",
+            "RiverName"
+          ],
+          "description": [
+            "RiverIndex",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809346",
+            "oVft": "72",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "nReach",
+            "riv"
+          ],
+          "description": [
+            "nReach",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809347",
+            "oVft": "80",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "ReachName",
+            "riv",
+            "rch"
+          ],
+          "description": [
+            "ReachName",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809348",
+            "oVft": "88",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "ReachIndex",
+            "riv",
+            "ReachName"
+          ],
+          "description": [
+            "ReachIndex",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809349",
+            "oVft": "96",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "ReachInvert_nPoints",
+            "riv",
+            "rch"
+          ],
+          "description": [
+            "ReachInvert_nPoints",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809350",
+            "oVft": "104",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "ReachInvert_Points",
+            "riv",
+            "rch",
+            "PointX",
+            "PointY"
+          ],
+          "description": [
+            "ReachInvert_Points",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, (27, 5)), 3, None), ((26, (27, 5)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809351",
+            "oVft": "112",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "nNode",
+            "riv",
+            "rch"
+          ],
+          "description": [
+            "nNode",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809352",
+            "oVft": "120",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "NodeRS",
+            "riv",
+            "rch",
+            "n"
+          ],
+          "description": [
+            "NodeRS",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809353",
+            "oVft": "128",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "NodeIndex",
+            "riv",
+            "rch",
+            "RS"
+          ],
+          "description": [
+            "NodeIndex",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809354",
+            "oVft": "136",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "NodeType",
+            "riv",
+            "rch",
+            "n"
+          ],
+          "description": [
+            "NodeType",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809355",
+            "oVft": "144",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "NodeCType",
+            "riv",
+            "rch",
+            "n"
+          ],
+          "description": [
+            "NodeCType",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809356",
+            "oVft": "152",
+            "rettype": "(8, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "NodeCutLine_nPoints",
+            "riv",
+            "rch",
+            "n"
+          ],
+          "description": [
+            "NodeCutLine_nPoints",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809357",
+            "oVft": "160",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "NodeCutLine_Points",
+            "riv",
+            "rch",
+            "n",
+            "PointX",
+            "PointY"
+          ],
+          "description": [
+            "NodeCutLine_Points",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 3), 3, None), ((26, 3), 3, None), ((26, 3), 3, None), ((26, (27, 5)), 3, None), ((26, (27, 5)), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809358",
+            "oVft": "168",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "Save"
+          ],
+          "description": [
+            "Save",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809359",
+            "oVft": "176",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "HECRASGeometry",
+      "functions": []
+    },
+    {
+      "name": "_HECRASFlow",
+      "functions": [
+        {
+          "names": [
+            "QueryInterface",
+            "riid",
+            "ppvObj"
+          ],
+          "description": [
+            "QueryInterface",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, (29, 16777216)), 1, None), ((26, (26, 24)), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610612736",
+            "oVft": "0",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "AddRef"
+          ],
+          "description": [
+            "AddRef",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610612737",
+            "oVft": "8",
+            "rettype": "(19, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "Release"
+          ],
+          "description": [
+            "Release",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610612738",
+            "oVft": "16",
+            "rettype": "(19, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "GetTypeInfoCount",
+            "pctinfo"
+          ],
+          "description": [
+            "GetTypeInfoCount",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 23), 2, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678272",
+            "oVft": "24",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "GetTypeInfo",
+            "itinfo",
+            "lcid",
+            "pptinfo"
+          ],
+          "description": [
+            "GetTypeInfo",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "((23, 1, None), (19, 1, None), ((26, (26, 24)), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678273",
+            "oVft": "32",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "GetIDsOfNames",
+            "riid",
+            "rgszNames",
+            "cNames",
+            "lcid",
+            "rgdispid"
+          ],
+          "description": [
+            "GetIDsOfNames",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, (29, 33554432)), 1, None), ((26, (26, 16)), 1, None), (23, 1, None), (19, 1, None), ((26, 3), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678274",
+            "oVft": "40",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "Invoke",
+            "dispidMember",
+            "riid",
+            "lcid",
+            "wFlags",
+            "pdispparams",
+            "pvarResult",
+            "pexcepinfo",
+            "puArgErr"
+          ],
+          "description": [
+            "Invoke",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "((3, 1, None), ((26, (29, 33554432)), 1, None), (19, 1, None), (18, 1, None), ((26, (29, 33554560)), 1, None), ((26, 12), 2, None), ((26, (29, 33554688)), 2, None), ((26, 23), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678275",
+            "oVft": "48",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "UnsteadyBoundaryIndex",
+            "River",
+            "Reach",
+            "RS",
+            "StorageArea",
+            "connection"
+          ],
+          "description": [
+            "UnsteadyBoundaryIndex",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None), ((26, 8), 3, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610809344",
+            "oVft": "56",
+            "rettype": "(3, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "HECRASFlow",
+      "functions": []
+    },
+    {
+      "name": "_cls_sediment_observed_TS",
+      "functions": [
+        {
+          "names": [
+            "QueryInterface",
+            "riid",
+            "ppvObj"
+          ],
+          "description": [
+            "QueryInterface",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, (29, 16777216)), 1, None), ((26, (26, 24)), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610612736",
+            "oVft": "0",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "AddRef"
+          ],
+          "description": [
+            "AddRef",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610612737",
+            "oVft": "8",
+            "rettype": "(19, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "Release"
+          ],
+          "description": [
+            "Release",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610612738",
+            "oVft": "16",
+            "rettype": "(19, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "GetTypeInfoCount",
+            "pctinfo"
+          ],
+          "description": [
+            "GetTypeInfoCount",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, 23), 2, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678272",
+            "oVft": "24",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "GetTypeInfo",
+            "itinfo",
+            "lcid",
+            "pptinfo"
+          ],
+          "description": [
+            "GetTypeInfo",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "((23, 1, None), (19, 1, None), ((26, (26, 24)), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678273",
+            "oVft": "32",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "GetIDsOfNames",
+            "riid",
+            "rgszNames",
+            "cNames",
+            "lcid",
+            "rgdispid"
+          ],
+          "description": [
+            "GetIDsOfNames",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "(((26, (29, 33554432)), 1, None), ((26, (26, 16)), 1, None), (23, 1, None), (19, 1, None), ((26, 3), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678274",
+            "oVft": "40",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        },
+        {
+          "names": [
+            "Invoke",
+            "dispidMember",
+            "riid",
+            "lcid",
+            "wFlags",
+            "pdispparams",
+            "pvarResult",
+            "pexcepinfo",
+            "puArgErr"
+          ],
+          "description": [
+            "Invoke",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "((3, 1, None), ((26, (29, 33554432)), 1, None), (19, 1, None), (18, 1, None), ((26, (29, 33554560)), 1, None), ((26, 12), 2, None), ((26, (29, 33554688)), 2, None), ((26, 23), 2, None))",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1610678275",
+            "oVft": "48",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cls_sediment_observed_TS",
+      "functions": []
+    },
+    {
+      "name": "__HECRASController",
+      "functions": [
+        {
+          "names": [
+            "ComputeProgressEvent",
+            "Progress"
+          ],
+          "description": [
+            "ComputeProgressEvent",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "((4, 1, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "1",
+            "oVft": "0",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "ComputeMessageEvent",
+            "eventMessage"
+          ],
+          "description": [
+            "ComputeMessageEvent",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "((8, 1, None),)",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "2",
+            "oVft": "0",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        },
+        {
+          "names": [
+            "ComputeComplete"
+          ],
+          "description": [
+            "ComputeComplete",
+            null,
+            0,
+            null
+          ],
+          "funcdesc": {
+            "args": "()",
+            "cParamsOpt": "0",
+            "callconv": "4",
+            "desckind": "1",
+            "funckind": "4",
+            "invkind": "1",
+            "memid": "3",
+            "oVft": "0",
+            "rettype": "(24, 0, None)",
+            "scodeArray": "()",
+            "wFuncFlags": "0"
+          }
+        }
+      ]
+    }
+  ],
+  "resource_note": "Inspected HEC-RAS 7.0.1 interface signatures; machine path and Python object addresses omitted. Runtime registration and binary identity are checked separately."
+}

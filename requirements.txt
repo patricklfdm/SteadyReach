@@ -1,0 +1,14 @@
+# Direct dependencies verified with Windows x64 / Python 3.12.14.
+# HEC-RAS, Microsoft runtime and document-rendering tools are external.
+numpy==2.3.5
+rasterio==1.5.2
+pyproj==3.8.0
+h5py==3.16.0
+matplotlib==3.11.2
+python-docx==1.2.0
+pypdf==6.10.0
+pypdfium2==5.14.0
+Pillow==12.3.0
+scipy==1.18.1
+tzdata==2026.6
+pywin32==312; sys_platform == "win32"
