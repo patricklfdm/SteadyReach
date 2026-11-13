@@ -19,7 +19,11 @@ ISSUES={
  'FLOW_SPLIT_NOT_FULLY_OBSERVED':('Incomplete structure flow split','结构分流结果不完整','Obtain all culvert, road and other-path outputs; a missing value is not zero.','补齐涵洞、道路及其他路径输出；缺值不能视为零流量。'),
  'NATIVE_WARNING_TABLE_INCOMPLETE':('Complete native warning table unavailable','完整原生警告表尚缺','Export and review all native errors, warnings and notes for this run.','导出并复核本次运行的全部原生错误、警告及提示。'),
  'STRUCTURE_FLOW_IMBALANCE':('Structure flow imbalance','结构流量不平衡','Check group totals, overflow and other represented paths.','核对孔组总量、越流及其他已建模路径。'),
- 'CULVERT_GROUP_DETAIL_NOT_EXTRACTED':('Incomplete culvert-group details','孔组详细输出不完整','Review the native group output tables.','复核原生孔组输出表。')}
+ 'CULVERT_GROUP_DETAIL_NOT_EXTRACTED':('Incomplete culvert-group details','孔组详细输出不完整','Review the native group output tables.','复核原生孔组输出表。'),
+ 'NATIVE_WET_SECTION_EDGE':('Native warning: low section end','原生警告：断面端点偏低','Inspect the actual terrain and connected flow paths beyond the section; do not raise ground to suppress the warning.','检查断面外实际地形及连通过流路径，不为消除警告抬高地面。'),
+ 'NATIVE_DIVIDED_FLOW':('Native warning: divided flow','原生警告：分隔水流','Check whether separated wet areas connect along the reach and whether the one-dimensional representation is appropriate.','判断分隔湿区沿河段是否连通，以及一维表达是否适用。'),
+ 'NATIVE_CONVEYANCE_CHANGE':('Native warning: abrupt conveyance change','原生警告：输水能力突变','Review section spacing, contraction/expansion geometry, banks and ineffective areas.','复核断面间距、收缩扩散几何、岸站及非有效流区。'),
+ 'NATIVE_MULTIPLE_CRITICAL_DEPTH':('Native note: multiple critical depths','原生提示：多个临界水深','Inspect the native profile and section shape; this note alone is not proof of a hydraulic jump or critical-depth fallback.','结合原生水面线和断面形状复核；此提示本身不证明出现水跃或临界水深回退。')}
 
 
 def value(v, digits=2, cn=True):
@@ -89,6 +93,8 @@ def build(data, plots, folder, language='en', detail='full', details=None):
       '高程单位为 '+h.get('unit','international ft')+'，高程基准为 '+str(h['datum'])+'。涵前和涵后水位对应下文标识的外部断面；小数位数不代表测量精度。')
     p('Road margin is the modeled minimum road crest minus exterior headwater. A positive margin alone does not establish that all floodplain or bypass paths remain dry.',
       '道路余高为模型最低路顶高程减涵前外部断面水位。余高为正，仍不能单独证明所有漫滩和绕流路径均无淹没。')
+    if data.get('language_review') and not cn:
+        d.add_paragraph('Language review pending: some user-entered construction or blockage notes below remain in their original language. This edition is not a fully translated English engineering narrative. Supply verified English wording in the editable model notes when needed.')
     d.add_heading(tr('What still needs attention','需要关注的问题'),1)
     counts={}
     for r in profiles:
@@ -180,7 +186,16 @@ def build(data, plots, folder, language='en', detail='full', details=None):
     p('A representative barrel value applies to the software group of identical barrels. It is not an independent solution for each opening. Unavailable roadway flow prevents a complete flow-split assessment; it is not replaced with zero.',
       '代表单孔值用于软件中的相同孔组，不代表每孔被独立求解。道路流量未取得时，完整分流判断仍缺依据，不将缺值改为零。')
     if full:
-        table(d,[tr('Profile / group','工况 / 孔组'),tr('Inlet velocity ft/s','入口流速 ft/s'),tr('Outlet velocity ft/s','出口流速 ft/s'),tr('Inlet / outlet control EGL ft','入口/出口控制 EGL ft')],[[r['profile_id']+' / '+b.get('name',str(b['group_id'])),num(b.get('inlet_velocity_fts')),num(b.get('outlet_velocity_fts')),num(b.get('inlet_control_egl_ft'))+' / '+num(b.get('outlet_control_egl_ft'))] for r in profiles for b in r.get('culvert_groups',[])],[1.7,1.4,1.4,2.2])
+        supplement_rows={(r['profile'],r['group_id']):r for r in (data.get('native_supplement') or {}).get('rows',[])}
+        display_groups=[]
+        for r in profiles:
+            for b in r.get('culvert_groups',[]):
+                observed=supplement_rows.get((r['profile_id'],b['group_id']))
+                values=observed or b
+                display_groups.append([r['profile_id']+' / '+b.get('name',str(b['group_id'])),num(values.get('inlet_velocity_fts')),num(values.get('outlet_velocity_fts')),num(values.get('inlet_control_egl_ft'))+' / '+num(values.get('outlet_control_egl_ft'))])
+        if supplement_rows:p('The group table below includes cross-checked native text supplements at their displayed precision. The automatic aggregate table above remains unchanged; missing aggregate/road flow is not reconstructed from rounded group sums.',
+                             '下表纳入已交叉核验的原生孔组文本，精度以原生显示为准。上方自动提取的总量表保持不变，不由四舍五入孔组值倒推缺失的总流量或道路流量。')
+        table(d,[tr('Profile / group','工况 / 孔组'),tr('Inlet velocity ft/s','入口流速 ft/s'),tr('Outlet velocity ft/s','出口流速 ft/s'),tr('Inlet / outlet control EGL ft','入口/出口控制 EGL ft')],display_groups,[1.7,1.4,1.4,2.2])
         p('Unavailable control heads do not establish inlet or outlet control. Outlet velocity can guide scour review; without bed material, protection and allowable-velocity evidence, it cannot establish erosion safety.',
           '未取得控制水头时，不自行判定入口或出口控制。出口流速可用于安排冲刷复核，但缺少床沙、护砌和允许流速资料时，不能据此判定冲刷安全。')
     if full:
@@ -268,6 +283,18 @@ def build(data, plots, folder, language='en', detail='full', details=None):
             ['Fr',tr('Channel Froude number; a screening aid for flow regime, not an acceptance result.','主槽 Froude 数，用于辅助判断流态，不是验收结论。')],
             ['Bank station',tr('Main-channel/overbank division in the model; not a flood-protection crest.','模型主槽与漫滩的分界，不是防洪堤顶。')],
             ['Conditional',tr('Uses explicitly reviewed assumptions whose site accuracy is unverified.','采用经明确审核、但现场准确性尚未核实的假设。')]], [1.4,5.3])
+    supplement=data.get('native_supplement')
+    if supplement:
+        page('Supplementary native outputs','补充原生输出')
+        p('These user-supplied native text exports were checked against this run’s geometry, water/energy levels and independent first-group outputs. Text has no embedded run hash; correct run selection still relies on the user. No new solver run. Blanks remain unavailable; rounded group sums do not prove zero road overflow.',
+          '这些用户提供的原生文本已与本次几何、水位／能量线及独立首组输出交叉核对。文本自身无运行哈希，正确选择运行仍依赖用户。本次未重新求解；空白仍为未取得，四舍五入孔组流量合计不能证明道路越流为零。')
+        table(d,['Profile','Group','Q cfs','V US ft/s','V DS ft/s','Control'],[[r['profile'],r['native_group'],num(r['flow_cfs']),num(r['inlet_velocity_fts']),num(r['outlet_velocity_fts']),r['control']] for r in supplement['rows']],[.8,1.2,1.1,1.1,1.1,1.4])
+        p('Warning coverage: '+supplement['warning_scope'],'警告覆盖范围：'+supplement['warning_scope'])
+        if supplement['missing_groups']:p('Unexported group/profile tables: '+str(supplement['missing_groups']),'尚未取得的组／工况表：'+str(supplement['missing_groups']))
+        if full and supplement['warnings']:
+            for row in supplement['warnings']['records']:
+                d.add_heading(row['profile']+' · RS '+row['station']+' · '+row['severity'],2);d.add_paragraph(row['text'])
+        p('Hydraulic QA remains open. Source files are included in the Complete package.','水力 QA 保持待复核。原始文本保存在完整交付包。')
     if details:detail_appendix(d,details,cn)
     from .report_navigation import finish
     return finish(d,cn,full)
@@ -289,7 +316,7 @@ def generate(summary_path,folder,culvert_details=None,comparisons=(),context=Non
     from . import __version__
     manifest=dict(summary=item(summary_path,'sole_report_data'),schema_version='readable_reports_2.2',created_utc=utc(),generator_version=__version__,edition=folder.name,
         data=item(folder/'report_data.json'),figures=item(folder/'figure_manifest.json'),visual_review='PENDING_HUMAN_PAGE_REVIEW',reports=[],
-        supplementary_sources=data['sources'],new_solver_calls_by_report=0)
+        supplementary_sources=data['sources'],language_review=data.get('language_review',[]),new_solver_calls_by_report=0)
     if details:manifest['supplementary_sources']+=[item(culvert_details)]+details['sources']
     for language,detail,name in REPORT_VARIANTS:
         path=folder/(name+'.docx');build(data,plots,folder,language,detail,details).save(path)

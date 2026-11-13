@@ -4,6 +4,8 @@
 
 The Model page combines public-source lookup, document import, parameter candidates and survey-map inspection. No AI account or reviewer-name form is required. The original documents and extraction record are kept locally and included in the calculation's provenance.
 
+Multi-group preparation is integrated: [associate openings, derive parameters, check projections and apply selected candidates together](AUTOMATION_EN.md). Crown-to-invert arithmetic requires an explicit interior-crown assumption; it is never inferred from a code alone.
+
 ## The usual sequence
 
 1. Create a project with coordinates. Preparation attempts USGS terrain and public source discovery. Existing projects use **Find available data automatically / Retry public search + analyze**. During processing, the phase and file counter are shown; keep the launcher open.
@@ -58,3 +60,9 @@ Import the completed CSV through the same source card. Values become reviewable 
 - **Unknown CSV columns:** use the dropdown mapping. Raw survey columns are not interpreted as model parameters.
 - **Values differ:** inspect source date, interior/exterior dimensions, opening group, units and datum; explicitly select or edit the intended value.
 - **Missing critical input:** leave it unresolved or choose an explicitly conditional estimate supported by site evidence. The solver remains paused until the final input gate and confirmation pass.
+
+## Additional catalog records and actual OCR checks
+
+Paste an applicable public `https://www.sciencebase.gov/catalog/item/<id>` URL into **Import another public USGS catalog record**. Supported document files are downloaded and analyzed together; limits are 30 files, 10 MB each and 35 MB per request. Archives and authenticated manager links retain a manual handoff; no login bypass is attempted. Metadata titles and proximity do not prove applicability. The attempt view distinguishes shared catalog searches from field-specific extracted candidates; absence of a candidate does not mean the whole Internet was searched for that parameter.
+
+Windows OCR uses pinned local PyWinRT packages and an actual printed-text probe in the full environment check. Rerun setup after updating requirements. OCR failure retains the original and explicitly offers visual inspection or a text/CSV transcription; handwritten dimensions are not automatically trusted. Explicit group-labelled text dimensions can propose group-specific candidates. An unlabelled culvert length is not assigned to group 1 of a multiple-group structure.

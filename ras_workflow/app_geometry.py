@@ -6,6 +6,12 @@ def perform(key,action,body):
     m=core.model(key);core.require_idle(m)
     if not m.get('session') or m.get('native_review'):raise ValueError('These operations edit a DEM-derived draft only')
     sp=ROOT/m['session'];d=read(sp.parent/'draft.json')
+    if action.startswith('auto-'):
+        from .app_geometry_auto import perform as automatic
+        return automatic(m,action[5:],body)
+    if action.startswith('repair-'):
+        from .app_section_repair import perform as repair
+        return repair(m,action[7:],body)
     if action=='map':
         from .app_acquisition import overlay
         return overlay(m,editor.map_view(sp,body.get('bounds')))
@@ -16,6 +22,11 @@ def perform(key,action,body):
         if set(picks)-allowed:raise ValueError('Unknown map point type')
         for kind,points in picks.items():
             if not isinstance(points,list) or len(points)>(1 if kind in ('inlet','outlet') else 100) or any(not isinstance(p,list) or len(p)!=2 or not all(finite(v) for v in p) for p in points):raise ValueError('Invalid map points')
+        if 'group_index' in body:
+            from .app_parameters import objects
+            gi=body['group_index'];groups=objects(m)[4]['structure']['groups']
+            if type(gi)!=int or not 0<=gi<len(groups):raise ValueError('Unknown opening group')
+            m.setdefault('group_map_picks',{})[str(gi)]={k:picks.get(k,[]) for k in ('inlet','outlet')}
         m['map_picks']=picks
         gap=body.get('wall_gap_ft')
         if gap not in (None,'') and (not finite(gap) or gap<0):raise ValueError('Nonnegative wall spacing required')

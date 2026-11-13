@@ -2,6 +2,10 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
+For new sites, let the program propose anchors, section positions/extents and bank candidates, then review them together. Completed projects can create independent QA revisions. See [automatic DEM layout and QA-guided repair](docs/DEM_AUTOMATION_EN.md).
+
+Use [consolidated preparation](docs/AUTOMATION_EN.md) for multiple opening groups, source-linked formulas, early geometry checks and batch input/bank review. Existing choices stay saved.
+
 A Windows desktop workflow for one-dimensional steady-flow culvert analysis with HEC-RAS. Work locally through three browser screens: **Project → Model → Results**. No AI service is needed.
 
 ## Start here
@@ -16,6 +20,7 @@ A Windows desktop workflow for one-dimensional steady-flow culvert analysis with
 
 ## What it does
 
+- Supports draggable DEM maps, fine zoom and explicit batch section rotation → real DEM preview → apply, with intersection checks and preserved draft history.
 - Queries USGS DEMs for U.S. locations, prepares terrain, samples cross sections and proposes bank positions.
 - Imports a supported existing steady model, or builds a model from entered and terrain-derived inputs.
 - Labels suggested/estimated values and leaves unsupported mandatory inputs empty. All no-model numerical fields can be edited before one final confirmation.
@@ -33,3 +38,7 @@ The model page now searches supported public sources, parses survey CSV/PDF/text
 Working projects, downloaded data, local tools and reports are created on your computer and excluded by `.gitignore`. Back up the whole working project when needed. Never publish user attachments, model outputs or machine settings by forcing ignored files into Git.
 
 Application code and original documentation: [MIT License](LICENSE). Bundled public examples, native templates and external programs retain their own terms; see [third-party notices](THIRD_PARTY_NOTICES.md).
+
+## Results and follow-up changes
+
+Save selected candidates, associations and banks together. Results supports independent revisions, native-table cross-checks, synchronized reports/packages, wet-edge plots, optional sensitivity batches and launching a QGIS review copy. See [result operations](docs/RESULTS_REVIEW_EN.md). Local flow paths, structural interpretation and engineering acceptance still require judgment.

@@ -26,3 +26,13 @@ scipy==1.18.1
 six==1.17.0
 typing_extensions==4.16.0
 tzdata==2026.6
+
+# Windows OCR bindings; actual printed-text probe verified 2026-11-13.
+winrt-runtime==3.2.1; sys_platform == "win32"
+winrt-Windows.Foundation==3.2.1; sys_platform == "win32"
+winrt-Windows.Foundation.Collections==3.2.1; sys_platform == "win32"
+winrt-Windows.Globalization==3.2.1; sys_platform == "win32"
+winrt-Windows.Graphics.Imaging==3.2.1; sys_platform == "win32"
+winrt-Windows.Media.Ocr==3.2.1; sys_platform == "win32"
+winrt-Windows.Storage==3.2.1; sys_platform == "win32"
+winrt-Windows.Storage.Streams==3.2.1; sys_platform == "win32"

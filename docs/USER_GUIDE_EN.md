@@ -2,6 +2,8 @@
 
 **English** | [简体中文](USER_GUIDE_CN.md) | [Home](../README.md)
 
+For new sites, follow [consolidated preparation](AUTOMATION_EN.md): associate openings, resolve early geometry checks, review candidate values and bank profiles together, then confirm the full model once.
+
 ## 1. Open the app
 
 Double-click `start_workflow.cmd`. Keep its console running. It opens a local browser page; all project files remain on your machine. With an installed environment there are no PowerShell commands to type during normal use. The default language is English; select 简体中文 to change it.
@@ -26,11 +28,13 @@ If a previously entered discharge or roughness conflicts with the imported model
 
 Without a native model, expand Flow and roughness, Structure/units/boundaries and the section controls. Enter the actual values available from drawings, surveys or engineering judgement. Necessary values include flow, roughness, structure shape/count/opening, length, inlet/outlet elevations, floor/inlet type, road geometry, boundaries and cross sections. There is no mandatory name, reason or individual confirmation field. User entries are recorded as unverified user inputs. Clicking a reference candidate preserves its assumption class and supporting range/source; it does not label the candidate as a measurement.
 
-For DEM-derived sections, expand Generate sections from DEM. Check DEM units/datum, load the map and select at least two anchors on each exterior reach, ordered upstream to downstream. Keep the covered crossing out of those terrain routes. Width/spacing are editable sampling proposals, not known site dimensions. Generate candidates, inspect the sampled sections and bank candidates, then accept appropriate bank positions individually or in a batch. Pick left/right toggles visibly identify the active selection. Missing terrain, intersecting cutlines, invalid bank order and stale section fingerprints still block use. Structure and hydrologic data still require input.
+For DEM-derived sections, start with **Automatic DEM layout / QA repair** to propose exterior anchors, positions, extents and bank candidates. Check DEM units/datum, actual flow direction and coverage, adopt the displayed choices together, then review the complete parameters. Manual map, section and bank controls remain available under B when needed. NoData, intersections and invalid bank order still block calculation. See the [DEM automation guide](DEM_AUTOMATION_EN.md).
 
 Start with **Find, import and inspect source material**: public lookup, PDF/text extraction, survey CSV and optional local Windows OCR now produce reviewable candidates. Existing inputs are preserved. Survey points can be inspected on the DEM without a separate QGIS step. See [source assistance](SOURCE_ASSIST_EN.md) for coverage, folder import, units and failed-attempt handling.
 
-Changes save automatically after a short pause; wait for Saved locally. Save draft is also available. An invalid numeric value must be corrected. Returning to the project list or starting a run saves current edits. If saving has not finished, leaving the browser warns about unsaved changes. Downloads can be retried without replacing the completed draft.
+Scalar edits save automatically after a short pause. Selected candidates, associations and bank batches appear in a pending banner; **Save all changes** commits them together. Wait for Saved locally. Returning to Projects, switching language or opening final review also saves pending selections first. A stale batch stops with an actionable error; earlier successful saves remain. Correct invalid numbers and save before refreshing or closing the browser. Downloads can be retried without replacing the draft.
+
+The DEM map supports fine wheel zoom, dragging and fit controls. For intersecting cutlines, use B → Adjust section directions / DEM preview: request rotations without narrowing, inspect actual DEM profiles, then explicitly apply. Recheck banks and affected dependent inputs afterward; see [section repair and map controls](NO_MODEL_GUIDE_EN.md).
 
 ## 4. Confirm the complete parameters, then run
 
@@ -55,9 +59,11 @@ The package status READY_FOR_REVIEW means files were generated and checked. It d
 - Unsupported geometry/plan: supply a supported steady model; the adapter does not guess unknown native syntax.
 - Solver blocked: inspect Technical details and the task log; resolve the installation/open-project issue. No mock result is substituted.
 - GIS export incomplete: hydraulic results can still be visible; retry delivery after resolving the reported cause. Do not label the missing map as complete.
-- Changed inputs after a finished run: create a new project for a new analysis. The workflow does not offer an in-place redesign editor for completed runs.
+- Changed inputs after a finished run: create an independent editable revision on Results for a workflow-built model. The original run is retained; recheck and confirm the revised inputs before calculation. For imported native models, edit in HEC-RAS and import a new project.
 
 
 ## Interpretation
 
 Public-model reproduction checks software behavior, not current field conditions. Coordinates and surface DEM do not establish buried geometry. Read [limitations](LIMITATIONS_EN.md) before using a result for design.
+
+[Results: complete native output, revise, compare and launch QGIS](RESULTS_REVIEW_EN.md)

@@ -51,8 +51,11 @@ def inspect(tools_config=None, *, full=False, require_delivery=False):
     timezone=timezone_check()
     if timezone['status']!='READY':blockers.append('Timezone: cannot load America/Los_Angeles; '+timezone['error'])
     blockers+=['Solver: '+x for x in solver.get('blocking_items',[])]+['Reports: '+x for x in report.get('blocking_items',[])]
+    ocr=dict(status='NOT_EXECUTED',scope='Use --full for an actual OCR recognition probe')
     probes=None
     if full:
+        from .local_ocr import probe as ocr_probe
+        ocr=ocr_probe()
         from .environment_probe import run
         probes=run(tools_config,reports=report.get('status')=='READY',qgis=delivery_tools['status']=='AVAILABLE_NOT_EXECUTED')
         if probes['reports']['status']=='FAILED':blockers.append('Report runtime: '+probes['reports']['error'])
@@ -64,7 +67,7 @@ def inspect(tools_config=None, *, full=False, require_delivery=False):
          python=dict(executable=sys.executable,version=sys.version,prefix=sys.prefix,base_prefix=sys.base_prefix,
                      isolated_venv=isolated,site_packages=site.getsitepackages()),
          os=platform.platform(),requirements=item(ROOT/'requirements.txt'),packages=packages,solver=solver,reports=report,delivery_tools=delivery_tools,
-         timezone=timezone,runtime_checks=probes,require_delivery=require_delivery,
+         timezone=timezone,ocr=ocr,runtime_checks=probes,require_delivery=require_delivery,
          limitation='Environment checks only. --full converts a software-only document and exports a QGIS test layout. No HEC-RAS solve, site mapping review, hydraulic QA or engineering acceptance is implied.')
 
 
@@ -104,6 +107,8 @@ def main(argv=None):
         print('  Timezone / 时区: '+result['timezone']['status'])
         print('  HEC-RAS installation / 安装检查: '+result['solver']['status'])
         print('  QGIS: '+result['delivery_tools']['status'])
+        print('  Local OCR / 本地识别: '+result['ocr']['status'])
+        if result['ocr'].get('error'):print('  '+result['ocr']['error'])
         if result['runtime_checks']:
             print('  PDF conversion / 实际转换: '+result['runtime_checks']['reports']['status'])
             print('  Evidence / 检查证据: '+result['runtime_checks']['folder'])

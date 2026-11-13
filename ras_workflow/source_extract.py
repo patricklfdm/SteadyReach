@@ -82,16 +82,9 @@ def document_text(path,scratch,ocr=True):
     return dict(text='',method='unsupported',warnings=['No extractor for this file type; original retained'])
 
 def image_text(path,scratch):
-    from PIL import Image
-    target=Path(scratch)/'ocr.png'
-    with Image.open(path) as image:
-        image=image.convert('RGB');image.thumbnail((2400,2400));image.save(target)
-    command=['powershell.exe','-NoProfile','-NonInteractive','-File',str(ROOT/'scripts/ocr_local.ps1'),'-InputPath',str(target)]
-    r=subprocess.run(command,capture_output=True,timeout=35,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-    if r.returncode:raise ValueError('Windows OCR unavailable: '+r.stderr.decode('utf-8',errors='replace')[:400])
-    text=json.loads(r.stdout.decode('utf-8-sig'))['text'][:100_000]
-    if not text.strip():raise ValueError('OCR returned no readable text; inspect the saved original image')
-    return text
+    from .local_ocr import image_text as recognize
+    return recognize(path,scratch)
+
 
 def control_context(documents,points):
     """Infer this documented SPC convention only with two independent controls.
@@ -158,6 +151,7 @@ def text_parameters(text,allowed):
     out=[]
     for key,label in aliases.items():
         if key not in allowed:continue
+        if key=='g.structure.groups.0.length_ft' and 'g.structure.groups.1.length_ft' in allowed:continue
         length=key.endswith('_ft')
         pattern=label+r'\s*[:=]?\s*(\d+(?:\.\d+)?|\.\d+)'+(r'\s*(ft|feet|m|meters)\b' if length else r'(?![\d.])')
         for match in re.finditer(pattern,text,re.I):
@@ -165,4 +159,15 @@ def text_parameters(text,allowed):
             if value is None or value<=0 or not length and value>=1:continue
             if length and match[2].lower() in ('m','meters'):value/=.3048
             out.append(dict(field=key,value=round(value,6),excerpt=match[0]))
+    # Explicit group labels only; dimensions without a group must not populate
+    # the first opening of a multiple-group crossing.
+    aliases={'length_ft':r'(?:barrel\s+)?length','span_ft':r'(?:clear\s+)?(?:width|diameter|span)',
+             'rise_ft':r'(?:clear\s+)?(?:height|rise)'}
+    for name,label in aliases.items():
+        pattern=r'\b(?:group|culvert\s+group)\s+(\d+)\s*[:;,\-]?\s*'+label+r'\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(ft|feet|m|meters)\b'
+        for match in re.finditer(pattern,text,re.I):
+            key=f'g.structure.groups.{int(match[1])-1}.'+name
+            if key not in allowed:continue
+            value=float(match[2])*(1/.3048 if match[3].lower() in ('m','meters') else 1)
+            if value>0:out.append(dict(field=key,value=round(value,6),excerpt=match[0]))
     return out

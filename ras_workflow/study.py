@@ -78,6 +78,7 @@ def prepare(project, scenario_id, specification, output):
         dest = folder/'cases'/name; dest.mkdir(parents=True)
         c = copy.deepcopy(config); c['case_kind'] = kind
         c['title'] = config['title'] + ' / ' + name
+        if spec.get('delivery_enabled') is False:c.setdefault('delivery',{})['enabled']=False
         for key in ['reference_results', 'benchmark_preparation', 'configuration_approval']: c.pop(key, None)
         for key in ['raster', 'provenance']:
             if c['terrain'].get(key):
@@ -103,7 +104,8 @@ def reviewed(study_path, review_path):
     study_path, review_path = [safe_path(ROOT, p) for p in [study_path, review_path]]
     study, review = read(study_path), read(review_path)
     if review.get('study_sha256') != sha(study_path): raise ValueError('Review does not match study hash')
-    if review.get('decision') != 'APPROVE_CONDITIONAL_STUDY' or not review.get('reviewer') or not review.get('basis'):
+    local=review.get('policy')=='local_computation_v1' and review.get('confirmed') is True and review.get('reviewer') is None
+    if review.get('decision') != 'APPROVE_CONDITIONAL_STUDY' or (not local and not review.get('reviewer')) or not review.get('basis'):
         raise ValueError('Explicit named study review and basis required')
     if review.get('approved_case_kind') != study['case_kind']: raise ValueError('Review case_kind mismatch')
     entries = [study['specification']] + study['source_inputs'] + study['evidence']

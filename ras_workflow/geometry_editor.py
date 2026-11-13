@@ -71,7 +71,8 @@ def map_view(session_path,bounds=None):
         bounds=[*(center-span/2),*(center+span/2)]
     b=np.asarray(bounds,dtype=float)
     if b.shape!=(4,) or not np.isfinite(b).all() or min(b[2:]-b[:2])<=0:raise ValueError('Invalid map extent')
-    if max(b[2:]-b[:2])>2*max(extent[2:]-extent[:2]) or not ((b[:2]<extent[2:]).all() and (b[2:]>extent[:2]).all()):raise ValueError('Map extent outside terrain')
+    if max(b[2:]-b[:2])>4*max(extent[2:]-extent[:2]) or not ((b[:2]<extent[2:]).all() and (b[2:]>extent[:2]).all()):raise ValueError('Map extent outside terrain')
+    if min(b[2:]-b[:2])<8*max(info['resolution']):raise ValueError('Map extent smaller than eight DEM cells')
     # Square map with a single coordinate scale.
     center=(b[:2]+b[2:])/2;span=max(b[2:]-b[:2]);b=np.r_[center-span/2,center+span/2]
     with rasterio.open(ROOT/terrain['raster']['path']) as dem:
@@ -80,16 +81,17 @@ def map_view(session_path,bounds=None):
     gray=np.clip((a.filled(low)-low)/max(high-low,1e-9)*200+30,0,255).astype('uint8')
     rgba=np.stack([gray,gray,gray,np.where(np.ma.getmaskarray(a),0,255).astype('uint8')],axis=2)
     buf=io.BytesIO();Image.fromarray(rgba).save(buf,format='PNG')
-    sections=[]
+    sections=[];section_items=[]
     if g.get('horizontal_crs'):
         transform=Transformer.from_crs(g['horizontal_crs'],crs,always_xy=True)
-        for row in g['cross_sections']:
+        for index,row in enumerate(g['cross_sections']):
             cut=row.get('cutline_xy')
             if cut:
                 xy=np.column_stack(transform.transform(*np.asarray(cut,float).T))
-                if np.isfinite(xy).all():sections.append(xy.tolist())
+                if np.isfinite(xy).all():
+                    sections.append(xy.tolist());section_items.append(dict(index=index,rs=row.get('rs'),cutline_xy=xy.tolist()))
     return dict(bounds=b.tolist(),crs=info['crs'],unit_to_m=unit,background=base64.b64encode(buf.getvalue()).decode(),raster=terrain['raster'],
-        sections=sections,note='DEM surface only; picks are unreviewed anchors, not surveyed structure positions')
+        sections=sections,section_items=section_items,terrain_bounds=extent.tolist(),resolution=info['resolution'],min_span=8*max(info['resolution']),max_span=4*max(extent[2:]-extent[:2]),spatial_issues=spatial_issues(g['cross_sections']),note='DEM surface only; picks are unreviewed anchors, not surveyed structure positions')
 
 
 def configure(session_path,revision,payload):
@@ -156,7 +158,7 @@ def transform_section(row,crs,parameters):
     cut=np.asarray(row['cutline_xy'],dtype=float);center=np.asarray(row['center_xy'],dtype=float)
     old_length=float(np.linalg.norm(np.diff(cut,axis=0),axis=1).sum()*factor)
     if not np.isfinite(cut).all() or not np.isfinite(center).all() or old_length<=0:raise ValueError('Valid nonzero cutline and center required')
-    p=dict(rotation_deg=0.,shift_east_ft=0.,shift_north_ft=0.,width_ft=old_length,sampling_ft=1.)
+    p=dict(rotation_deg=0.,shift_east_ft=0.,shift_north_ft=0.,width_ft=old_length,sampling_ft=max(1.,old_length/498.))
     if not isinstance(parameters,dict) or set(parameters)-set(p):raise ValueError('Unknown geometry adjustment')
     p.update(parameters)
     if not all(finite(v) for v in p.values()) or not -60<=p['rotation_deg']<=60 or p['width_ft']<=0 or p['sampling_ft']<=0 or math.ceil(p['width_ft']/p['sampling_ft'])>499:

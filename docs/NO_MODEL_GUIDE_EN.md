@@ -4,6 +4,8 @@
 
 Use `start_workflow.cmd`. The supported scope is one reach with one box/circular culvert crossing and 1D steady flow; distinct openings may use separate groups. Normal operation uses the local browser, without AI, reviewer names, signatures, per-field explanations or screenshot submissions.
 
+Start with [source-linked consolidated preparation](AUTOMATION_EN.md) for multi-group pairing, formulas, early geometry checks, batch parameter choices and bank profiles.
+
 ## Prepare available material
 
 | Required information | Preferred material | If unavailable |
@@ -32,23 +34,42 @@ Use A · Flow and roughness and C · Culvert and road. Each field has an origin 
 
 Unknowns may stay blank or receive an explicit assumption. Selected candidates retain their assumption/source records; edits preserve the previous origin. A reported value is not automatically an independently verified measurement.
 
-## 3. Pick exterior reaches and generate sections
+## 3. Propose anchors and sections, then review them together
+
+Start with **Automatic DEM layout / QA repair → Propose anchors and sections**. Associated survey mouths, saved map positions or a coordinate-only DEM search supply candidate exterior anchors, adaptive section positions and widths, with intersection checks. Select a layout, check direction/coverage/banks, then **Adopt and review calculation inputs**; this does not start the solver. See the [DEM automation guide](DEM_AUTOMATION_EN.md) for complete steps, coordinate-only direction ambiguity and QA revisions.
+
+Use the manual alternative below if candidates do not describe the actual flow path. You do not need to complete these picks before requesting an automatic proposal.
+
+### Manual picks / adjustments (alternative)
 
 1. In B · DEM, sections and banks, check vertical units/datum and load the DEM. Zoom as needed.
 2. Pick at least two upstream-reach anchors from the remote end toward the inlet.
 3. Pick at least two downstream-reach anchors from the outlet toward the remote end. Both lists follow flow direction; exclude the covered crossing from the exterior terrain routes.
 4. The initial 200/40 ft width/spacing values are editable sampling proposals, not site dimensions. Allow at least four functional sections and sufficient flow-area coverage. Generate / replace candidate sections retains the prior draft history.
-5. Inspect profiles and uncertainty flags. Left/right bank buttons visibly toggle; select sampled points to revise banks. Individual or batch adoption and direct section-data editing are available.
-6. Inspect and adopt missing layout candidates in a batch. These include model identifiers, structure/face stations, banks and reach lengths. Existing values are retained.
+5. Resolve early cutline and opening-projection conflicts first. Use the bank-profile gallery to inspect uncertain profiles, revise points and save only selected changes together; other saved banks are retained.
+6. Review parameter candidates together: identifiers, face stations, flow-path lengths and structure/road derivations. Existing inputs default to Keep saved value; select replacements explicitly.
 
 Map points save automatically; the active mode and counts remain visible. Undo removes the current mode's last point. Editing map picks does not silently change generated sections: explicitly regenerate to replace them, then review new bank/structure candidates.
 
-Initial reach lengths assume equal straight center-to-center paths for channel and overbanks. Revise for bends, unequal paths or bypass. RS values are identifiers, not surveyed chainages. Intersections, NoData and invalid bank order remain blocking. Editing sampled positions/elevations preserves the original DEM history and removes the claim that those values are unchanged DEM samples.
+Within an exterior reach, channel-length candidates follow the saved flowline; equal overbank lengths remain an explicit assumption. Across a structure or without a usable line, the separate straight-distance candidate remains conditional. Review unequal paths and bypass. RS values are identifiers, not surveyed chainages. Intersections, NoData and invalid bank order remain blocking. Editing sampled positions/elevations preserves the original DEM history and removes the claim that those values are unchanged DEM samples.
+
+## Intersecting sections: adjust, resample and apply on the model page
+
+Under **B · DEM, sections and banks**, open **Adjust section directions / DEM preview** to see the affected river stations. Red map cutlines identify spatial issues. With point-picking modes off, click a section line to select it. Positive rotation is counterclockwise about the section center in map coordinates.
+
+1. Choose **Suggest rotations (keep widths)**. A bounded search within ±30° can adjust adjacent sections together, retaining widths and centers. These are layout candidates, not proof of flow-normal orientation or complete floodplain coverage; complex layouts may remain unresolved.
+2. Alternatively select a section and edit its rotation or width; shift and sampling controls are collapsed. **Add / update adjustment** combines several changes. Editing the current section and clicking Preview also includes that edit. Reducing width is an explicit user choice; do not omit conveyance merely to remove an intersection.
+3. Choose **Preview DEM resampling**. The app reads the actual raster and displays old/new profiles, green dashed candidate cutlines, remaining spatial issues and missing elevations. Saved geometry remains unchanged. Apply stays disabled for intersections involving edited sections or missing elevations. Issues elsewhere remain visible and still block solving.
+4. After inspecting locations, flow paths and elevations, choose **Use this DEM preview**. The previous draft is retained. Only changed profiles lose bank selections; other saved banks and still-valid reviews are retained. Center shifts invalidate neighboring reach lengths; face changes invalidate dependent station references and offsets. Sources, opening dimensions and map anchors remain saved. Changed inputs or DEM files invalidate an earlier preview.
+5. Recheck banks and missing inputs, then confirm all parameters before HEC-RAS runs. Removing intersections does not establish hydraulic QA or design acceptance.
+
+**Map controls:** drag to pan; use the wheel for fine zooming around the pointer; zoom buttons change the scale by about 20%. **Fit DEM** and **Fit sections** recover the extent. With the map focused, arrow keys pan, + / − zoom and Home fits the DEM. Dragging never adds a point, even in picking mode; a click adds one. Scale, DEM resolution, CRS and coverage boundary remain visible. Views range from eight DEM cells to four times the largest DEM dimension. Blank space outside the coverage is unavailable terrain, not a new download; zooming does not improve DEM resolution.
 
 ## 4. Use conditional structure and road proposals where appropriate
 
-- **Length/layout:** pick inlet/outlet group centers. For one identical group the app can propose a straight barrel length and inlet distance. Explicit wall/gap spacing enables equal parallel barrel-center proposals. Supply skewed/curved or unequal groups individually.
-- **Invert:** with selected functional face sections/banks, explicit mouth picks and nearby exterior DEM sections, the app can extrapolate within-bank bed lows a short distance to a mouth. This assumes bed/invert continuity; it is not a buried-invert measurement. Sediment, drops, vegetation or embankments can invalidate it. The displayed interval only spans the near bed and extrapolated bed; it is **not a bound on the actual invert error**. No unsupported value is proposed if prerequisites fail.
+- **Length/layout:** pick inlet/outlet group centers. Select the opening group in the map to retain separate inlet/outlet picks for multiple groups. Survey-point associations can instead derive every mapped barrel together. Explicit gap spacing enables equal parallel multi-barrel proposals; inspect skew and unequal members. See [formulas and limits](AUTOMATION_EN.md).
+- **Survey invert:** explicitly identify invert points or assume interior crown/low chord minus clear height in the association panel. Matching datum is required. Location-only associations supply no invert.
+- **DEM invert:** with selected functional face sections/banks, explicit mouth picks and nearby exterior DEM sections, the app can extrapolate within-bank bed lows a short distance to a mouth. This assumes bed/invert continuity; it is not a buried-invert measurement. Sediment, drops, vegetation or embankments can invalidate it. The displayed interval only spans the near bed and extrapolated bed; it is **not a bound on the actual invert error**. No unsupported value is proposed if prerequisites fail.
 - **Road crest:** adopt face station candidates first, then draw the crest left to right looking downstream. Sample the selected road crest. Its profile candidates appear under Culvert and road and require explicit selection. Check actual crest coverage, DEM resolution and possible low bypass paths.
 - **Coefficients:** candidates carry applicability conditions and official references. Reference ranges are not site measurement uncertainty. A displayed gradual/abrupt section-loss scheme can fill missing values in a batch; do not mechanically apply subcritical guidance to mixed/supercritical conditions.
 - **Boundary:** positive slopes sampled from exterior sections can serve as conditional normal-depth energy-slope proxies. The range describes sampled adjacent slopes, not a confidence interval. Adverse/insufficient terrain remains unresolved. Check reach extent and boundary sensitivity; do not substitute barrel slope for the remote energy slope.

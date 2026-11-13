@@ -18,3 +18,13 @@
 | Missing result shown as a dash | The field was not extracted or is unavailable. It is not zero. Check warnings and native output. |
 
 For investigation retain the task log, `status/doctor.json`, and the project's saved input/summary files locally. Share only the files the recipient is authorized to see; logs can contain local paths. To stop a draft, use Stop this project → Abandon → Confirm abandon. Files remain available for your own backup.
+
+## Saving, OCR and result editions
+
+- **Selections remain pending:** click Save all changes, not browser Refresh. If a dependency changed, clear the stale selection and reopen the model; completed saves remain.
+- **OCR unavailable:** rerun setup to install the pinned Windows bindings, then run the full environment check. No PowerShell execution-policy change is needed. Empty photo OCR is not a successful dimension extraction; use the retained original or a transcription.
+- **QGIS shortcut fails:** on Results use Open QGIS review copy after a mapped Complete package exists. It uses the configured QGIS environment without editing global PATH. Missing QGIS still requires installation/setup.
+- **Report links disappear after native import:** expected. Click Update reports and both packages; links return only for refreshed exports. See [results guide](RESULTS_REVIEW_EN.md).
+- **Need to change a finished model:** create an independent editable revision on Results (workflow-built models), then confirm and solve it. Do not edit sealed result files.
+
+When refreshing reports, an intact previous package can supply the same verified offline aerial mosaic. An edited manifest, changed map extent or image hash mismatch is rejected. Keep the sealed package and use a review copy for desktop software; preserve the error if regeneration fails.

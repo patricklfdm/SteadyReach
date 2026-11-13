@@ -1,22 +1,34 @@
-"""A location aid from native GIS cutlines; never an inundation map."""
+"""Locate actual wet edges and disconnected wetted intervals, without inferring flow paths."""
 import h5py
-from .common import ROOT,item
+from .common import ROOT, intact
+from .qa import BASE, verified_profiles
 
-def draw(hyd,folder,issues):
-    from .report_data import plot_style
-    with h5py.File(ROOT/hyd['raw_hdf']['path']) as f:
-        base=f['Geometry/Cross Sections']
-        if any(k not in base for k in ['Polyline Info','Polyline Points','Attributes']):return None
-        info=base['Polyline Info'][:];points=base['Polyline Points'][:];attrs=base['Attributes'][:]
-        if len(info)!=len(attrs) or not len(points):return None
-        plt=plot_style();fig,ax=plt.subplots(figsize=(8,5));marked={str(i['station']) for i in issues if i.get('station') is not None}
-        for row,a in zip(info,attrs):
-            start,count=row[:2];line=points[start:start+count]
-            if len(line)<2:continue
-            rs=a['RS'].decode().strip();hit=rs in marked
-            ax.plot(line[:,0],line[:,1],color='#b84c36' if hit else '#245477',lw=2 if hit else 1)
-            ax.annotate('RS '+rs,line[len(line)//2],xytext=(4,5),textcoords='offset points',fontsize=8)
-        ax.set_aspect('equal',adjustable='datalim');ax.set_xlabel('Native GIS X (source coordinate units)');ax.set_ylabel('Native GIS Y (source coordinate units)')
-        ax.set_title('Model section locations / red = a located QA finding\nCRS not inferred; not an inundation map',fontsize=10);ax.grid(alpha=.2);fig.tight_layout()
-        path=folder/'section_locator.png';fig.savefig(path,dpi=150);plt.close(fig)
-    return item(path,'native_section_location_aid')
+
+def intervals(x,z,water):
+    result=[];active=None
+    for a,b,za,zb in zip(x,x[1:],z,z[1:]):
+        wa,wb=za<water,zb<water
+        if wa and active is None:active=a
+        if wa!=wb:
+            cut=a+(water-za)/(zb-za)*(b-a)
+            if wa:result.append([active,cut]);active=None
+            else:active=cut
+        if wb and b==x[-1] and active is not None:result.append([active,b]);active=None
+    return result
+
+
+def collect(h,geometry=None):
+    verified_profiles(h);rows=[]
+    with h5py.File(ROOT/h['raw_hdf']['path']) as f:
+        attrs=f['Geometry/Cross Sections/Attributes'][:];info=f['Geometry/Cross Sections/Station Elevation Info'][:];points=f['Geometry/Cross Sections/Station Elevation Values'][:]
+        for pi,p in enumerate(h['profiles']):
+            water=f[BASE+'/Cross Sections/Water Surface'][pi]
+            for i,(a,(offset,count)) in enumerate(zip(attrs,info)):
+                xy=points[offset:offset+count];x=xy[:,0].astype(float).tolist();z=xy[:,1].astype(float).tolist();w=float(water[i]);wet=intervals(x,z,w)
+                if w<=min(z[0],z[-1]) and len(wet)<2:continue
+                rs=a['RS'].decode().strip();matches=[v for v in (geometry or {}).get('cross_sections',[]) if str(v['rs'])==rs or float(v['rs'])==float(rs)]
+                rows.append(dict(index=i,rs=rs,profile=p['profile_id'],station_ft=x,elevation_ft=z,wse_ft=w,
+                    left_excess_ft=max(0,w-z[0]),right_excess_ft=max(0,w-z[-1]),wet_intervals_ft=wet,
+                    cutline_xy=matches[0]['cutline_xy'] if len(matches)==1 else None,
+                    review='Ground/WSE intersections only; separate wetted intervals do not establish connected bypass flow'))
+    return dict(rows=rows,raw_hdf=h['raw_hdf'],hydraulic_qa='REVIEW_REQUIRED')

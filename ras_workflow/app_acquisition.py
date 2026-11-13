@@ -204,9 +204,9 @@ def enrich(m,fields):
         f['source_conflict']=bool(different or multi)
         en,zh,next_en,next_zh=route_for(f)
         tried=[dict(route=v['route'],status=v['status']) for v in a.get('attempts',[])]
-        if a:tried.append(dict(route='local_document_extraction',status='INSPECTED' if a.get('documents') else 'NO_DOCUMENTS',count=len(a.get('documents',[]))))
+        if a:tried.append(dict(route='local_document_extraction',status='PARTIAL_FAILURE' if any(d.get('status')=='EXTRACTION_FAILED' for d in a.get('documents',[])) else 'INSPECTED' if a.get('documents') else 'NO_DOCUMENTS',count=len(a.get('documents',[])),failed=sum(d.get('status')=='EXTRACTION_FAILED' for d in a.get('documents',[])),scope='Shared source discovery; not a separate Internet search for this field'))
         if f.get('parameter_candidates'):tried.append(dict(route='parameter_candidate_evaluation',status='CANDIDATE',count=len(f['parameter_candidates'])))
-        f['acquisition']=dict(route=dict(en=en,zh=zh),next=dict(en=next_en,zh=next_zh),status='SOURCE_CHANGED' if not sources_ok else 'CONFLICT' if f['source_conflict'] else 'CANDIDATE' if choices else 'NO_EXTRACTED_VALUE' if a else 'NOT_ATTEMPTED',attempted=bool(a),attempts=tried)
+        f['acquisition']=dict(route=dict(en=en,zh=zh),next=dict(en=next_en,zh=next_zh),status='SOURCE_CHANGED' if not sources_ok else 'CONFLICT' if f['source_conflict'] else 'CANDIDATE' if choices else 'NO_EXTRACTED_VALUE' if a else 'NOT_ATTEMPTED',attempted=bool(a),attempts=tried,field_value_extracted=bool(choices),candidate_sources=[v.get('source') for v in choices],automatic_methods_evaluated=['explicit_source_values','terrain_or_geometry_proposals'],manual_decision_required=f['missing'] or f['source_conflict'])
     return fields
 
 def overlay(m,map_data):
@@ -222,7 +222,11 @@ def overlay(m,map_data):
                 if not finite(x) or not finite(y):continue
                 result.append(dict(**p,xy=[x,y],source=survey['source']['sha256'],unit=context['vertical_unit'],datum=context['vertical_datum'],context_basis=context['basis']))
         except Exception as e:issues.append(str(e))
-    return dict(**map_data,survey_points=result,survey_issues=issues)
+    from .app_parameters import objects
+    from .app_automation import resolve
+    mapped,errors=resolve(m,objects(m)[4])
+    openings=[dict(group=r['group'],barrel=r['barrel'],xy=[e['xy'] for e in r['ends']],interpretation=r['interpretation']) for r in mapped]
+    return dict(**map_data,survey_points=result,survey_issues=issues,opening_items=openings)
 
 def select_points(key,body):
     """Turn explicitly identified survey points into conservative model candidates."""

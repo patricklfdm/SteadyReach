@@ -84,6 +84,16 @@ def collect(summary_path, comparisons=()):
         if not intact([h['diagnostics']]):raise ValueError('Report diagnostic evidence changed')
         diagnostics=read(ROOT/h['diagnostics']['path']);sources.append(h['diagnostics'])
         if diagnostics['run_id']!=h['run_id'] or not intact(diagnostics['sources']):raise ValueError('Report diagnostic source mismatch')
+    supplement=None
+    if s.get('native_supplement'):
+        from .app_outputs import validate as validate_outputs,diagnostics as supplemented_qa
+        supplement=validate_outputs(s['native_supplement']);diagnostics=supplemented_qa(h,supplement)
+        sources+=[s['native_supplement']]+supplement['files']
+    import re
+    language_review=[]
+    for i,g in enumerate((geometry or {}).get('structure',{}).get('groups',[])):
+        for key in ('bottom_type','inlet_description','blockage_basis'):
+            if re.search(r'[\u3400-\u9fff]',str(g.get(key,''))):language_review.append(dict(group=i+1,field=key,status='ENGLISH_TRANSLATION_PENDING',original=g[key]))
     compared=[];references=[]
     for path in comparisons or []:
         entry=item(safe_path(ROOT,path));comp=read(ROOT/entry['path'])
@@ -109,7 +119,7 @@ def collect(summary_path, comparisons=()):
         compared.append(comp);sources+=[entry]+comp['sources']
     return dict(schema_version='readable_report_data_1.0',created_utc=utc(),summary=s,sections=rows,
         geometry=geometry,map_geometry=map_geometry,geometry_source=geometry_source,raster_source=raster_source,diagnostics=diagnostics,
-        comparisons=compared,reference_comparisons=references,native_inputs=native_inputs,native_input_error=native_input_error,
+        language_review=language_review,native_supplement=supplement,comparisons=compared,reference_comparisons=references,native_inputs=native_inputs,native_input_error=native_input_error,
         sources=sources,report_generation_is_solver_run=False)
 
 

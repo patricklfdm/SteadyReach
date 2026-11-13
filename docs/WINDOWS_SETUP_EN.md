@@ -35,3 +35,5 @@ When prompted, choose QGIS's installation root or press Enter to defer. At compl
 These checks are software checks, not a hydraulic calculation. A successful check does not approve a site design. If a `.venv` folder is incomplete, keep it for diagnosis; move it aside only after all app/installation windows have stopped, then rerun setup. Do not remove saved projects to repair Python.
 
 If software paths change, rerun setup. Machine choices live in `.tools/workflow_tools.json`; they are local and must not be published. See [troubleshooting](TROUBLESHOOTING_EN.md).
+
+The full environment check also runs a local printed-text OCR probe. Updating this release adds pinned PyWinRT Windows dependencies; rerun setup once. OCR availability is reported separately from the solver and PDF/GIS tools.

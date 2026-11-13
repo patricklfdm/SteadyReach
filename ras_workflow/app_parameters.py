@@ -133,6 +133,10 @@ def proposals(m,c,g):
             if slopes and all(v>0 for v in slopes):
                 val=round(sum(slopes)/len(slopes),6)
                 add('g.boundary_slopes.'+reach,val,'Positive exterior bed slopes as a normal-depth energy-slope proxy; range is the sampled adjacent slopes, not a confidence interval. Check boundary distance and sensitivity.','以外部河段正坡降近似正常水深能坡；范围为相邻段坡降，不是置信区间。须检查边界距离及敏感性。',range_=[round(min(slopes),6),round(max(slopes),6)])
+    from .app_automation import derived
+    for key, choices in derived(m,g).items():
+        if key.endswith('.reach_lengths_ft') or '.groups.' in key:out[key]=choices
+        else:out.setdefault(key,[]).extend(choices)
     for key,choices in out.items():
         for ch in choices:ch['candidate']=digest(dict(field=key,choice=ch,geometry=digest(g),metadata=m['metadata']))
     return out
@@ -190,7 +194,11 @@ def rows(m):
         f['missing']=missing
         f['parameter_candidates']=[dict(candidate=digest(s),**s) for s in f['suggestions']]+extra.get(f['key'],[])
     from .app_acquisition import enrich
-    return enrich(m,result)
+    result=enrich(m,result)
+    for f in result:
+        prior=f['answer'].get('candidate_record',{})
+        f['derived_update_available']=bool(prior.get('automation_context') and any(v.get('automation_context') and v['value']!=f['value'] for v in f['parameter_candidates']))
+    return result
 
 def choose(m,selections,missing_only=False):
     from . import app_core as core
@@ -203,6 +211,12 @@ def choose(m,selections,missing_only=False):
         d['answers'][f['key']]=dict(value=choice['value'],evidence_class=choice['evidence_class'],basis=choice['basis'],confirmed=False,candidate_record=choice)
         if any(digest(s)==choice['candidate'] for s in f['suggestions']):d['answers'][f['key']]['suggestion']=choice['candidate']
         used.append(dict(field=f['key'],candidate=choice))
+    selected_groups={int(v['field'].split('.')[3]) for v in used if v['field'].startswith('g.structure.groups.') and v['field'].endswith('.centers_ft')}
+    if selected_groups:
+        from .app_automation import preflight
+        candidate_geometry=intake._objects(p,d)[1]
+        blocked=[q for q in preflight(m,candidate_geometry)['issues'] if q.get('blocking') and selected_groups.intersection(q.get('groups',[])) and q['code'] in ('PROJECTED_OPENINGS_OVERLAP','OPENING_OUTSIDE_SECTION')]
+        if blocked:raise ValueError('Resolve opening projection conflicts before adopting centers / 请先解决涵孔投影冲突，再采用孔位： '+blocked[0]['message'])
     d.update(reviewer=None,basis='Displayed candidate selected for conditional computation; no engineering acceptance.')
     intake.save_draft(sp,d);m['revision']+=1;core.persist(m,'SELECT_CANDIDATES',dict(selected=used))
     return core.view(m['id'])
@@ -231,7 +245,7 @@ def binding(m):
         sp,p,d,c,g=objects(m);sources+=[item(sp.parent/'draft.json'),item(sp.parent/'packet.json')]+p['sources']
         if d.get('section_workflow'):sources+=d['section_workflow']['sources']
         sources+=d.get('geometry_edit_sources',[])
-        data=dict(configuration=c,geometry=g,answers=d['answers'],map_picks=m.get('map_picks'),survey_settings=m.get('survey_settings'))
+        data=dict(configuration=c,geometry=g,answers=d['answers'],map_picks=m.get('map_picks'),survey_settings=m.get('survey_settings'),opening_mapping=m.get('opening_mapping'),group_map_picks=m.get('group_map_picks'))
     if not intact(sources):raise ValueError('Input/source file changed or disappeared. Review its current copy / 输入或来源文件已改变，请重新核对')
     data.update(project_id=m['id'],revision=m['revision'],metadata=m['metadata'],gis=m['gis'],sources=sources)
     return data
@@ -244,6 +258,9 @@ def review(m):
     else:
         sp,d=reviewed_draft(m);errors=intake.validate(sp,d,require_consent=False,direct_start=True)['errors']
         fields=rows(m);native=None
+        from .app_automation import preflight
+        for q in preflight(m,data['geometry'])['issues']:
+            if q['blocking']:errors.append(dict(code=q['code'],en=q['message'],zh=q['zh']))
     packet=dict(schema_version='parameter_review_1',project_id=m['id'],revision=m['revision'],fingerprint=digest(data),
         inputs=data,fields=fields,native=native,errors=errors,ready=not errors,created_utc=utc(),engineering_acceptance='NOT_ASSESSED')
     path=core.folder(m['id'])/'reviews'/unique_id()/'parameters.json';save(path,packet)

@@ -13,6 +13,10 @@ from . import app_core as core
 def create():
     token=secrets.token_urlsafe(32)
     class Handler(BaseHTTPRequestHandler):
+        # Keep large DEM/proposal responses alive until Content-Length is consumed.
+        # HTTP/1.0 close-after-write reset a >255 KiB local preview on Windows.
+        protocol_version='HTTP/1.1'
+        timeout=30
         def log_message(self,*args):pass
         def route(self):
             if self.headers.get('Host')!=self.server.address:raise ValueError('Invalid local host')
@@ -22,6 +26,9 @@ def create():
         def send(self,code,value,mime='application/json; charset=utf-8'):
             raw=value if isinstance(value,bytes) else json.dumps(value,ensure_ascii=False,allow_nan=False).encode()
             self.send_response(code)
+            if code>=400:
+                # Rejected requests may have an unread body; never reuse that stream.
+                self.close_connection=True;self.send_header('Connection','close')
             for k,v in {'Content-Type':mime,'Content-Length':str(len(raw)),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
                 'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"}.items():self.send_header(k,v)
             self.end_headers();self.wfile.write(raw)
@@ -35,7 +42,7 @@ def create():
                     path=safe_path(ROOT,route[5:])
                     if not path.is_relative_to(ROOT/'projects') or path.suffix.lower() not in ('.pdf','.docx','.json','.txt','.csv','.png','.jpg','.jpeg'):raise ValueError('Unsupported artifact')
                     return self.send(200,path.read_bytes(),mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
-                assets={'':('app.html','text/html; charset=utf-8'),'app.js':('app.js','application/javascript; charset=utf-8'),'app_editor.js':('app_editor.js','application/javascript; charset=utf-8'),'app_sources.js':('app_sources.js','application/javascript; charset=utf-8'),'app.css':('app.css','text/css; charset=utf-8')}
+                assets={'app_geometry_auto.js':('app_geometry_auto.js','application/javascript; charset=utf-8'),'app_results.js':('app_results.js','application/javascript; charset=utf-8'),'app_automation.js':('app_automation.js','application/javascript; charset=utf-8'),'app_map.js':('app_map.js','application/javascript; charset=utf-8'),'app_section_repair.js':('app_section_repair.js','application/javascript; charset=utf-8'),'':('app.html','text/html; charset=utf-8'),'app.js':('app.js','application/javascript; charset=utf-8'),'app_editor.js':('app_editor.js','application/javascript; charset=utf-8'),'app_sources.js':('app_sources.js','application/javascript; charset=utf-8'),'app.css':('app.css','text/css; charset=utf-8')}
                 if route not in assets:return self.send(404,dict(error='Not found'))
                 file,mime=assets[route];self.send(200,(ROOT/'ras_workflow/templates'/file).read_bytes(),mime)
             except Exception as e:self.send(400,dict(error=str(e)))
@@ -65,6 +72,24 @@ def create():
                         from . import app_acquisition as acquisition
                         actions={'folder':acquisition.import_folder,'survey':acquisition.configure_survey,'points':acquisition.select_points}
                         result=actions[route.split('/')[1]](key,body)
+                    elif route=='opening-associations':
+                        from .app_automation import perform
+                        result=perform(key,body)
+                    elif route=='catalog-import':
+                        from .app_catalog import queue
+                        result=queue(key,body)
+                    elif route=='qgis-preview':
+                        from .app_desktop import qgis
+                        result=qgis(key,body)
+                    elif route in ('study-prepare','study-start'):
+                        from . import app_study
+                        result=(app_study.prepare if route=='study-prepare' else app_study.start)(key,body)
+                    elif route=='native-outputs':
+                        from .app_outputs import receive
+                        result=receive(key,body)
+                    elif route=='revision':
+                        from .app_revision import create as revise
+                        result=revise(key,body)
                     elif route=='start':result=core.start(key,body)
                     elif route=='review':
                         from .app_parameters import review

@@ -286,7 +286,6 @@ def run(key):
         d['uploads']+=m.get('attachments',[])+[m['run_confirmation'],m['pending_review']]
         if m.get('road_sample'):d['uploads'].append(m['road_sample'])
         if m.get('source_analysis'):d['uploads'].append(m['source_analysis'])
-        if m.get('source_analysis'):d['uploads'].append(m['source_analysis'])
         save(sp.parent/'draft.json',d)
         result=intake.apply(ROOT/m['session'],read((ROOT/m['session']).parent/'draft.json')['revision'],direct_start=True,mapping_enabled=m['gis'])
         if result['status']!='APPLIED':raise ValueError(str(result['errors']))
@@ -295,13 +294,14 @@ def run(key):
     # Preserve engine ownership protection and force new plan results.
     code=cli.execute(cp,m['run_scenario'],fresh=True,timeout=240)
     state=read(cp.parent/'state.json');m['engine_state']=rel(cp.parent/'state.json');m['summary']=state.get('latest_summary')
+    m.pop('exports_need_refresh',None)
     m['status']='RESULTS_READY' if state.get('calculation_status')=='COMPUTED' else 'NEEDS_ATTENTION'
     m['errors']=state.get('errors',[]);m['phase']='DONE';m['exit_code']=code
     if (state.get('delivery') or {}).get('status')=='INCOMPLETE':m['status']='RESULTS_READY_MAP_PENDING'
     persist(m,'FINISHED',dict(calculation=state.get('calculation_status'),exit_code=code,summary=m.get('summary')))
 
 def launch(key,action):
-    if action not in ('prepare','run','report','delivery','acquire','analyze'):raise ValueError('Unknown task')
+    if action not in ('prepare','run','report','delivery','acquire','analyze','study','catalog'):raise ValueError('Unknown task')
     m=model(key);require_idle(m)
     global_state=ROOT/'status/app/active.json'
     with lock(ROOT/'status/app/launch.lock'):
@@ -336,6 +336,12 @@ def worker(record):
             elif job['action'] in ('acquire','analyze'):
                 from .app_acquisition import analyze
                 analyze(key,network=job['action']=='acquire')
+            elif job['action']=='catalog':
+                from .app_catalog import acquire as acquire_catalog
+                acquire_catalog(key)
+            elif job['action']=='study':
+                from .app_study import execute as execute_study
+                execute_study(key)
             elif job['action']=='run':run(key)
             else:regenerate(key,job['action'])
         job['status']='FINISHED'
@@ -352,9 +358,23 @@ def regenerate(key,action):
     if action=='report':
         from .report import generate
         generate(summary,out/'reports');m['latest_reports']=rel(out/'reports')
+        m['previous_delivery']=m.get('latest_delivery') or m.get('previous_delivery') or (read(ROOT/m['engine_state']).get('delivery') if m.get('engine_state') else None)
+        m['exports_need_refresh']=True;m.pop('latest_delivery',None)
     else:
         from .site_delivery import generate
-        result=generate(summary,out/'delivery');m['latest_delivery']=result
+        if m.get('exports_need_refresh'):
+            from .report_catalog import inspect as report_editions
+            catalogue=report_editions(summary)
+            if catalogue['issues']:raise ValueError('Report evidence changed: '+str(catalogue['issues']))
+            if catalogue['latest']:
+                m['latest_reports']=rel((ROOT/catalogue['latest']['manifest']['path']).parent)
+            else:
+                from .report import generate as report_generate
+                report_generate(summary,out/'reports');m['latest_reports']=rel(out/'reports')
+        previous=m.get('latest_delivery') or m.get('previous_delivery') or (read(ROOT/m['engine_state']).get('delivery') if m.get('engine_state') else None)
+        reuse=(previous or {}).get('complete',{}).get('path') if (previous or {}).get('mapped') else None
+        result=generate(summary,out/'delivery',reuse_package=reuse);m['latest_delivery']=result
+        if result.get('status') in ('READY_FOR_REVIEW','READY_NATIVE_ONLY','READY'):m['exports_need_refresh']=False
     m.update(status='RESULTS_READY',phase='DONE',errors=[]);persist(m,'REGENERATE_'+action.upper())
 
 def view(key,detail=True):
@@ -365,9 +385,9 @@ def view(key,detail=True):
             from .project_actions import process_alive
             if not process_alive(task.get('pid')):result.update(status='INTERRUPTED',errors=['The worker stopped; saved inputs and outputs remain. Retry the task.'])
     if not detail:return result
+    if m.get('catalog_attempt') and intact([m['catalog_attempt']]):result['catalog_result']=read(ROOT/m['catalog_attempt']['path'])
+    if m.get('latest_study') and intact([m['latest_study']]):result['study_result']=read(ROOT/m['latest_study']['path'])
     result['native']=native_preview(m)
-    from .app_acquisition import snapshot
-    if m.get('source_analysis'):result['acquisition']=snapshot(m)
     from .app_acquisition import snapshot
     if m.get('source_analysis'):result['acquisition']=snapshot(m)
     if m.get('session') and not m.get('native_review') and not m.get('active_project'):
@@ -375,6 +395,9 @@ def view(key,detail=True):
         result['intake']=intake.view(ROOT/m['session'])
         from .app_parameters import rows
         result['intake']['fields']=rows(m)
+        from .app_parameters import objects
+        from .app_automation import view as automation_view
+        result['automation']=automation_view(m,objects(m)[4])
         result['intake']['check']=intake.validate(ROOT/m['session'],require_consent=False,direct_start=True)
     result['missing']=check(m) if m['status'] not in ('PROCESSING','ABANDONED') and not m.get('active_project') else []
     if m.get('summary') and intact([m['summary']]):
@@ -387,6 +410,21 @@ def view(key,detail=True):
         result['report_files']=[dict(name=p.name,path=rel(p)) for p in reports.glob('*') if p.suffix in ('.pdf','.docx')]
         delivery=m.get('latest_delivery') or (read(ROOT/m['engine_state']).get('delivery') if m.get('engine_state') else None)
         result['delivery']=delivery
+        from .app_revision import compare
+        result['comparison']=compare(m,s)
+        if s.get('native_supplement'):
+            from .app_outputs import validate as validate_outputs,diagnostics as supplemented_qa
+            result['native_supplement']=validate_outputs(s['native_supplement'])
+            result['results']['diagnostics']=supplemented_qa(h,result['native_supplement'])
+        from .qa_locator import collect as locate
+        geometry=None
+        if m.get('session') and not m.get('native_review'):
+            from .app_parameters import objects
+            geometry=objects(m)[4]
+        result['qa_locations']=locate(h,geometry)
+        if m.get('exports_need_refresh'):
+            result['report_files']=[];result['delivery']=None
+
     return result
 
 def listing():

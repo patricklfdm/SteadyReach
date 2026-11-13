@@ -152,7 +152,22 @@ def associate(project,terrain,engine,log):
     if not linked or (geometry.parent/linked).resolve()!=terrain.resolve():raise ValueError('Native terrain association readback mismatch')
 
 
-def generate(summary_path,output):
+def cached_imagery(package,crs,bounds):
+    """Reuse only an intact prior NAIP mosaic for the identical map extent."""
+    package=safe_path(ROOT,package);verify(package)
+    receipt=package/'Evidence/imagery.json';r=read(receipt)
+    if r.get('method')=='REUSED_VERIFIED_OFFLINE_MOSAIC':r=r['acquisition']
+    if r.get('status')!='READY_FOR_MAP_REVIEW':raise ValueError('Previous imagery has no verified acquisition record')
+    if not CRS.from_user_input(r['requested_crs']).equals(crs,ignore_axis_order=True):raise ValueError('Previous imagery CRS differs; acquire imagery for the revised extent')
+    tolerance=max(bounds[2]-bounds[0],bounds[3]-bounds[1])*1e-8
+    if any(abs(a-b)>tolerance for a,b in zip(bounds,r['requested_bounds'])):raise ValueError('Previous imagery extent differs; acquire imagery for the revised extent')
+    raster=package/'GIS/Aerial.tif'
+    if not raster.is_file() or sha(raster)!=r['raster']['sha256']:raise ValueError('Previous mosaic differs from its acquisition hash')
+    return dict(method='REUSED_VERIFIED_OFFLINE_MOSAIC',acquisition=r,source=r['source'],raster=item(raster),
+                previous_receipt=item(receipt),previous_manifest=item(package/'PACKAGE_MANIFEST.json'),network_requests=0)
+
+
+def generate(summary_path,output,reuse_package=None):
     summary_path=safe_path(ROOT,summary_path);summary=read(summary_path);c=summary['configuration'];h=summary.get('hydraulics')
     if not h:raise ValueError('A verified actual solver run is required for a computed delivery')
     from .report_data import collect
@@ -203,6 +218,13 @@ def generate(summary_path,output):
                 if p.is_file():copy_file(p,full/'Reports/figures'/p.name)
         copy_file(report_manifest,full/'Evidence/report_manifest.original.json')
         copy_file(summary_path,full/'Evidence/summary.original.json')
+        if summary.get('native_supplement'):
+            from .app_outputs import validate as validate_outputs
+            supplement=validate_outputs(summary['native_supplement'])
+            copy_file(ROOT/summary['native_supplement']['path'],full/'Evidence/NativeSupplement/bundle.json')
+            for i,entry in enumerate(supplement['files']):copy_file(ROOT/entry['path'],full/'Evidence/NativeSupplement'/str(i)/Path(entry['path']).name)
+            copy_file(ROOT/supplement['summary']['path'],full/'Evidence/NativeSupplement/source_summary.json')
+
         save(full/'Evidence/delivery_settings.json',settings)
         from . import __version__
         save(full/'Evidence/delivery_generator.json',dict(version=__version__,created_utc=utc(),
@@ -250,9 +272,12 @@ def generate(summary_path,output):
             associate(project,terrain,engine,full/'Evidence/terrain_association.log')
             image_settings=settings.get('imagery',{});image=None
             if image_settings.get('mode')=='usgs_naip':
-                from .imagery import acquire as acquire_imagery
-                acquired=acquire_imagery(crs,bounds,full/'Evidence/Imagery',
-                    image_settings.get('max_download_bytes',40_000_000),image_settings.get('max_pixels',1600))
+                if reuse_package:
+                    acquired=cached_imagery(reuse_package,crs,bounds)
+                else:
+                    from .imagery import acquire as acquire_imagery
+                    acquired=acquire_imagery(crs,bounds,full/'Evidence/Imagery',
+                        image_settings.get('max_download_bytes',40_000_000),image_settings.get('max_pixels',1600))
                 image=full/'GIS/Aerial.tif';copy_file(ROOT/acquired['raster']['path'],image)
                 image_settings=dict(image_settings,source=acquired['source'])
                 save(full/'Evidence/imagery.json',acquired)
