@@ -18,6 +18,7 @@ ISSUES={
  'DOWNSTREAM_EGL_RISE':('Downstream energy-grade rise','下游能量线升高','Check the flow direction and local transition.','检查流向及局部流态转换。'),
  'FLOW_SPLIT_NOT_FULLY_OBSERVED':('Incomplete structure flow split','结构分流结果不完整','Obtain all culvert, road and other-path outputs; a missing value is not zero.','补齐涵洞、道路及其他路径输出；缺值不能视为零流量。'),
  'NATIVE_WARNING_TABLE_INCOMPLETE':('Complete native warning table unavailable','完整原生警告表尚缺','Export and review all native errors, warnings and notes for this run.','导出并复核本次运行的全部原生错误、警告及提示。'),
+ 'NATIVE_DISPLAY_MACHINE_DIFFERENCE':('Native display differs from machine output','原生显示与机器输出有差异','Review both recorded values; extraction does not certify numerical agreement. Original HDF/COM values remain unchanged.','核对已记录的两个数值；导出不代表数值一致，原始 HDF／COM 数值保持不变。'),
  'STRUCTURE_FLOW_IMBALANCE':('Structure flow imbalance','结构流量不平衡','Check group totals, overflow and other represented paths.','核对孔组总量、越流及其他已建模路径。'),
  'CULVERT_GROUP_DETAIL_NOT_EXTRACTED':('Incomplete culvert-group details','孔组详细输出不完整','Review the native group output tables.','复核原生孔组输出表。'),
  'NATIVE_WET_SECTION_EDGE':('Native warning: low section end','原生警告：断面端点偏低','Inspect the actual terrain and connected flow paths beyond the section; do not raise ground to suppress the warning.','检查断面外实际地形及连通过流路径，不为消除警告抬高地面。'),
@@ -286,10 +287,19 @@ def build(data, plots, folder, language='en', detail='full', details=None):
     supplement=data.get('native_supplement')
     if supplement:
         page('Supplementary native outputs','补充原生输出')
-        p('These user-supplied native text exports were checked against this run’s geometry, water/energy levels and independent first-group outputs. Text has no embedded run hash; correct run selection still relies on the user. No new solver run. Blanks remain unavailable; rounded group sums do not prove zero road overflow.',
-          '这些用户提供的原生文本已与本次几何、水位／能量线及独立首组输出交叉核对。文本自身无运行哈希，正确选择运行仍依赖用户。本次未重新求解；空白仍为未取得，四舍五入孔组流量合计不能证明道路越流为零。')
+        if supplement.get('automatic_receipt'):
+            p('SteadyReach automatically exported these native HEC-RAS tables from an exclusively owned process. The receipt binds unchanged native inputs and outputs to this run. Group names, geometry, common water/energy levels and independent first-group results were cross-checked. Export did not rerun the solver. Values retain native display precision; blank fields remain unavailable. Rounded group sums do not prove zero road overflow.',
+              'SteadyReach 在独占的 HEC-RAS 进程内自动导出这些原生表格，导出记录将未改变的原生输入与输出绑定到本次运行。已交叉核对孔组名称、几何、公共水位／能量线及独立首组结果。导出操作未重新求解；数值保留原生显示精度，空白仍为未取得。四舍五入孔组流量合计不能证明道路越流为零。')
+        else:
+            p('These user-supplied native text exports were checked against this run’s geometry, water/energy levels and independent first-group outputs. Text has no embedded run hash; correct run selection still relies on the user. No new solver run. Blanks remain unavailable; rounded group sums do not prove zero road overflow.',
+              '这些用户提供的原生文本已与本次几何、水位／能量线及独立首组输出交叉核对。文本自身无运行哈希，正确选择运行仍依赖用户。本次未重新求解；空白仍为未取得，四舍五入孔组流量合计不能证明道路越流为零。')
         table(d,['Profile','Group','Q cfs','V US ft/s','V DS ft/s','Control'],[[r['profile'],r['native_group'],num(r['flow_cfs']),num(r['inlet_velocity_fts']),num(r['outlet_velocity_fts']),r['control']] for r in supplement['rows']],[.8,1.2,1.1,1.1,1.1,1.4])
         p('Warning coverage: '+supplement['warning_scope'],'警告覆盖范围：'+supplement['warning_scope'])
+        if supplement.get('display_differences'):
+            p('The following native display values differ from machine output by more than half a 0.01 display unit. They remain OPEN QA items, not passed comparisons. Both values are retained; differences larger than one display unit or blank/value conflicts prevent automatic import.',
+              '以下原生显示值与机器输出的差异超过 0.01 显示单位的一半，保留为未关闭 QA 项，不记为核对通过。两个数值均保留；超过一个显示单位或空白／有值冲突会阻止自动导入。')
+            table(d,[tr('Profile / group','工况／孔组'),tr('Field','字段'),tr('Native display','原生显示'),tr('Machine value','机器值'),tr('Difference','差值')],
+                [[r['profile']+' / '+str(r['group_id']+1),r['field'],str(r['native_display']),f"{r['machine_value']:.6f}",f"{r['difference']:.6f}"] for r in supplement['display_differences']],[1.2,1.6,1.1,1.4,1.4])
         if supplement['missing_groups']:p('Unexported group/profile tables: '+str(supplement['missing_groups']),'尚未取得的组／工况表：'+str(supplement['missing_groups']))
         if full and supplement['warnings']:
             for row in supplement['warnings']['records']:

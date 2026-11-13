@@ -295,13 +295,14 @@ def run(key):
     code=cli.execute(cp,m['run_scenario'],fresh=True,timeout=240)
     state=read(cp.parent/'state.json');m['engine_state']=rel(cp.parent/'state.json');m['summary']=state.get('latest_summary')
     m.pop('exports_need_refresh',None)
+    m.pop('native_export_attempt',None)
     m['status']='RESULTS_READY' if state.get('calculation_status')=='COMPUTED' else 'NEEDS_ATTENTION'
     m['errors']=state.get('errors',[]);m['phase']='DONE';m['exit_code']=code
     if (state.get('delivery') or {}).get('status')=='INCOMPLETE':m['status']='RESULTS_READY_MAP_PENDING'
     persist(m,'FINISHED',dict(calculation=state.get('calculation_status'),exit_code=code,summary=m.get('summary')))
 
 def launch(key,action):
-    if action not in ('prepare','run','report','delivery','acquire','analyze','study','catalog'):raise ValueError('Unknown task')
+    if action not in ('prepare','run','report','delivery','acquire','analyze','study','catalog','native-export'):raise ValueError('Unknown task')
     m=model(key);require_idle(m)
     global_state=ROOT/'status/app/active.json'
     with lock(ROOT/'status/app/launch.lock'):
@@ -343,6 +344,9 @@ def worker(record):
                 from .app_study import execute as execute_study
                 execute_study(key)
             elif job['action']=='run':run(key)
+            elif job['action']=='native-export':
+                from .app_outputs import retry
+                retry(key)
             else:regenerate(key,job['action'])
         job['status']='FINISHED'
     except Exception as e:
@@ -402,6 +406,7 @@ def view(key,detail=True):
     result['missing']=check(m) if m['status'] not in ('PROCESSING','ABANDONED') and not m.get('active_project') else []
     if m.get('summary') and intact([m['summary']]):
         s=read(ROOT/m['summary']['path']);h=s.get('hydraulics') or {}
+        result['automatic_native_outputs']=m.get('native_export_attempt') or s.get('automatic_native_outputs')
         result['results']=dict(calculation=s['calculation_status'],run_id=h.get('run_id'),solver_reused=s['solver_reused'],hydraulic_qa=h.get('hydraulic_qa_status'),
             diagnostics=read(ROOT/h['diagnostics']['path']) if h.get('diagnostics') and intact([h['diagnostics']]) else None,
             metrics=h.get('profiles'),engineering_acceptance='NOT_ASSESSED')

@@ -224,6 +224,8 @@ def generate(summary_path,output,reuse_package=None):
             copy_file(ROOT/summary['native_supplement']['path'],full/'Evidence/NativeSupplement/bundle.json')
             for i,entry in enumerate(supplement['files']):copy_file(ROOT/entry['path'],full/'Evidence/NativeSupplement'/str(i)/Path(entry['path']).name)
             copy_file(ROOT/supplement['summary']['path'],full/'Evidence/NativeSupplement/source_summary.json')
+            if supplement.get('automatic_receipt'):
+                copy_file(ROOT/supplement['automatic_receipt']['path'],full/'Evidence/NativeSupplement/automatic_export_receipt.json')
 
         save(full/'Evidence/delivery_settings.json',settings)
         from . import __version__

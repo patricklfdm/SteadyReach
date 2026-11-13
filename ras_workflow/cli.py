@@ -132,6 +132,11 @@ def execute(path,scenario_id,fresh=False,timeout=180,receipt_path=None):
         if target_status=='COMPLETED':summary['workflow_status']='REPORT_PENDING'
         if session:summary['intake']=dict(session=session['session'],packet=session['packet'],resume_project=rel(requested),scenario=session['scenario'])
         if hyd:summary['hydraulic_results']=item((ROOT/hyd['raw_hdf']['path']).parent.parent/'hydraulic_results.json')
+        if hyd:
+            from .app_outputs import attach_automatic
+            execution=read((ROOT/hyd['raw_hdf']['path']).parent.parent/'execution.json')
+            attach_automatic(summary,folder/'native_outputs',execution.get('native_export'),execution.get('native_export_error'))
+            print('Native outputs: '+summary['automatic_native_outputs']['status'],flush=True)
         save(folder/'summary.json',summary)
         try:report.generate(folder/'summary.json',folder/'reports')
         except Exception as e:errors.append('Report: '+str(e));save(folder/'report_error.json',dict(error=str(e),traceback=traceback.format_exc()))

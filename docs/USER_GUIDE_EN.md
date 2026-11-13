@@ -46,7 +46,7 @@ The program then builds an independent working model, runs actual HEC-RAS, extra
 
 ## 5. Read and deliver the result
 
-The results page shows flow, headwater, tailwater, velocity and road flow where the installed interface provides them. A dash means unavailable, not zero. Multiple culvert groups may lack independently extracted group velocities. Expand grouped warnings to see unresolved issues.
+The results page shows flow, headwater, tailwater, velocity and road flow where the installed interface provides them. A dash means unavailable, not zero. Native group tables and the complete warning list are exported automatically after computation and included in reports. If export is unavailable, save/close HEC-RAS and use **Export native outputs and update deliverables** without solving again. Keep Windows signed in and avoid clipboard use during export. Expand grouped warnings and any display/machine differences to see unresolved issues. [Detailed instructions](RESULTS_REVIEW_EN.md).
 
 Open Report_EN/Report_CN DOCX or PDF, and Summary_EN for the English executive summary. Open Minimal for the small native HEC-RAS/Mapper/exhibit package; open Complete for editable QGIS, both report languages, source snapshots and QA/run evidence. Keep the chosen package's subfolders together. Use copies for reviewer edits/recomputation, so the sealed package remains reproducible.
 

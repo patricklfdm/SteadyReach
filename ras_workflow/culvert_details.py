@@ -1,7 +1,7 @@
-"""Operator-observed 7.0.1 Culvert Output clipboard tables, at display precision.
+"""Inspected 7.0.1 Culvert Output clipboard tables, at display precision.
 
 This is a supplementary extraction of an existing solve, never a new solve or
-an automatic GUI exporter. The original summary and COM values stay immutable.
+a solver call. Export orchestration is in native_export; COM values stay immutable.
 """
 import csv
 import math
@@ -60,8 +60,8 @@ def parse(text):
             if not token:
                 value = None
             elif label == 'Culvert Control':
-                # Only this label has been observed in the current native acceptance.
-                if token != 'Outlet':
+                # Observed in real Galloway (Outlet) and Phelps (Inlet) exports.
+                if token not in ('Outlet','Inlet'):
                     raise ValueError('Uninspected native control label: ' + token)
                 value = token
             elif label == '# Barrels':

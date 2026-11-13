@@ -11,7 +11,15 @@
 
 ## Complete missing native outputs
 
-The automatic adapter reads verified HDF, controller and available log outputs. Some HEC-RAS 7.0.1 results are only available in native tables; this release does **not** automatically drive the HEC-RAS GUI to export them.
+After each new solve, the adapter automatically exports **every computed culvert group/profile** and the complete **Errors, Warnings and Notes** table from its owned HEC-RAS process. It checks the native selectors, headers, model/output hashes, geometry and HDF/COM values before including the texts in reports. No AI service, reviewer form or screenshot upload is needed. Complete keeps the original text and export receipt in `Evidence/NativeSupplement`; Minimal keeps its normal compact contents.
+
+For earlier runs, or after an unavailable export, expand **Complete native outputs / refresh deliverables → Retry native export without solving** and click **Export native outputs and update deliverables**. The action opens a separate copy of the saved results and automatically updates reports and both packages. The original computation is preserved and is not repeated.
+
+Save and close HEC-RAS before starting. Keep a signed-in Windows desktop available. Output windows may briefly appear; the adapter uses the clipboard and leaves the last exported table there. Avoid copying other content during export. An existing HEC-RAS process is left untouched and produces a retry message. This adapter is limited to the inspected English/US Customary 7.0.1 build, one river/reach and one crossing with 1–10 groups. Unknown layouts, identity changes, clipboard interference or timeouts leave an explicit unavailable status without discarding a verified computation.
+
+**Complete with differences** means all texts were obtained, but a native display value differs from HDF/COM beyond the normal half-display-unit check. Both values and an OPEN QA item are retained; machine results are never replaced. For hash-bound automatic exports only, discrepancies up to one 0.01 display unit may be retained this way; larger differences or blank/value conflicts reject import. This is an export consistency rule, not a hydraulic accuracy tolerance. The Phelps example exercises this state. Blank roadway flow stays unknown; rounded group sums are not used to infer it.
+
+If automatic export remains unavailable, the collapsed **How to export missing native tables** section provides the manual fallback:
 
 1. Open a copy of this run's HEC-RAS model and select its computed plan. In **View → Summary Errors, Warnings and Notes**, select the complete river/reach and every computed profile, then export text.
 2. In **Culvert Output**, select each group and profile. Use **Copy to Clipboard (Data and Headings)** and save each table as a UTF-8 `.txt`. Preserve the header and empty cells. Do not substitute zero or hand-edit values to pass checks.

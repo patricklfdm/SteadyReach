@@ -111,8 +111,9 @@ def controller_extract(c,project,hdf,probe_flags=None):
 
 def main(path):
     r=read(path);folder=path.parent;project=safe_path(ROOT,r['project']);hdf=project.with_suffix('.p01.hdf')
-    if hdf.exists():raise RuntimeError('Refusing existing plan result in fresh run')
-    if project.with_suffix('.LOG').exists():raise RuntimeError('Refusing existing log in fresh run')
+    export_only=r.get('operation')=='native_export'
+    if not export_only and hdf.exists():raise RuntimeError('Refusing existing plan result in fresh run')
+    if not export_only and project.with_suffix('.LOG').exists():raise RuntimeError('Refusing existing log in fresh run')
     state=dict(run_id=r['run_id'],case_kind=r['case_kind'],started_at_utc=utc(),solver_invoked=False,
         compute_completed=False,output_identity_verified=False,status='IN_PROGRESS',stages=[],engine=r['engine'])
     def update(stage,**values):
@@ -120,12 +121,18 @@ def main(path):
         print(stage,flush=True)
     c=None;owned_project=False
     try:
+        from .native_session import require_exclusive
+        try:require_exclusive()
+        except RuntimeError:
+            state['blocking_code']='USER_PROJECT_OPEN';raise
         env=os.environ.copy();env['PATH']=str(ROOT/'.tools/solver_runtime')+os.pathsep+env['PATH']
         si=subprocess.STARTUPINFO();si.dwFlags|=subprocess.STARTF_USESHOWWINDOW;si.wShowWindow=0
         app=subprocess.Popen([r['engine']['selected']['executable'],'-Embedding'],cwd=project.parent,env=env,startupinfo=si)
         update('owned_server_started',owned_app_pid=app.pid);time.sleep(2)
+        require_exclusive(app.pid)
         pythoncom.CoInitialize()
         c=win32com.client.dynamic.Dispatch(pythoncom.CoCreateInstance(r['engine']['selected']['clsid'],None,pythoncom.CLSCTX_LOCAL_SERVER,pythoncom.IID_IDispatch))
+        require_exclusive(app.pid)
         current=c.CurrentProjectFile()
         if current:
             state['blocking_code']='USER_PROJECT_OPEN'
@@ -133,7 +140,15 @@ def main(path):
         update('empty_project_verified',version=c.HECRASVersion())
         c.Project_Open(str(project))
         if Path(c.CurrentProjectFile()).resolve()!=project:raise RuntimeError('Project identity mismatch')
-        owned_project=True;c.Project_Save();update('roundtrip_saved')
+        owned_project=True
+        if export_only:
+            if not intact(r['export_sources']):raise ValueError('Export copy changed before opening')
+            verify_native(hdf,r['expected'],r['profiles']);c.Output_Initialize()
+            from .native_export import capture
+            capture(c,project,app.pid,folder/'native_export',r['profiles'])
+            update('native_export_finished',status='EXPORT_ATTEMPTED',native_export=item(folder/'native_export/receipt.json'))
+            return 0
+        c.Project_Save();update('roundtrip_saved')
         update('compute_invoked',solver_invoked=True)
         response=c.Compute_CurrentPlan(0,None,True);complete=bool(c.Compute_Complete())
         update('compute_returned',compute_response=response,compute_complete_flag=complete)
@@ -154,7 +169,16 @@ def main(path):
         update('identity_and_results_verified',native_field_checks=checks,compute_completed=True,output_identity_verified=True,
             output_written_this_run=True,status='COMPUTED_PENDING_QA',hdf_sha256=sha(hdf),
             native_log=item(project.with_suffix('.LOG')) if project.with_suffix('.LOG').is_file() else None)
+        # Computational success is committed before the optional desktop export.
+        # Export failure must retain the genuine HDF/COM result for report and retry.
+        update('native_export_started')
+        from .native_export import capture
+        capture(c,project,app.pid,folder/'native_export',r['profiles'])
+        update('native_export_finished',native_export=item(folder/'native_export/receipt.json'))
     except Exception as e:
+        if state.get('compute_completed') and state.get('output_identity_verified'):
+            update('native_export_failed',native_export_error=str(e))
+            return 0
         update('failure',status='FAILED',error=str(e));traceback.print_exc();return 1
     finally:
         if c is not None and owned_project:

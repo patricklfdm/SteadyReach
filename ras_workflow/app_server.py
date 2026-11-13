@@ -94,7 +94,7 @@ def create():
                     elif route=='review':
                         from .app_parameters import review
                         result=review(core.model(key))
-                    elif route in ('report','delivery'):result=core.launch(key,route)
+                    elif route in ('report','delivery','native-export'):result=core.launch(key,route)
                     elif route=='attach':result=core.attach(key,body['files'])
                     elif route=='abandon':result=core.abandon(key)
                     elif route.startswith('geometry/'):

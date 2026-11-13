@@ -23,7 +23,9 @@ The included USGS example permits comparison with published model output. Reprod
 
 ## Scope of the added automation
 
-Native-table supplementation remains a user export followed by strict automated cross-checking, not automatic GUI extraction. The inspected adapter is specific to English/US Customary HEC-RAS 7.0.1. Independent revisions apply to workflow-built models. Wet-edge searches are bounded, preserve structure approaches and never establish floodplain connectivity or convergence. Sensitivity tests explicit ranges; no universal range, field calibration or design certification is supplied. OCR can miss or misread text; catalog coverage is finite. English report templates do not translate arbitrary user-written notes; language review is flagged where Chinese construction notes remain.
+Native group and full warning tables are exported automatically from the inspected English/US Customary HEC-RAS 7.0.1 process. An available signed-in Windows desktop and clipboard are required; this is not a headless-server guarantee. Failed exports retain computed results and allow a one-click retry or manual fallback. Display/machine discrepancies remain explicit QA issues; blanks are never converted to zero. See [export behavior and limits](RESULTS_REVIEW_EN.md).
+
+Independent revisions apply to workflow-built models. Wet-edge searches are bounded, preserve structure approaches and never establish floodplain connectivity or convergence. Sensitivity tests explicit ranges; no universal range, field calibration or design certification is supplied. OCR can miss or misread text; catalog coverage is finite. English report templates do not translate arbitrary user-written notes; language review is flagged where Chinese construction notes remain.
 
 ## Automatic DEM / QA proposals
 

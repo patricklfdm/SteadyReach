@@ -89,6 +89,7 @@ def collect(summary_path, comparisons=()):
         from .app_outputs import validate as validate_outputs,diagnostics as supplemented_qa
         supplement=validate_outputs(s['native_supplement']);diagnostics=supplemented_qa(h,supplement)
         sources+=[s['native_supplement']]+supplement['files']
+        if supplement.get('automatic_receipt'):sources.append(supplement['automatic_receipt'])
     import re
     language_review=[]
     for i,g in enumerate((geometry or {}).get('structure',{}).get('groups',[])):

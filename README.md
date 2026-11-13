@@ -25,6 +25,7 @@ A Windows desktop workflow for one-dimensional steady-flow culvert analysis with
 - Imports a supported existing steady model, or builds a model from entered and terrain-derived inputs.
 - Labels suggested/estimated values and leaves unsupported mandatory inputs empty. All no-model numerical fields can be edited before one final confirmation.
 - Runs actual HEC-RAS, checks output identity, retains warnings and produces full English/Chinese DOCX and PDF reports plus an English summary.
+- Automatically exports all supported culvert-group/profile tables and the full native warning table; earlier runs can retry export and refresh deliverables without solving again. See [scope and desktop requirements](docs/RESULTS_REVIEW_EN.md).
 - Produces a small native-model delivery folder and a complete folder with reports and, when GIS is enabled and available, Mapper terrain/contours, QGIS layouts and exhibits.
 
 The supported calculation scope is one river/reach and one box or circular culvert crossing, potentially with multiple barrel groups. Surface DEM does not establish buried inverts. Successful calculation/package creation is not engineering approval.

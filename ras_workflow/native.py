@@ -75,7 +75,7 @@ def discover():
         runtime=runtime_record,
         interface_evidence=item(ROOT/'ras_workflow/resources/hec_ras_701_interface.json'),executables=executables,
         os=platform.platform(),python=sys.version,python_executable=sys.executable,
-        limitations=['Only the inspected executable hash is enabled','Complete native warnings require a separately observed GUI export and warnings-import; COM compute messages are partial'])
+        limitations=['Only the inspected executable hash is enabled','Native group/warning export requires an available Windows desktop; a failed export retains computed results and can be retried without solving. COM compute messages alone are partial.'])
     return result
 
 def fixed(values,width=8,perline=10):
@@ -173,7 +173,8 @@ def run_isolated(request_path, timeout):
     Worker waits for GO until it is assigned. A timeout closes only this job.
     """
     import win32job, win32api
-    with lock(ROOT/'status/workflow_solver.lock'):
+    from .native_session import session_lock
+    with session_lock(),lock(ROOT/'status/workflow_solver.lock'):
         request_path=Path(request_path);folder=request_path.parent
         job=win32job.CreateJobObject(None,'Local\\HecWorkflow_'+unique_id())
         limits=win32job.QueryInformationJobObject(job,win32job.JobObjectExtendedLimitInformation)
@@ -199,10 +200,17 @@ def run_isolated(request_path, timeout):
         result=dict(status=state,returncode=code,timeout_seconds=timeout,finished_at_utc=utc(),worker_pid=proc.pid,
                     cleanup='Windows job closed; only owned worker descendants affected')
         save(folder/'supervisor.json',result)
+        record=read(folder/'execution.json') if (folder/'execution.json').is_file() else {}
+        if (state=='TIMEOUT' or code!=0) and record.get('compute_completed') and record.get('output_identity_verified'):
+            # Only an interruption after the verified solve may be downgraded.
+            # Extraction still independently verifies the HDF/controller hashes.
+            record.update(native_export_error='Native export interrupted; verified calculation retained. Retry export without solving.',native_export_interrupted=True)
+            save(folder/'execution.json',record)
+            return record
         if state=='TIMEOUT' or code!=0:
             execution=read(folder/'execution.json') if (folder/'execution.json').is_file() else {}
             if execution.get('blocking_code')=='USER_PROJECT_OPEN':raise RuntimeError(execution['error'])
             raise RuntimeError('Native worker '+state+'; see '+rel(folder/'worker_stderr.log'))
-        record=read(folder/'execution.json')
+        if read(request_path).get('operation')=='native_export':return record
         if not record.get('compute_completed') or not record.get('output_identity_verified'):raise RuntimeError('Fresh matching compute was not verified')
         return record
