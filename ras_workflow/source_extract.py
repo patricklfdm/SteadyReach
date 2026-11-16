@@ -5,8 +5,33 @@ import json
 import math
 import re
 import subprocess
+import sys
+import zipfile
+from importlib.metadata import PackageNotFoundError, version
+import xml.etree.ElementTree as ET
+
+EXTRACTOR_VERSION = 2
 from pathlib import Path
 from .common import ROOT, finite
+
+def runtime_signature():
+    packages = {}
+    for name in ('pypdf', 'pypdfium2', 'winrt-runtime', 'winrt-Windows.Media.Ocr'):
+        try:
+            packages[name] = version(name)
+        except PackageNotFoundError:
+            packages[name] = None
+    return dict(python=sys.executable, version=sys.version, packages=packages)
+
+
+def reuse_document(cached, reuse_failed, runtime):
+    if not cached or cached.get('extractor_version') != EXTRACTOR_VERSION:
+        return False
+    partial_ocr = any('ocr failed' in warning.lower() for warning in cached.get('warnings', []))
+    if cached.get('status') == 'INSPECTED' and not partial_ocr:
+        return True
+    return reuse_failed and cached.get('extraction_runtime') == runtime
+
 
 def numeric(value):
     try:
@@ -55,31 +80,92 @@ def survey(rows,mapping=None):
         points.append(dict(id=str(r.get(columns.get('id'),i+1)),x=xyz[0],y=xyz[1],z=xyz[2],code=str(r.get(columns.get('code'),'')),row=i+2))
     return dict(columns=columns,headers=list(rows[0]),points=points,invalid_rows=invalid,status='PARSED' if points else 'NO_VALID_POINTS')
 
-def document_text(path,scratch,ocr=True):
-    path=Path(path);suffix=path.suffix.lower();scratch=Path(scratch);scratch.mkdir(parents=True,exist_ok=True)
-    if suffix in ('.txt','.xml'):
-        return dict(text=path.read_text(encoding='utf-8-sig')[:300_000],method='text',warnings=[])
-    if suffix=='.pdf':
+def document_text(path, scratch, ocr=True):
+    path = Path(path)
+    suffix = path.suffix.lower()
+    scratch = Path(scratch)
+    scratch.mkdir(parents=True, exist_ok=True)
+    if suffix in ('.txt', '.xml', '.kml'):
+        raw = path.read_text(encoding='utf-8-sig')[:300_000]
+        if suffix == '.kml':
+            return kml_text(raw)
+        return dict(text=raw, method='text', warnings=[])
+    if suffix in ('.docx', '.kmz'):
+        with zipfile.ZipFile(path) as archive:
+            names = ['word/document.xml'] if suffix == '.docx' else [n for n in archive.namelist() if n.lower().endswith('.kml')]
+            if sum(archive.getinfo(n).file_size for n in names) > 8_000_000:
+                raise ValueError('Document XML exceeds the 8 MB extraction bound')
+            if suffix == '.kmz':
+                documents = [kml_text(archive.read(n)) for n in names]
+                return dict(text='\n'.join(d['text'] for d in documents), method='KML placemarks',
+                            locations=[p for d in documents for p in d['locations']], warnings=[])
+            root = ET.fromstring(archive.read(names[0]))
+            ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+            paragraphs = [''.join(t.text or '' for t in p.findall('.//w:t', ns)) for p in root.findall('.//w:p', ns)]
+            return dict(text='\n'.join(paragraphs)[:300_000], method='DOCX paragraphs and tables',
+                        warnings=['Embedded drawing/image labels need visual inspection or image OCR'])
+    if suffix == '.pdf':
         from pypdf import PdfReader
-        reader=PdfReader(path);pages=reader.pages[:40]
-        parts=[p.extract_text() or '' for p in pages]
-        warnings=[]
-        if len(reader.pages)>40:warnings.append('Only the first 40 PDF pages were inspected')
-        if sum(len(p.strip()) for p in parts)>80:
-            return dict(text='\n'.join(f'[Page {i+1}]\n{p}' for i,p in enumerate(parts))[:300_000],method='PDF text',warnings=warnings)
-        if not ocr: return dict(text='',method='PDF text',warnings=['Scanned PDF needs OCR'])
-        import pypdfium2 as pdfium
-        pdf=pdfium.PdfDocument(path);parts=[]
+        reader = PdfReader(path)
+        parts = []
+        warnings = []
+        methods = []
+        pdf = None
         try:
-            for i in range(min(4,len(pdf))):
-                page=pdf[i];bitmap=page.render(scale=1.8);image=bitmap.to_pil();target=scratch/f'page_{i+1}.png';image.save(target)
-                try:parts.append(f'[Page {i+1}; OCR unverified]\n'+image_text(target,scratch))
-                finally:image.close();bitmap.close();page.close()
-        finally:pdf.close()
-        return dict(text='\n'.join(parts),method='Windows OCR',warnings=warnings+['OCR numbers need visual verification; at most four scanned pages inspected'])
-    if suffix in ('.jpg','.jpeg','.png','.tif','.tiff'):
-        return dict(text=image_text(path,scratch) if ocr else '',method='Windows OCR',warnings=['Photo / handwriting recognition is unverified; scale and feature identity require review'])
-    return dict(text='',method='unsupported',warnings=['No extractor for this file type; original retained'])
+            for i, page in enumerate(reader.pages[:40]):
+                raw = page.extract_text() or ''
+                method = 'PDF text'
+                if len(raw.strip()) < 80 and ocr:
+                    try:
+                        import pypdfium2 as pdfium
+                        if pdf is None:
+                            pdf = pdfium.PdfDocument(path)
+                        rendered = pdf[i]
+                        bitmap = rendered.render(scale=1.8)
+                        image = bitmap.to_pil()
+                        try:
+                            target = scratch / f'page_{i+1}.png'
+                            image.save(target)
+                            raw = image_text(target, scratch)
+                            method = 'Windows OCR unverified'
+                        finally:
+                            image.close()
+                            bitmap.close()
+                            rendered.close()
+                    except Exception as error:
+                        warnings.append(f'Page {i+1} OCR failed: {error}')
+                elif len(raw.strip()) < 80:
+                    warnings.append(f'Page {i+1} has little extractable text; OCR disabled')
+                parts.append(f'[Page {i+1}; {method}]\n{raw}')
+                methods.append(method)
+        finally:
+            if pdf is not None:
+                pdf.close()
+        if len(reader.pages) > 40:
+            warnings.append('Only the first 40 PDF pages were inspected')
+        return dict(text='\n'.join(parts)[:300_000], method='PDF text + OCR' if any('OCR' in m for m in methods) else 'PDF text',
+                    page_methods=methods, warnings=warnings)
+    if suffix in ('.jpg', '.jpeg', '.png', '.tif', '.tiff'):
+        return dict(text=image_text(path, scratch) if ocr else '', method='Windows OCR',
+                    warnings=['Photo / handwriting recognition is unverified; feature identity requires review'])
+    return dict(text='', method='unsupported', warnings=['No extractor for this file type; original retained'])
+
+
+def kml_text(raw):
+    root = ET.fromstring(raw)
+    ns = {'k': 'http://www.opengis.net/kml/2.2'}
+    locations = []
+    for placemark in root.findall('.//k:Placemark', ns):
+        coords = placemark.findtext('k:Point/k:coordinates', default='', namespaces=ns).strip().split(',')
+        if len(coords) < 2:
+            continue
+        lon, lat = numeric(coords[0]), numeric(coords[1])
+        if lat is None or lon is None or not -90 <= lat <= 90 or not -180 <= lon <= 180:
+            continue
+        locations.append(dict(name=placemark.findtext('k:name', default='', namespaces=ns), latitude=lat, longitude=lon))
+    return dict(text='\n'.join(f"Placemark {p['name']}: latitude {p['latitude']}, longitude {p['longitude']}" for p in locations),
+                locations=locations, method='KML placemarks', warnings=[])
+
 
 def image_text(path,scratch):
     from .local_ocr import image_text as recognize
@@ -137,17 +223,17 @@ def parameter_rows(rows,allowed):
 def text_flows(text):
     """Small, auditable extractor; ambiguous document flows remain candidates."""
     found=[]
-    for m in re.finditer(r'(?i)\b(?:Q\s*100|100[- ]year|1\s*%\s*AEP)\b[^\n\d]{0,45}([\d,]+(?:\.\d+)?)\s*(cfs|ft(?:\^?3|³)/s|m(?:\^?3|³)/s)\b',text):
+    for m in re.finditer(r'(?i)(?<![\d.])\b(?:Q\s*100|100[- ]year|1\s*(?:%|[- ]percent)\s*AEP)\b[^\n\d]{0,45}([\d,]+(?:\.\d+)?)\s*(cfs|ft(?:\^?3|³)/s|m(?:\^?3|³)/s)\b',text):
         value=numeric(m[1])
         if value and value>0:found.append(dict(value=round(value*(35.3146667 if m[2].lower().startswith('m') else 1),6),excerpt=m[0]))
     return found
 
 def text_parameters(text,allowed):
     """Extract explicit labels with units; no assignment from unlabeled numbers."""
-    aliases={'c.scenarios.0.channel_n':r'(?:channel|bottom|主槽|河床)\s*(?:Manning.?s?\s*)?(?:n|roughness|糙率)',
-        'c.scenarios.0.overbank_n':r'(?:overbank|bank|漫滩|河岸)\s*(?:Manning.?s?\s*)?(?:n|roughness|糙率)',
+    aliases={'c.scenarios.0.channel_n':r'(?:channel|bottom|主槽|河床)\s*(?:Manning.?s?\s*)?(?:n|roughness|糙率)?',
+        'c.scenarios.0.overbank_n':r'(?:overbank|bank|漫滩|河岸)\s*(?:Manning.?s?\s*)?(?:n|roughness|糙率)?',
         'g.structure.groups.0.length_ft':r'(?:culvert|barrel|涵洞)\s*(?:length|长度|涵长)',
-        'g.structure.road.width_ft':r'(?:road|roadway|路面)\s*(?:width|宽度)'}
+        'g.structure.road.width_ft':r'(?:road|roadway|路面)\s*(?:crossing\s+)?(?:width|宽度)'}
     out=[]
     for key,label in aliases.items():
         if key not in allowed:continue
@@ -170,4 +256,73 @@ def text_parameters(text,allowed):
             if key not in allowed:continue
             value=float(match[2])*(1/.3048 if match[3].lower() in ('m','meters') else 1)
             if value>0:out.append(dict(field=key,value=round(value,6),excerpt=match[0]))
-    return out
+    return out + opening_parameters(text, allowed) + group_blocks(text, allowed)
+
+
+def group_blocks(text, allowed):
+    """Read numbered group blocks with explicit labels, dimensions and datum."""
+    headings=list(re.finditer(r'(?im)^\s*(?:culvert\s+group|group|涵孔组)\s*(\d+)\s*[:：\-]?[^\n]*',text))
+    result=[]
+    labels={'length_ft':r'(?:barrel\s+|culvert\s+)?length|涵长',
+            'span_ft':r'(?:clear\s+)?(?:width|span|diameter)|净宽|直径',
+            'rise_ft':r'(?:clear\s+)?(?:height|rise)|净高',
+            'us_invert_ft':r'(?:inlet|upstream|US)\s+invert|进口涵底',
+            'ds_invert_ft':r'(?:outlet|downstream|DS)\s+invert|出口涵底'}
+    for i,heading in enumerate(headings):
+        prefix=f'g.structure.groups.{int(heading[1])-1}.'
+        block=text[heading.start():headings[i+1].start() if i+1<len(headings) else len(text)][:6000]
+        datums=set(re.findall(r'\b(?:NAVD88|NGVD29)\b',block,re.I))
+        datum=next(iter(datums)).upper() if len(datums)==1 else None
+        classification='assumed' if re.search(r'assum|hypothes|approx|nominal|estimate|假设|估[计算]',block,re.I) else 'reported'
+        for name,label in labels.items():
+            key=prefix+name
+            if key not in allowed or 'invert' in name and datum is None:
+                continue
+            pattern=r'(?:'+label+r')\s*[:=：]?\s*(-?\d+(?:\.\d+)?)\s*(US\s+survey\s+(?:ft|feet)|ft|feet|meters?|m)\b'
+            for match in re.finditer(pattern,block,re.I):
+                unit=match[2].lower()
+                factor=(1200/3937)/.3048 if unit.startswith('us') else 1/.3048 if unit.startswith('m') else 1.
+                value=float(match[1])*factor
+                if 'invert' not in name and value<=0:
+                    continue
+                row=dict(field=key,value=round(value,6),evidence_class=classification,
+                         excerpt=heading[0].strip()+' / '+match[0])
+                if 'invert' in name:
+                    row['datum']=datum
+                    row['excerpt']+=' / '+datum
+                result.append(row)
+    return result
+
+
+def opening_parameters(text, allowed):
+    """Explicit dimensions for a single group; preserve conditional wording."""
+    if 'g.structure.groups.1.shape' in allowed:
+        return []
+    prefix = 'g.structure.groups.0.'
+    result = []
+    def add(name, value, match):
+        key = prefix + name
+        if key not in allowed:
+            return
+        # Keep the enclosing sentence and preceding label for attribution.
+        excerpt = text[max(0, match.start()-100):min(len(text), match.end()+100)].strip()
+        assumed = re.search(r'assum|hypothes|appears|approx|nominal|estimate|假设|估[计算]', excerpt, re.I)
+        result.append(dict(field=key, value=value, excerpt=excerpt,
+                           evidence_class='assumed' if assumed else 'reported'))
+    for match in re.finditer(r'\b(\d+|one|two|three|four)\s*[- ](?:cell|barrel)\s+(?:concrete\s+)?box\s+culvert', text, re.I):
+        token = match[1].lower()
+        count = int(token) if token.isdigit() else {'one': 1, 'two': 2, 'three': 3, 'four': 4}[token]
+        if 1 <= count <= 25:
+            add('shape', 'box', match)
+            add('count', count, match)
+    for name, label in [('span_ft', 'width'), ('rise_ft', 'height')]:
+        pattern = r'\b' + label + r'\s+per\s+(?:cell|barrel)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(ft|feet|m|meters)\b'
+        for match in re.finditer(pattern, text, re.I):
+            value = float(match[1]) * (1/.3048 if match[2].lower() in ('m', 'meters') else 1)
+            if value > 0:
+                add(name, round(value, 6), match)
+    for match in re.finditer(r'\b(\d+(?:\.\d+)?)\s*(ft|feet|m|meters)\s*[×x]\s*(\d+(?:\.\d+)?)\s*\2\s+(?:box\s+)?(?:barrels|cells)', text, re.I):
+        factor = 1/.3048 if match[2].lower() in ('m', 'meters') else 1
+        add('span_ft', round(float(match[1])*factor, 6), match)
+        add('rise_ft', round(float(match[3])*factor, 6), match)
+    return result

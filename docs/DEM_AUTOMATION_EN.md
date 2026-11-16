@@ -2,6 +2,8 @@
 
 **English** | [简体中文](DEM_AUTOMATION_CN.md) | [No-model guide](NO_MODEL_GUIDE_EN.md)
 
+**Automatic-draft route.** The model page can stage an eligible initial layout or bounded QA correction together with dependent input estimates. Exterior end sections with unresolved bank morphology are tested at wider coverage while preserving intersection and NoData checks. Other uncertainty remains visible. Profile grids and numeric bank stations support the final inspection. [One-confirmation procedure](AUTOMATION_EN.md).
+
 Use **Automatic DEM layout / QA repair** on the Model page. The program prepares a map and profiles for one consolidated decision. It does not run HEC-RAS while proposing or adopting geometry. No reviewer name, signature or reason field is required.
 
 ## Starting without sections
@@ -37,6 +39,6 @@ In the QA preview, brown is proposed ground, grey dashed is original ground and 
 - It uses a projected local raster with known vertical unit/datum and an intact source hash. The current in-memory search accepts at most 16 million cells. Missing coverage or ambiguous terrain is reported; it is not filled with synthetic elevations.
 - Search length is bounded to 100–1,000 ft per exterior side and maximum width to 120–2,000 ft. These implementation bounds are not HEC-RAS engineering criteria. Very long, broad, braided or divided reaches need an appropriate domain and explicit engineering layout.
 - Surface DEM does not determine buried culvert length, invert, entrance shape, sediment, design discharge or calibrated roughness. Those remain source-based values or explicit assumptions.
-- The program does not automatically move structure faces, invent bypass paths, select a new regime/boundary, or claim mesh/section-spacing convergence. Initial adaptive placement is a layout heuristic, not convergence testing.
+- QA repair protects structure-face locations and retains hydraulic warnings for review. The automatic-draft route can fill a missing regime or supported boundary-slope assumption for final confirmation. Bypass representation and section-spacing convergence require their own engineering assessment.
 
 HEC guidance calls for representative geometry and sections approximately normal to flow, covering the relevant floodplain; culverts also need appropriate functional exterior sections. See [cross-section geometry](https://www.hec.usace.army.mil/confluence/rasdocs/ras1dtechref/7.0/basic-data-requirements/geometric-data/cross-section-geometry) and [culvert section locations](https://www.hec.usace.army.mil/confluence/rasdocs/ras1dtechref/7.0/modeling-culverts/general-culvert-modeling-guidelines/cross-section-locations-for-culverts). The automatic search thresholds are implementation heuristics, not thresholds prescribed by those references.

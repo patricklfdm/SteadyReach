@@ -4,6 +4,7 @@ Nothing in this module runs HEC-RAS. A proposal is never a site measurement.
 """
 import copy
 import math
+from pathlib import Path
 from .common import ROOT, digest, finite, intact, item, lock, read, rel, save, unique_id, utc
 from . import intake
 
@@ -116,7 +117,12 @@ def proposals(m,c,g):
             add(pre+'reach_lengths_ft',[length]*3,'Straight center-to-center distance, assumed equal for channel and both overbanks; revise for curved/unequal flow paths.','断面中心直线距离，暂假定左滩/主槽/右滩相同；弯曲或不等长流路请修改。')
         banks=(row.get('bank_candidates') or {}).get('selected_indices')
         if banks and row.get('station_ft') and all(type(j)==int and 0<=j<len(row['station_ft']) for j in banks):
-            add(pre+'bank_stations_ft',[row['station_ft'][j] for j in banks],'Terrain break/shape bank candidate; inspect profile and uncertainty flags.','根据地形坡折及形态生成岸站候选；请查看断面和不确定标记。','terrain_derived')
+            method=row['bank_candidates']
+            add(pre+'bank_stations_ft',[row['station_ft'][j] for j in banks],
+                method.get('basis','Terrain break/shape bank candidate; inspect profile and uncertainty flags.'),
+                method.get('basis_zh','根据地形坡折及形态生成岸站候选；请查看断面和不确定标记。'),
+                'assumed' if method.get('evidence_class')=='assumed' else 'terrain_derived')
+            out[pre+'bank_stations_ft'][-1]['bank_method']=method
         add(pre+'expansion_contraction',[.3,.1],'Expansion then contraction for gradual subcritical transitions; not a universal culvert-face default.','顺序为扩散、收缩；适用于缓流渐变段，不能统一代替涵洞突变段。',url=LOSSES)
         add(pre+'expansion_contraction',[.5,.3],'Expansion then contraction for abrupt subcritical transitions; review applicability to mixed flow.','顺序为扩散、收缩；缓流突变段候选，混合流需判断适用性。',url=LOSSES)
     # Bed-slope alternatives use exterior section center elevations and spacing.
@@ -133,12 +139,28 @@ def proposals(m,c,g):
             if slopes and all(v>0 for v in slopes):
                 val=round(sum(slopes)/len(slopes),6)
                 add('g.boundary_slopes.'+reach,val,'Positive exterior bed slopes as a normal-depth energy-slope proxy; range is the sampled adjacent slopes, not a confidence interval. Check boundary distance and sensitivity.','以外部河段正坡降近似正常水深能坡；范围为相邻段坡降，不是置信区间。须检查边界距离及敏感性。',range_=[round(min(slopes),6),round(max(slopes),6)])
-    from .app_automation import derived
+    from .app_automation import derived, dependency
     for key, choices in derived(m,g).items():
         if key.endswith('.reach_lengths_ft') or '.groups.' in key:out[key]=choices
         else:out.setdefault(key,[]).extend(choices)
+    from .conditional_estimates import construction_candidates, surface_candidates
+    for key, choices in construction_candidates(m,g,c).items():
+        # Keep alternative inlet scenarios visible for manual editing.
+        out.setdefault(key,[]).extend(choices)
+    if xs and m.get('terrain',{}).get('raster') and m.get('metadata',{}).get('dem_vertical_datum')==g.get('vertical_datum'):
+        from .terrain_auto import Sampler
+        try:
+            sampler=Sampler(m['terrain'],m['metadata'].get('dem_vertical_unit'),g['vertical_datum'])
+            if sampler.crs.equals(CRS.from_user_input(g['horizontal_crs'])):
+                for key,choices in surface_candidates(m,g,sampler).items():
+                    sourced=[v for v in out.get(key,[]) if v.get('source_derived')]
+                    out[key]=sourced+choices
+        except (ValueError,OSError):
+            pass  # Other source/manual routes remain available.
     for key,choices in out.items():
-        for ch in choices:ch['candidate']=digest(dict(field=key,choice=ch,geometry=digest(g),metadata=m['metadata']))
+        for ch in choices:
+            ch['automation_context']=dependency(m,g,key)
+            ch['candidate']=digest(dict(field=key,choice=ch))
     return out
 
 def road_context(m,g):
@@ -182,8 +204,8 @@ def sample_road(m):
         distance_us_ft=round(offset,3),sources=[terrain['raster']],sample_xy=xy.tolist(),unit='international_ft',datum=datum)
     path=core.folder(m['id'])/'map_estimates'/unique_id()/'road.json';save(path,result);m['road_sample']=item(path)
 
-def rows(m):
-    sp,p,d,c,g=objects(m);extra=proposals(m,c,g);result=intake.fields(c,g,m['scenario']);intake._suggestions(c,p,result)
+def rows(m, context=None):
+    sp,p,d,c,g=context or objects(m);extra=proposals(m,c,g);result=intake.fields(c,g,m['scenario']);intake._suggestions(c,p,result)
     for f in result:
         answer=d['answers'].get(f['key'],{});f['answer']=answer
         missing=f['value'] in (None,'',[])
@@ -250,9 +272,42 @@ def binding(m):
     data.update(project_id=m['id'],revision=m['revision'],metadata=m['metadata'],gis=m['gis'],sources=sources)
     return data
 
+def attention(m, fields, automatic=False):
+    """Keep unresolved interpretations visible at the single run confirmation."""
+    from .app_acquisition import snapshot
+    notices = []
+    if automatic or m.get('automatic_preparation'):
+        notices.append(dict(code='AUTOMATIC_GEOMETRY_REVIEW',
+            en='Check the crossing, upstream/downstream direction and floodplain coverage on the DEM. Automatic layout and section widening use terrain screening. Hydraulic suitability still requires review.',
+            zh='请在 DEM 上核对设施位置、上下游方向及漫滩覆盖。自动布置和断面扩宽采用地形筛查，仍需判断水力适用性。'))
+    uncertain = []
+    for field in fields:
+        method = field.get('answer', {}).get('candidate_record', {}).get('bank_method')
+        if method and method.get('confidence') in ('LOW', 'UNRESOLVED'):
+            uncertain.append(field)
+    if uncertain:
+        notices.append(dict(code='UNCERTAIN_BANK_INTERPRETATION',
+            en=f'{len(uncertain)} bank pairs have competing, scale-sensitive or continuity-based interpretations. Inspect their profiles and edit the bank positions as needed.',
+            zh=f'{len(uncertain)} 组岸站存在候选竞争、尺度敏感或连续性外推。请查看相应剖面并修改不适用的位置。',
+            fields=[field['key'] for field in uncertain]))
+    documents = snapshot(m).get('documents', [])
+    incomplete = [d for d in documents if d.get('status') != 'INSPECTED' or d.get('warnings')]
+    if incomplete:
+        names = [d['source'].get('original_name', Path(d['source']['path']).name) for d in incomplete]
+        notices.append(dict(code='SOURCE_EXTRACTION_LIMITS',
+            en='Inspect source files with extraction limits or unverified image text. ' + ', '.join(names),
+            zh='下列资料存在提取限制或未经核实的图像文字，请查看原件。' + '、'.join(names)))
+    return notices
+
+
 def review(m):
     from . import app_core as core
-    core.require_idle(m);data=binding(m)
+    core.require_idle(m)
+    automatic_settled=True
+    if m.get('automatic_preparation') and not m.get('active_project') and not m.get('native_review'):
+        from .app_autoprepare import fill
+        automatic_settled=fill(m, owned_only=True)['dependencies_settled']
+    data=binding(m)
     if m.get('native_review'):
         errors=core.check(m);fields=[];native=core.native_preview(m)
     else:
@@ -261,8 +316,11 @@ def review(m):
         from .app_automation import preflight
         for q in preflight(m,data['geometry'])['issues']:
             if q['blocking']:errors.append(dict(code=q['code'],en=q['message'],zh=q['zh']))
+    if not automatic_settled:
+        errors.append(dict(code='AUTOMATIC_INPUTS_UNSETTLED',en='Automatic values did not settle. Review conflicting dependencies before calculation.',zh='自动推导尚未稳定，请核对关联参数后再计算。'))
     packet=dict(schema_version='parameter_review_1',project_id=m['id'],revision=m['revision'],fingerprint=digest(data),
-        inputs=data,fields=fields,native=native,errors=errors,ready=not errors,created_utc=utc(),engineering_acceptance='NOT_ASSESSED')
+        inputs=data,fields=fields,native=native,errors=errors,ready=not errors,created_utc=utc(),engineering_acceptance='NOT_ASSESSED',
+        attention=[] if native else attention(m, fields))
     path=core.folder(m['id'])/'reviews'/unique_id()/'parameters.json';save(path,packet)
     m['pending_review']=item(path);core.persist(m,'OPEN_FINAL_PARAMETER_REVIEW',dict(review=m['pending_review']))
     return dict(**packet,review_token=m['pending_review']['sha256'],path=rel(path))

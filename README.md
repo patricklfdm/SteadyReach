@@ -2,11 +2,9 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-For new sites, let the program propose anchors, section positions/extents and bank candidates, then review them together. Completed projects can create independent QA revisions. See [automatic DEM layout and QA-guided repair](docs/DEM_AUTOMATION_EN.md).
+A Windows desktop workflow for one-dimensional steady-flow culvert analysis with HEC-RAS. Work locally through three browser screens, **Project → Model → Results**, with no AI service required.
 
-Use [consolidated preparation](docs/AUTOMATION_EN.md) for multiple opening groups, source-linked formulas, early geometry checks and batch input/bank review. Existing choices stay saved.
-
-A Windows desktop workflow for one-dimensional steady-flow culvert analysis with HEC-RAS. Work locally through three browser screens: **Project → Model → Results**. No AI service is needed.
+For a new model, import the available material and check the crossing and terrain metadata. Click **Prepare an automatic draft** to prepare sections, banks and labelled estimates together. Resolve highlighted issues, then confirm the complete model once. Numeric bank editing and profile grids support corrections. [Preparation guide](docs/AUTOMATION_EN.md).
 
 ## Start here
 
@@ -32,7 +30,9 @@ The supported calculation scope is one river/reach and one box or circular culve
 
 ## Source-assisted input
 
-The model page now searches supported public sources, parses survey CSV/PDF/text, attempts local OCR, overlays survey points on the DEM and proposes values with provenance. It keeps existing values, distinguishes conflicts and failed attempts, and groups parameters in collapsed sections with a missing-item navigator. See [source assistance](docs/SOURCE_ASSIST_EN.md). Provider coverage is limited; unsupported or ambiguous site information still needs an engineer.
+The model page now searches supported public sources, parses survey CSV, PDF text/scanned pages, DOCX paragraphs/tables, KML/KMZ placemarks and labelled text, attempts local OCR, overlays survey points on the DEM and proposes values with provenance. It keeps existing values, distinguishes conflicts and failed attempts, and groups parameters in collapsed sections with a missing-item navigator. See [source assistance](docs/SOURCE_ASSIST_EN.md). Provider coverage is limited; unsupported or ambiguous site information still needs an engineer.
+
+Saved projects can be deleted from the home page and restored from **Deleted projects**. Their files remain available to dependent revisions and continue to use disk space.
 
 ## Your files
 

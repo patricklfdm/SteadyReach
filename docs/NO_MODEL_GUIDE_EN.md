@@ -2,6 +2,8 @@
 
 **English** | [简体中文](NO_MODEL_GUIDE_CN.md) | [Home](../README.md)
 
+Use **Prepare an automatic draft** after source import and crossing/metadata checks. It stages geometry and labelled estimates together. Resolve highlighted issues, then use the single final parameter confirmation. The tools below provide detailed inspection and correction routes. [Automatic preparation](AUTOMATION_EN.md).
+
 Use `start_workflow.cmd`. The supported scope is one reach with one box/circular culvert crossing and 1D steady flow; distinct openings may use separate groups. Normal operation uses the local browser, without AI, reviewer names, signatures, per-field explanations or screenshot submissions.
 
 Start with [source-linked consolidated preparation](AUTOMATION_EN.md) for multi-group pairing, formulas, early geometry checks, batch parameter choices and bank profiles.

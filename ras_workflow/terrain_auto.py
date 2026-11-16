@@ -164,6 +164,34 @@ def initial(m,g,c,s,length=400.,maximum=800.):
                     row=rows[change['index']];cut,center,p=transform_section(row,s.crs,change['parameters']);tangent=np.array([-(cut[-1]-cut[0])[1],(cut[-1]-cut[0])[0]])
                     width=p['width_ft'];station=np.array(row['station_ft']);xy=cut[0]+station[:,None]/width*(cut[-1]-cut[0]);zz=s.sample(xy)
                     if np.isfinite(zz).all():row.update(cutline_xy=cut.tolist(),elevation_ft=zz.tolist());s.stamp(row)
+            # An end section may pass the relief screen while cropping a bank
+            # break. Try wider DEM coverage before asking for manual stations.
+            from .banks import propose as bank_proposal
+            for reach in ('upstream','downstream'):
+                indices=[i for i,r in enumerate(rows) if r['reach_id']==reach]
+                exterior=indices[0] if reach=='upstream' else indices[-1]
+                row=rows[exterior]
+                settings=dict(window_ft=6.,center_search_fraction=.1,distance_penalty=1.)
+                if bank_proposal(row,settings).get('selected_indices'):
+                    continue
+                old_width=row['station_ft'][-1]-row['station_ft'][0]
+                transverse=np.asarray(row['cutline_xy'][-1])-row['cutline_xy'][0]
+                tangent=np.array([-transverse[1],transverse[0]])
+                for width in sorted(set(min(maximum,old_width*v) for v in (1.5,2.,3.))):
+                    if width<=old_width:continue
+                    try:
+                        wider=width_row(s,row['center_xy'],tangent,minimum=width,maximum=width)
+                    except ValueError:
+                        break
+                    if not bank_proposal(wider,settings).get('selected_indices'):
+                        continue
+                    updated=dict(row,**wider)
+                    trial=rows.copy();trial[exterior]=updated
+                    if spatial_issues(trial):
+                        continue
+                    updated['auto_layout']['bank_coverage_extension_from_ft']=old_width
+                    rows[exterior]=updated
+                    break
             issues=spatial_issues(rows)
             for row in rows:row['auto_layout']['endpoints_above_screen']=min(row['elevation_ft'][0],row['elevation_ft'][-1])>row['auto_layout']['terrain_relief_screen_ft']
             annotate(candidate)

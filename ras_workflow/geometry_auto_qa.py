@@ -79,8 +79,8 @@ def propose(m,g,s,maximum=1200.):
     from .app_automation import preflight
     candidate=copy.deepcopy(g);rows=candidate['cross_sections'];changes=[];unresolved=[]
     ui=next((i for i,r in enumerate(rows) if r['rs']==g['structure'].get('us_xs_rs')),None)
-    protected={ui-1,ui,ui+1,ui+2} if ui is not None else set()
-    rotations=suggest(g,m)
+    protected={ui,ui+1} if ui is not None else set()
+    rotations=suggest(g,m,protected=protected)
     for change in rotations['changes']:
         i=change['index'];row=rows[i]
         if i in protected or not terrain_owned(row,s) or any(row.get(k) for k in ('manning_segments','ineffective_left','ineffective_right')):
@@ -116,5 +116,5 @@ def propose(m,g,s,maximum=1200.):
     return dict(layouts=[dict(id='qa_changes',geometry=candidate,anchors=[],changes=changes,changed_sections=[i for i,r in enumerate(rows) if r['rs'] in changed],
         before_sections={str(i):copy.deepcopy(r) for i,r in enumerate(g['cross_sections']) if r['rs'] in changed},
         issues=issues,warnings=['PRIOR_WSE_IS_A_SCREEN_NOT_NEW_HYDRAULICS'],unresolved=unresolved,
-        can_apply=bool(changes) and not any(q.get('blocking') for q in issues),basis='QA-driven bounded repair; preserved interior samples on extension; no change of boundary, structures or solver tolerances.')],
+        can_apply=bool(changes) and not any(q.get('blocking') and q['code']!='DERIVED_INPUT_CHANGED' for q in issues),basis='QA-driven bounded repair; preserved interior samples on extension; dependent values require refresh before final calculation confirmation.')],
         sources=[s.source]+sources,solver_run=False)

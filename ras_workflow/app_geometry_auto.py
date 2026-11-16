@@ -74,7 +74,7 @@ def apply(m,body):
         row['bank_stations_ft']=snapped
     if spatial_issues(g['cross_sections']):raise ValueError('Selected combination creates spatial conflicts; choose another proposal')
     from .app_automation import preflight
-    if v['mode']=='qa' and any(q['blocking'] for q in preflight(m,g)['issues']):raise ValueError('Proposed geometry still has blocking dependent-input conflicts')
+    if v['mode']=='qa' and any(q['blocking'] and q['code']!='DERIVED_INPUT_CHANGED' for q in preflight(m,g)['issues']):raise ValueError('Proposed geometry still has blocking dependent-input conflicts')
     folder=sp.parent/'automatic_geometry'/v['id'];entry=item(folder/'proposal.json')
     g.update(approved_for_model=False,status='EDITABLE_AUTOMATIC_PROPOSAL')
     g.setdefault('provenance',[]).extend(v['sources']+[entry])

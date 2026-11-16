@@ -7,7 +7,7 @@ import numpy as np
 from .common import finite
 
 DEFAULTS = dict(window_ft=3., min_relief_ft=.5, min_slope_drop=.08,
-                center_search_fraction=.25, competing_score_ratio=.75)
+                center_search_fraction=.25, competing_score_ratio=.75, distance_penalty=0.)
 
 
 def _single_scale(row, settings=None):
@@ -15,7 +15,7 @@ def _single_scale(row, settings=None):
     if settings:
         if set(settings)-set(p):raise ValueError('Unknown bank screening setting')
         p.update(settings)
-    if not all(finite(v) and v>0 for v in p.values()) or p['center_search_fraction']>.5 or p['competing_score_ratio']>1:
+    if not all(finite(v) and v>0 for k,v in p.items() if k!='distance_penalty') or not finite(p['distance_penalty']) or p['distance_penalty']<0 or p['center_search_fraction']>.5 or p['competing_score_ratio']>1:
         raise ValueError('Invalid bank screening settings')
     result=dict(method='outward_slope_break_v1',settings=p,evidence_class='inferred',
         selected_indices=None,confidence='UNRESOLVED',reasons=[],left=[],right=[],
@@ -45,7 +45,7 @@ def _single_scale(row, settings=None):
             if inside<=p['min_slope_drop'] or drop<p['min_slope_drop'] or relief<p['min_relief_ft']:continue
             poss.append(dict(index=int(i),station_ft=float(x[i]),elevation_ft=float(z[i]),
                 inward_slope=float(inside),outward_slope=float(outside),slope_drop=float(drop),
-                relief_ft=float(relief),score=float(drop*min(relief/p['min_relief_ft'],4))))
+                relief_ft=float(relief),score=float(drop*min(relief/p['min_relief_ft'],4)/(1+p['distance_penalty']*d[k]/w))))
         selected=[]
         for value in sorted(poss,key=lambda r:r['score'],reverse=True):
             if all(abs(value['station_ft']-a['station_ft'])>=w for a in selected):selected.append(value)

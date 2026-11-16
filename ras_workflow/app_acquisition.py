@@ -31,7 +31,7 @@ def import_folder(key,body):
     if not root.is_absolute() or str(root).startswith('\\\\') or not root.is_dir():raise ValueError('Choose a local source-material folder')
     root=root.resolve();files=[];total=0
     for p in root.rglob('*'):
-        if p.is_symlink() or not p.is_file() or p.suffix.lower() not in ('.csv','.pdf','.jpg','.jpeg','.png','.txt','.xml'):continue
+        if p.is_symlink() or not p.is_file() or p.suffix.lower() not in ('.csv','.pdf','.jpg','.jpeg','.png','.txt','.xml','.docx','.kml','.kmz','.tif','.tiff'):continue
         if not p.resolve().is_relative_to(root):continue
         size=p.stat().st_size
         if size>15_000_000:continue
@@ -83,7 +83,7 @@ def discover(m,out):
     except Exception as e:attempts.append(dict(route='MA_30_crossing_inventory',status='NETWORK_FAILED',error=str(e)))
     return attempts,links
 
-def analyze(key,network=False):
+def analyze(key,network=False,reuse_failed=False):
     from . import app_core as core,intake
     from .app_parameters import objects
     m=core.model(key)
@@ -96,6 +96,7 @@ def analyze(key,network=False):
     core.persist(m)
     sp,p,d,c,g=objects(m);allowed={f['key']:f for f in intake.fields(c,g,m['scenario'])}
     candidates=[];documents=[];surveys=[];matches=[];cache={x['source']['sha256']:x for x in old.get('documents',[])}
+    runtime=extract.runtime_signature()
     for candidate0 in old.get('candidates',[]):
         if candidate0.get('identified_points') and intact([candidate0['source']]) and candidate0.get('survey_settings_hash')==digest(m.get('survey_settings',{})):candidates.append(candidate0)
     def candidate(field,value,basis,source,classification='reported',auto=False,**extra):
@@ -134,13 +135,21 @@ def analyze(key,network=False):
                     if spec:surveys.append(dict(source=entry,**spec))
             else:
                 cached=cache.get(entry['sha256'])
-                if cached and cached.get('text') and cached.get('status')=='INSPECTED':doc=copy.deepcopy(cached);doc['source']=entry
-                else:doc.update(extract.document_text(path,out/('extract_'+str(i))))
+                if extract.reuse_document(cached,reuse_failed,runtime):
+                    doc=copy.deepcopy(cached)
+                    doc.update(source=entry,cache_reused=True)
+                    doc.setdefault('extraction_runtime',None)
+                else:
+                    doc.update(extraction_runtime=runtime)
+                    doc.update(extract.document_text(path,out/('extract_'+str(i))))
+                doc['extractor_version']=extract.EXTRACTOR_VERSION
                 for flow in extract.text_flows(doc.get('text','')):
-                    candidate('c.scenarios.0.profiles.0.flow_cfs',flow['value'],'Unverified document match: '+flow['excerpt']+'. Confirm the location, event and text against the original.',entry,'inferred' if doc.get('method')=='Windows OCR' else 'reported')
+                    candidate('c.scenarios.0.profiles.0.flow_cfs',flow['value'],'Unverified document match: '+flow['excerpt']+'. Confirm the location, event and text against the original.',entry,'inferred' if 'OCR' in doc.get('method','') else 'reported')
                 for v in extract.text_parameters(doc.get('text',''),allowed):
-                    candidate(v['field'],v['value'],'Unverified labelled text: '+v['excerpt']+'. Confirm site, group and units against the original.',entry,'inferred' if doc.get('method')=='Windows OCR' else 'reported')
-        except Exception as e:doc.update(status='EXTRACTION_FAILED',error=str(e))
+                    origin='assumed' if v.get('evidence_class')=='assumed' else 'inferred' if 'OCR' in doc.get('method','') else 'reported'
+                    candidate(v['field'],v['value'],'Unverified labelled text: '+v['excerpt']+'. Confirm site, group and units against the original.',entry,origin,datum=v.get('datum'))
+        except Exception as e:doc.update(status='EXTRACTION_FAILED',error=str(e),extractor_version=extract.EXTRACTOR_VERSION)
+        doc.setdefault('extraction_runtime',runtime)
         documents.append(doc)
     for s in surveys:
         context=extract.control_context(documents,s['points'])

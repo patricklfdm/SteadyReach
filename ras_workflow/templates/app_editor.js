@@ -21,7 +21,7 @@ function parameterInput(parent,f){
   const row=el('div',undefined,'suggestion');row.append(el('strong',tr('Candidate: ','候选：')+format(s.value,f.kind)),el('p',tr(s.condition?.en||s.basis,s.condition?.zh||s.basis)));
   if(s.range)row.append(el('p',tr('Reference range: ','参考范围：')+s.range.join(' – ')+tr(' · Check the stated conditions; this is not a site uncertainty interval.',' · 请看适用条件，不代表本站误差范围。')));
   if(s.url){const a=el('a',tr('Official reference ↗','官方依据 ↗'));a.href=s.url;a.target='_blank';a.rel='noreferrer';row.append(a);}
-  row.append(button('Use this candidate','采用此候选值',async()=>{await save();const fresh=current.intake.fields.find(x=>x.key===f.key)?.parameter_candidates.find(x=>JSON.stringify(x.value)===JSON.stringify(s.value)&&x.basis===s.basis);if(!fresh)throw Error(tr('Candidate changed. Reopen the current parameters.','候选值已变化，请重新打开当前参数。'));await api('candidate',{id:current.id,revision:current.revision,field:f.key,candidate:fresh.candidate});await open(current.id);notify(tr('Candidate applied; its assumption/source label is retained.','已采用候选值，并保留假设／来源标签。'));document.getElementById('input-'+f.key)?.scrollIntoView({block:'center'});}));suggestions.append(row);
+  row.append(button('Use this candidate','采用此候选值',async()=>{await save();const fresh=current.intake.fields.find(x=>x.key===f.key)?.parameter_candidates.find(x=>sameCandidate(x,s));if(!fresh)throw Error(tr('Candidate changed. Reopen the current parameters.','候选值已变化，请重新打开当前参数。'));await api('candidate',{id:current.id,revision:current.revision,field:f.key,candidate:fresh.candidate});await open(current.id);notify(tr('Candidate applied; its assumption/source label is retained.','已采用候选值，并保留假设／来源标签。'));document.getElementById('input-'+f.key)?.scrollIntoView({block:'center'});}));suggestions.append(row);
  }
  return input;
 }
@@ -32,7 +32,14 @@ function parameterTable(parent,fields){
   if(text.length>200){const d=details(value,Array.isArray(f.value)?f.value.length+' values — expand':'Show complete value',Array.isArray(f.value)?f.value.length+' 个数值 — 展开':'展开完整内容');d.append(el('pre',text));}else value.textContent=text||'—';t.append(row);
  }wrap.append(t);parent.append(wrap);
 }
-async function showFinalReview(){await save();finalReview=await api('review',{id:current.id});renderFinalReview();}
+async function showFinalReview(){
+ await saveAll();
+ const review=await api('review',{id:current.id});
+ current=await api('project/'+current.id);
+ if(current.revision!==review.revision)throw Error(tr('Inputs changed during review. Refresh the parameter list.','核对过程中输入发生变化，请刷新参数清单。'));
+ finalReview=review;renderFinalReview();
+ notify(review.ready?tr('Changes saved. Review the complete inputs and highlighted assumptions before running.','更改已保存。请核对完整输入和标出的假设，再确认运行。'):tr('Changes saved. Resolve the listed inputs before running.','更改已保存。请处理列出的输入问题后再运行。'));
+}
 function renderFinalReview(){
  const review=finalReview;shell(1);window.scrollTo(0,0);const screen=$('#screen');screen.append(el('h1',tr('Confirm every input before HEC-RAS runs','HEC-RAS 运算前核对全部输入')),
  el('p',tr('Nothing has been solved yet. Edit any field; changes cancel this confirmation. No name, reason, or signature is required.','尚未开始求解。可以修改任意字段，修改后本次确认会失效。无需姓名、理由或签名。')),
@@ -44,6 +51,7 @@ function renderFinalReview(){
  else{
   const assumptions=review.fields.filter(f=>!f.missing&&['assumed','inferred'].includes(f.evidence_class));screen.append(el('p',`${review.fields.length} `+tr('input fields · ','项输入 · ')+assumptions.length+tr(' marked estimates/assumptions.','项标为估计／假设。'),'status'));
   if(assumptions.length){const a=details(screen,'Estimates / assumptions ('+assumptions.length+')','估计／假设（'+assumptions.length+'）',false);parameterTable(a,assumptions);}
+  renderPreparationAttention(screen,review.attention);
   renderParameterNavigator(screen,review.fields);
   const fields=details(screen,'Complete editable parameter list','完整可修改参数清单',false);
   parameterTable(fields,review.fields);
@@ -55,7 +63,7 @@ function renderFinalReview(){
 }
 function renderManual(screen){
  const intake=current.intake;if(!intake){screen.append(button('Prepare terrain and inputs','准备地形与输入',async()=>{await api('prepare',{id:current.id});await open(current.id);}));return;}
- screen.append(el('h2',tr('Build from site materials','从现场资料建立模型')),el('p',tr('1. Find / import material and inspect extracted candidates. 2. Check exterior reaches and banks on the DEM. 3. Resolve only remaining inputs. 4. Confirm all parameters once before calculation.','① 查找／导入资料并核查提取候选；② 在 DEM 上核查外部河段和左右岸；③ 仅处理剩余缺项；④ 运算前集中确认全部参数。')));
+ screen.append(el('h2',tr('Build from site materials','从现场资料建立模型')),el('p',tr('Import site materials and check the crossing on the DEM, then prepare an automatic draft. Review the highlighted uncertainties and remaining inputs together before confirming the calculation.','导入现场资料并在 DEM 上核对设施位置，然后自动准备草稿。集中核对标出的不确定项与剩余输入，再确认运算。')));
  renderSources(screen);renderAutomation(screen);renderAutoGeometry(screen);renderParameterNavigator(screen,intake.fields);
  const guide=details(screen,'What materials are useful?','准备哪些资料？',false);
  table(guide,[tr('Input','输入'),tr('Preferred material / what automation can do','优先资料／可自动处理的部分')],[
@@ -95,7 +103,7 @@ function renderMapEditor(parent){
  field(params,'map-opening-group','Opening group for inlet / outlet picks','进出口点选所属涵孔组',0,'select',(current.automation?.groups||[{index:0}]).map(g=>[g.index,'Group '+(g.index+1),'组 '+(g.index+1)]),v=>task(async()=>{await savePoints();groupIndex=Number(v);const saved=groupPicks[String(groupIndex)]||{};anchors.inlet=saved.inlet||[];anchors.outlet=saved.outlet||[];draw();notify(tr('Pick inlet/outlet centers for group ','请点选此组进出口中心：')+(groupIndex+1));}));
  parent.append(el('small',tr('200/40 ft are editable sampling proposals, not site dimensions. Blank wall spacing stays unknown.','200/40 ft 仅为可改的采样建议，不是本站尺寸；空白墙厚保持未知。')));
  const modes=[];
- async function savePoints(){clearTimeout(pointsTimer);if(pointsPromise)await pointsPromise;await save();const picks=JSON.parse(JSON.stringify(anchors));pointsPromise=api('geometry/picks',{id:current.id,revision:current.revision,group_index:groupIndex,picks,wall_gap_ft:gap.value===''?null:Number(gap.value),parameters:{section_width_ft:Number(width.value),section_spacing_ft:Number(spacing.value)}});try{current=await pointsPromise;groupPicks[String(groupIndex)]={inlet:picks.inlet,outlet:picks.outlet};pendingMapSave=null;mapDirty=false;status.textContent=tr('Map points saved. ','地图点位已保存。')+counts();}finally{pointsPromise=null;}}
+ async function savePoints(){clearTimeout(pointsTimer);if(pointsPromise)await pointsPromise;await save();const picks=JSON.parse(JSON.stringify(anchors));pointsPromise=api('geometry/picks',{id:current.id,revision:current.revision,group_index:groupIndex,picks,wall_gap_ft:gap.value===''?null:Number(gap.value),parameters:{section_width_ft:Number(width.value),section_spacing_ft:Number(spacing.value)}});try{current=await pointsPromise;groupPicks[String(groupIndex)]={inlet:picks.inlet,outlet:picks.outlet};pendingMapSave=null;mapDirty=false;status.textContent=tr('Map points saved. ','地图点位已保存。')+counts();refreshCandidateControls();}finally{pointsPromise=null;}}
  const counts=()=>Object.entries(anchors).map(([k,v])=>`${tr({upstream:'Upstream',downstream:'Downstream',inlet:'Inlet',outlet:'Outlet',road:'Road'}[k],{upstream:'上游',downstream:'下游',inlet:'进口',outlet:'出口',road:'路面'}[k])}: ${v.length}`).join(' · ');
  function queuePoints(){pendingMapSave=savePoints;mapDirty=true;status.textContent=tr('Saving map points… ','正在保存点位… ')+counts();clearTimeout(pointsTimer);pointsTimer=setTimeout(()=>{if(!busy)task(savePoints,tr('Save map points','保存地图点位'));else queuePoints();},700);}
  for(const input of [width,spacing,gap])input.onchange=queuePoints;

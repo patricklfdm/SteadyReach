@@ -31,15 +31,34 @@ def linear_factor(g):
 
 def dependency(m,g,field):
     data=dict(crs=g.get('horizontal_crs'),datum=g.get('vertical_datum'))
+    sections=g.get('cross_sections',[])
+    face_data=[{k:r.get(k) for k in ('rs','center_xy','cutline_xy','station_ft','elevation_ft','bank_stations_ft')} if r else None for r in faces(g)]
     if '.groups.' in field:
         i=int(field.split('.')[3]);b=g['structure']['groups'][i]
-        data.update(mapping=[r for r in m.get('opening_mapping',[]) if r['group']==i],count=b.get('count'),survey=m.get('survey_settings'),map_picks=m.get('group_map_picks',{}).get(str(i)),gap=m.get('wall_gap_ft'),span=b.get('span_ft'))
-        if 'invert' in field:data['height']=b.get('rise_ft')
-        if field.endswith(('.centers_ft','.distance_us_ft')):data['faces']=[{k:r.get(k) for k in ('rs','cutline_xy','station_ft')} if r else None for r in faces(g)]
+        picks=m.get('group_map_picks',{}).get(str(i))
+        if not picks and len(g['structure']['groups'])==1:picks=m.get('map_picks')
+        data.update(mapping=[r for r in m.get('opening_mapping',[]) if r['group']==i],count=b.get('count'),shape=b.get('shape'),survey=m.get('survey_settings'),map_picks=picks,gap=m.get('wall_gap_ft'),span=b.get('span_ft'))
+        if 'invert' in field:
+            data.update(height=b.get('rise_ft'),faces=face_data,terrain=m.get('terrain',{}).get('raster'),metadata=m.get('metadata'))
+        if field.endswith(('.centers_ft','.distance_us_ft')):data['faces']=face_data
     elif '.cross_sections.' in field:
-        i=int(field.split('.')[2]);data.update(centers=[r.get('center_xy') for r in g['cross_sections'][i:i+2]],flowlines=g.get('flowlines'))
+        i=int(field.split('.')[2]);row=sections[i]
+        if field.endswith('.bank_stations_ft'):
+            data.update(section={k:row.get(k) for k in ('station_ft','elevation_ft','center_xy','cutline_xy')},terrain=m.get('terrain',{}).get('raster'))
+            data['neighbor_banks']=[{k:r.get(k) for k in ('rs','reach_id','center_xy','cutline_xy','bank_stations_ft')} for j,r in enumerate(sections) if j!=i and abs(j-i)<=2]
+        elif field.endswith('.expansion_contraction'):
+            data.update(stations=[r.get('rs') for r in sections],upstream_face=g['structure'].get('us_xs_rs'))
+        else:data.update(centers=[r.get('center_xy') for r in sections[i:i+2]],flowlines=g.get('flowlines'))
+    elif '.boundary_slopes.' in field:
+        data['sections']=[{k:r.get(k) for k in ('reach_id','center_xy','station_ft','elevation_ft','bank_stations_ft')} for r in sections]
+    elif field in ('g.structure.rs','g.structure.us_xs_rs','g.structure.ds_xs_rs'):
+        data['sections']=[{k:r.get(k) for k in ('rs','reach_id')} for r in sections]
+    elif field.startswith('g.structure.road.'):
+        data.update(survey=m.get('survey_settings'),faces=face_data,terrain=m.get('terrain',{}).get('raster'),metadata=m.get('metadata'),
+                    map_picks=m.get('map_picks'),group_map_picks=m.get('group_map_picks'),width=g['structure']['road'].get('width_ft'),
+                    groups=[{k:b.get(k) for k in ('count','span_ft','rise_ft','centers_ft','us_invert_ft','ds_invert_ft')} for b in g['structure']['groups']])
     else:
-        data.update(source=m.get('source_analysis'),survey=m.get('survey_settings'),faces=[{k:r.get(k) for k in ('rs','cutline_xy','station_ft')} if r else None for r in faces(g)])
+        data['shapes']=[b.get('shape') for b in g['structure']['groups']]
     return digest(data)
 
 
@@ -160,7 +179,7 @@ def derived(m,g):
     for r in mapped:grouped[r['group']].append(r)
     def add(key,val,basis,zh,cls,records):
         choice=proposal(val,basis,zh,cls)
-        choice.update(automation=True,dependencies=digest(dict(mapping=m.get('opening_mapping'),geometry=g)),
+        choice.update(automation=True,source_derived=bool(records),dependencies=digest(dict(mapping=m.get('opening_mapping'),geometry=g)),
             sources=[r['survey']['source'] for r in records],identified_points=[dict(group=r['group'],barrel=r['barrel'],us=r['us'],ds=r['ds'],interpretation=r['interpretation']) for r in records])
         out.setdefault(key,[]).append(choice)
     for i,rs in grouped.items():
@@ -221,11 +240,11 @@ def derived(m,g):
             for name,value in [('station_ft',a),('elevation_ft',[round(p['z']*zfactor,6) for p in road]),('distance_us_ft',round(offset(us,road[len(road)//2]['xy'],factor),6))]:
                 choice=proposal(value,'Survey RDCL/CREST points projected onto the upstream face. Assumes these points describe the overtopping crest with adequate lateral coverage; road centerline is not necessarily the crest.',
                     '将 RDCL／CREST 测点投影到上游站距轴；假定这些点描述越流高点且横向覆盖充分。路中线未必是堰顶。','inferred')
-                choice.update(automation=True,sources=[s['source']],identified_points=[p['id'] for p in road],datum=g['vertical_datum'])
+                choice.update(automation=True,source_derived=True,sources=[s['source']],identified_points=[p['id'] for p in road],datum=g['vertical_datum'])
                 out.setdefault('g.structure.road.'+name,[]).append(choice)
             choice=proposal('shared','Assume this identified road crest profile represents both faces. Use distinct profiles when their station origins/elevations differ.',
                 '假定已辨认的路顶剖面适用于两侧；站距基点或高程不同时使用独立剖面。','assumed')
-            choice.update(automation=True,sources=[s['source']])
+            choice.update(automation=True,source_derived=True,sources=[s['source']])
             out.setdefault('g.structure.road.profile_mode',[]).append(choice)
     # Curved channel distance follows the saved flowline. Overbanks remain a
     # clearly labelled equal-length assumption until their own paths are known.

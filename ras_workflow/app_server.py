@@ -35,7 +35,7 @@ def create():
         def do_GET(self):
             try:
                 route=self.route()
-                if route=='state':return self.send(200,dict(projects=core.listing(),scope='Single reach, one box/circular culvert crossing, 1D steady flow'))
+                if route=='state':return self.send(200,dict(projects=core.listing(),deleted_projects=core.listing(deleted=True),scope='Single reach, one box/circular culvert crossing, 1D steady flow'))
                 if route.startswith('project/'):
                     return self.send(200,core.view(route.split('/',1)[1]))
                 if route.startswith('file/'):
@@ -62,11 +62,15 @@ def create():
                     result=core.launch(m['id'],'prepare')
                 else:
                     key=body['id']
-                    if route=='save':result=core.update(key,body)
+                    if route in ('delete-project','restore-project'):result=core.set_deleted(key,body,deleted=route=='delete-project')
+                    elif route=='save':result=core.update(key,body)
                     elif route=='native':result=core.native_inputs(key,body)
                     elif route=='use-native-values':result=core.use_native_values(key,body)
                     elif route=='candidate':result=core.use_candidate(key,body)
                     elif route=='prepare':result=core.launch(key,'prepare')
+                    elif route=='automatic-prepare':
+                        from .app_autoprepare import queue
+                        result=queue(key,body)
                     elif route in ('acquire','analyze'):result=core.launch(key,route)
                     elif route.startswith('sources/'):
                         from . import app_acquisition as acquisition

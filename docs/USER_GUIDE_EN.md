@@ -2,7 +2,7 @@
 
 **English** | [简体中文](USER_GUIDE_CN.md) | [Home](../README.md)
 
-For new sites, follow [consolidated preparation](AUTOMATION_EN.md): associate openings, resolve early geometry checks, review candidate values and bank profiles together, then confirm the full model once.
+For a new site, import available material, check the crossing and terrain metadata, then click **Prepare an automatic draft**. Inspect the staged geometry, labelled estimates and highlighted uncertainties before confirming the full model once. [Consolidated preparation](AUTOMATION_EN.md).
 
 ## 1. Open the app
 
@@ -67,3 +67,9 @@ The package status READY_FOR_REVIEW means files were generated and checked. It d
 Public-model reproduction checks software behavior, not current field conditions. Coordinates and surface DEM do not establish buried geometry. Read [limitations](LIMITATIONS_EN.md) before using a result for design.
 
 [Results: complete native output, revise, compare and launch QGIS](RESULTS_REVIEW_EN.md)
+
+## Delete and restore saved projects
+
+On the home page, choose **Delete project** beside a saved project, then **Confirm deletion**. Cancel closes the confirmation without changing the project. A running project becomes eligible after its current task finishes.
+
+Deleted projects appear in the collapsed **Deleted projects** list. Choose **Restore project** to return one to the normal list. Deletion retains the files in their original location so dependent revisions keep working. The retained files continue to use disk space. This feature manages the project list through a recoverable deletion record.

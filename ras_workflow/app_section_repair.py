@@ -50,7 +50,7 @@ def wet_edge(m,sp,d,g,body):
         limitation='Widths tested at 1.25, 1.5 and 2 times the saved width, at most 500 samples. No raised terrain, no altered structure approach. Prior WSE is only a screening threshold; a fresh solve and flow-path review remain necessary.')
 
 
-def suggest(g,m=None):
+def suggest(g,m=None,protected=()):
     """Bounded component search; rotate only, never silently reduce width."""
     rows=copy.deepcopy(g['cross_sections'])
     from .app_automation import preflight
@@ -72,7 +72,7 @@ def suggest(g,m=None):
         ids=sorted(component);options={}
         for i in ids:
             options[i]=[]
-            for angle in angles:
+            for angle in ([0] if i in protected else angles):
                 cut,center,p=editor.transform_section(rows[i],g['horizontal_crs'],dict(rotation_deg=angle))
                 candidate=copy.deepcopy(g);candidate['cross_sections']=copy.deepcopy(rows);candidate['cross_sections'][i].update(cutline_xy=cut.tolist(),center_xy=center.tolist())
                 projection_bad=any(i in q.get('sections',[]) and q['code'] in {'PROJECTED_OPENINGS_OVERLAP','OPENING_OUTSIDE_SECTION'} for q in screen(candidate))

@@ -38,11 +38,12 @@ function renderAutoGeometry(parent){
    const chart=document.createElementNS('http://www.w3.org/2000/svg','svg');chart.setAttribute('viewBox','0 0 700 230');chart.classList.add('chart');chart.setAttribute('aria-label','RS '+r.rs+' profile');p.append(chart);
    const info=el('p',(r.bank_candidates?.reasons||[]).join('; '),'muted');p.append(info);
    const draw=()=>{chart.replaceChildren();const x=r.station_ft,z=r.elevation_ft,before=v.before_sections?.[i],change=v.changes?.find(c=>c.rs===r.rs),water=change?.threshold_prior_wse_ft,levels=[...z,...(before?.elevation_ft||[]),...(Number.isFinite(water)?[water]:[])],lo=Math.min(...levels),hi=Math.max(...levels),pt=(a,b)=>[40+(a-x[0])/(x.at(-1)-x[0])*630,190-(b-lo)/Math.max(1,hi-lo)*160];
+    profileGrid(chart,x,lo,hi,[40,670,30,190]);
     svgEl(chart,'polyline',{points:x.map((a,j)=>pt(a,z[j]).join(',')).join(' '),fill:'none',stroke:'#795438','stroke-width':2});
     if(before)svgEl(chart,'polyline',{points:before.station_ft.map((a,j)=>pt(a+(change?.station_label_shift_ft||0),before.elevation_ft[j]).join(',')).join(' '),fill:'none',stroke:'#6b7280','stroke-width':2,'stroke-dasharray':'5 4'});
     if(Number.isFinite(water)){const y=pt(x[0],water)[1];svgEl(chart,'line',{x1:40,x2:670,y1:y,y2:y,stroke:'#bd312b','stroke-dasharray':'6 4'});}
     for(const input of [left,right]){if(input.value==='')continue;const j=x.indexOf(Number(input.value));if(j>=0){const[cx,cy]=pt(x[j],z[j]);svgEl(chart,'circle',{cx,cy,r:5,fill:'#007641'});}}
-    svgEl(chart,'text',{x:5,y:20}).textContent=hi.toFixed(2)+' ft';svgEl(chart,'text',{x:40,y:218}).textContent=tr('Station ft: ','站距 ft：')+x[0].toFixed(1)+' → '+x.at(-1).toFixed(1);};
+   };
    if(proposal.mode==='qa')p.append(el('small',tr('Brown: proposed ground; grey dashed: original ground; red dashed (when present): prior WSE, not a new result. Green: banks.','棕色：提案地形；灰虚线：原地形；红虚线（如有）：前次水位，并非新结果；绿色：岸站。')));
    for(const input of [left,right])input.onchange=()=>{if(input.value!==''){const value=Number(input.value);if(!Number.isFinite(value))return;input.value=r.station_ft.reduce((a,b)=>Math.abs(a-value)<Math.abs(b-value)?a:b);notify(tr('Bank snapped to displayed DEM sample; verify before confirming.','岸站已对齐显示的采样点，请在确认前核对。'));}draw();};draw();
   }

@@ -25,6 +25,23 @@ def folder(key):
 def model(key):
     return read(folder(key)/'app.json')
 
+def deletion_record(key):
+    return ROOT/'status/app/deleted_projects'/(folder(key).name+'.json')
+
+def set_deleted(key,body,deleted):
+    """Keep shared project artifacts and their hashes intact while hiding a project."""
+    with lock(ROOT/'status/app/launch.lock'):
+        m=model(key);record=deletion_record(key)
+        if deleted:
+            if body.get('confirmed') is not True:raise ValueError('Confirm deletion / 请确认删除项目')
+            if record.exists():return dict(id=key,deleted=True)
+            require_task_finished(m)
+            if body.get('revision')!=m['revision']:raise ValueError('Project changed; refresh the list / 项目已变更，请刷新列表')
+            save(record,dict(project_id=key,title=m['title'],deleted_utc=utc(),revision=m['revision']))
+        else:
+            record.unlink(missing_ok=True)
+    return dict(id=key,deleted=deleted)
+
 def persist(m,action=None,details=None):
     m['updated_utc']=utc()
     save(folder(m['id'])/'app.json',m)
@@ -90,12 +107,16 @@ def native_inputs(key,body):
     persist(m,'SELECT_NATIVE_INPUTS',dict(inspection=item(packet),source=str(source),selected_plan=read(packet)['selected_plan']))
     return view(key)
 
-def require_idle(m):
+def require_task_finished(m):
     if m.get('task'):
         job=read(ROOT/m['task'])
         if job['status']=='RUNNING':
             from .project_actions import process_alive
             if process_alive(job.get('pid')):raise ValueError('A task is running; wait for it to finish / 当前任务尚未结束')
+
+def require_idle(m):
+    if deletion_record(m['id']).exists():raise ValueError('Restore this project from Deleted projects first / 请先从回收站恢复此项目')
+    require_task_finished(m)
     if m['status']=='ABANDONED':raise ValueError('Project abandoned; create a new project or explicitly resume')
 
 def update(key,body):
@@ -117,6 +138,8 @@ def update(key,body):
             if key0 not in allowed_fields:raise ValueError('Unknown model field: '+key0)
             previous=d['answers'].get(key0,{})
             classification=classes.get(key0,previous.get('evidence_class','user_entered'))
+            if key0 not in classes and classification in ('inferred','derived','terrain_derived'):
+                classification='assumed'
             if classification not in ('reported','assumed'):classification='user_entered'
             # Editing a candidate never silently turns it into a measurement.
             answer=dict(value=value,evidence_class=classification,basis=USER_SOURCE,confirmed=False)
@@ -302,10 +325,10 @@ def run(key):
     persist(m,'FINISHED',dict(calculation=state.get('calculation_status'),exit_code=code,summary=m.get('summary')))
 
 def launch(key,action):
-    if action not in ('prepare','run','report','delivery','acquire','analyze','study','catalog','native-export'):raise ValueError('Unknown task')
-    m=model(key);require_idle(m)
+    if action not in ('prepare','run','report','delivery','acquire','analyze','study','catalog','native-export','automatic-prepare'):raise ValueError('Unknown task')
     global_state=ROOT/'status/app/active.json'
     with lock(ROOT/'status/app/launch.lock'):
+        m=model(key);require_idle(m)
         if global_state.exists():
             from .project_actions import process_alive
             previous=read(global_state)
@@ -343,6 +366,9 @@ def worker(record):
             elif job['action']=='study':
                 from .app_study import execute as execute_study
                 execute_study(key)
+            elif job['action']=='automatic-prepare':
+                from .app_autoprepare import execute
+                execute(key)
             elif job['action']=='run':run(key)
             elif job['action']=='native-export':
                 from .app_outputs import retry
@@ -383,6 +409,7 @@ def regenerate(key,action):
 
 def view(key,detail=True):
     m=model(key);result=copy.deepcopy(m)
+    if detail and deletion_record(key).exists():raise ValueError('Restore this project from Deleted projects first / 请先从回收站恢复此项目')
     if m.get('task'):
         task=read(ROOT/m['task']);result['job']=task
         if task['status']=='RUNNING':
@@ -391,6 +418,8 @@ def view(key,detail=True):
     if not detail:return result
     if m.get('catalog_attempt') and intact([m['catalog_attempt']]):result['catalog_result']=read(ROOT/m['catalog_attempt']['path'])
     if m.get('latest_study') and intact([m['latest_study']]):result['study_result']=read(ROOT/m['latest_study']['path'])
+    if m.get('automatic_preparation') and intact([m['automatic_preparation']]):
+        result['preparation_result']=read(ROOT/m['automatic_preparation']['path'])
     result['native']=native_preview(m)
     from .app_acquisition import snapshot
     if m.get('source_analysis'):result['acquisition']=snapshot(m)
@@ -432,8 +461,13 @@ def view(key,detail=True):
 
     return result
 
-def listing():
-    return [view(p.parent.name,False) for p in sorted(BASE.glob('site_*/app.json'),reverse=True)]
+def listing(deleted=False):
+    projects=[]
+    for path in sorted(BASE.glob('site_*/app.json'),reverse=True):
+        key=path.parent.name
+        if deletion_record(key).exists()==deleted:
+            projects.append(model(key) if deleted else view(key,False))
+    return projects
 
 def attach(key,files):
     from .app_acquisition import add_file
