@@ -45,6 +45,7 @@ function renderResultTools(parent){
  if(!current.native_review)parent.append(button('Prepare QA revision suggestions','根据 QA 创建修订建议',prepareQaRevision));
  renderStudy(parent);
  renderSpacing(parent);
+ renderCoverage(parent);
  if(current.delivery?.mapped&&!current.exports_need_refresh)parent.append(button('Open QGIS review copy','打开 QGIS 复核副本',async()=>{const r=await api('qgis-preview',{id:current.id});notify(tr('Opened a separate preview copy: ','已打开独立复核副本：')+r.path);}));
  const box=details(parent,'Complete native outputs / refresh deliverables','补齐原生输出／更新交付包',!!current.exports_need_refresh||['UNAVAILABLE','COMPLETE_WITH_DIFFERENCES'].includes(current.automatic_native_outputs?.status));
  if(current.model_type==='river')box.append(el('p',tr('The workflow exports the full native warning table for the river reach. There are no culvert group tables.','工作流导出整个河段的原生警告表，纯河道没有涵孔组表。')));
@@ -81,10 +82,74 @@ function renderResultTools(parent){
 }
 
 function renderStudyProgress(parent,progress){
- const states={QUEUED:tr('Queued','等待中'),IN_PROGRESS:tr('Computing / exporting reports','计算／导出报告中'),COMPUTED:tr('Computed','已计算'),BLOCKED:tr('Needs input','待处理'),FAILED:tr('Failed','失败')};
+ const states={QUEUED:tr('Queued','等待中'),IN_PROGRESS:tr('Computing / exporting reports','计算／导出报告中'),COMPUTED:tr('Computed','已计算'),BLOCKED:tr('Needs input','待处理'),FAILED:tr('Failed','失败'),SKIPPED:tr('Unused after batch stopped','批次停止后未使用')};
  const names={baseline:tr('Baseline','基准'),refinement_1:tr('First refinement','第一级加密'),refinement_2:tr('Second refinement','第二级加密')};
  table(parent,[tr('Case','工况'),tr('Sections','断面数'),tr('Progress','进度')],progress.map(row=>[names[row.id]||row.id,row.section_count??'—',states[row.status]||row.status]));
  for(const row of progress)if(row.error)parent.append(el('p',row.id+' · '+row.error,'warning'));
+}
+
+function renderCoverage(parent){
+ if(current.native_review||current.model_type!=='river')return;
+ const pending=current.pending_study_plan?.analysis_kind==='coverage_repair';
+ const box=details(parent,'Automatic wet-end repair batch','湿端自动修订批次',pending||!!current.coverage_result);
+ box.append(el('p',tr('Confirm a width and calculation limit once. Starting from this saved baseline, each round uses the preceding actual HEC-RAS water levels to extend DEM section ends, then calculates again. Final reports and both mapped packages are exported automatically.',
+  '集中确认宽度与计算轮数上限后，程序从本次已保存基准出发，按上轮真实 HEC-RAS 水位延伸 DEM 断面端部，再计算。最后自动生成报告及两种带地图交付包。')));
+ const policy=pending?current.pending_study_plan.policy:{};
+ const width=field(box,'coverage-width','Maximum total section width (ft)','总断面宽度上限（ft）',policy.maximum_width_ft??2000,'number');width.min=120;width.max=2000;
+ const rounds=field(box,'coverage-rounds','Maximum repair calculations','最多修订计算轮数',policy.maximum_rounds??3,'number');rounds.min=1;rounds.max=5;rounds.step=1;
+ box.append(el('small',tr('These are search and computation bounds. New exterior terrain uses the existing overbank roughness assumption. Review floodplain connectivity and material suitability before confirming.',
+  '以上为搜索及计算上限。新增外部地形沿用已采用的漫滩糙率假设，确认前请判断过流连通性与材料适用性。')));
+ let proposal=null;
+ const preview=el('div');
+ box.append(button('Preview bounded wet-end repair','预览限定范围内的湿端修订',async()=>{
+  proposal=await api('study-prepare',{id:current.id,revision:current.revision,kind:'coverage',maximum_rounds:Number(rounds.value),maximum_width_ft:Number(width.value)});
+  current.pending_study=proposal.entry;current.pending_study_plan=proposal.plan;current.coverage_preview=proposal.preview;
+  showProposal();notify(tr('Preview saved. Review the extent and assumptions, then confirm once.','预览已保存。核对范围与假设后，集中确认一次即可。'));
+ }),preview);
+ for(const field of [width,rounds])field.addEventListener('input',()=>{proposal=null;preview.replaceChildren(el('p',tr('Bounds changed. Generate a new preview before calculating.','上限已修改，请重新生成预览后计算。'),'warning'));});
+ function showProposal(){
+  preview.replaceChildren();const p=proposal.preview,policy=proposal.plan.policy;
+  preview.append(el('p',p.wet_sections.length+tr(' wet-end sections · ',' 条湿端断面 · ')+p.changes.length+tr(' proposed first-round extensions',' 条首轮延伸建议'),'status'));
+  table(preview,['RS',tr('Left added ft','左端增加 ft'),tr('Right added ft','右端增加 ft')],p.changes.map(c=>[c.rs,c.left_added_ft.toFixed(2),c.right_added_ft.toFixed(2)]));
+  for(const change of p.changes){
+   const row=p.geometry.cross_sections.find(r=>r.rs===change.rs),water=p.water_levels_ft[String(change.rs)]??change.threshold_prior_wse_ft;
+   const profile=details(preview,'RS '+row.rs+' · proposed profile','RS '+row.rs+' · 建议剖面');
+   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 700 230');svg.classList.add('repair-profile');svg.setAttribute('role','img');svg.setAttribute('aria-label','Coverage DEM RS '+row.rs);profile.append(svg);
+   const x=row.station_ft,z=row.elevation_ft,lo=Math.min(...z,water),hi=Math.max(...z,water),px=v=>55+(v-x[0])/(x.at(-1)-x[0])*615,py=v=>185-(v-lo)/Math.max(1,hi-lo)*155;
+   for(let i=0;i<=5;i++){const value=lo+(hi-lo)*i/5;svgEl(svg,'line',{x1:55,x2:670,y1:py(value),y2:py(value),stroke:'#d9e1e7'});svgEl(svg,'text',{x:3,y:py(value)+4}).textContent=value.toFixed(1);}
+   for(let i=0;i<=5;i++){const value=x[0]+(x.at(-1)-x[0])*i/5;svgEl(svg,'line',{x1:px(value),x2:px(value),y1:30,y2:185,stroke:'#d9e1e7'});svgEl(svg,'text',{x:px(value),y:201,'text-anchor':'middle'}).textContent=value.toFixed(0);}
+   svgEl(svg,'polyline',{points:x.map((v,i)=>[px(v),py(z[i])].join(',')).join(' '),fill:'none',stroke:'#795438','stroke-width':2});
+   svgEl(svg,'line',{x1:55,x2:670,y1:py(water),y2:py(water),stroke:'#1679be','stroke-width':2});
+   for(const bank of row.bank_stations_ft)svgEl(svg,'line',{x1:px(bank),x2:px(bank),y1:25,y2:190,stroke:'#b83b29','stroke-dasharray':'5 3'});
+   svgEl(svg,'text',{x:55,y:215}).textContent=tr('Width / elevation in ft. Blue is preceding water level.','宽度／高程单位 ft。蓝线为上轮水位。');
+  }
+  if(p.unresolved.length)preview.append(el('p',tr('Fixed-direction proposals still leave these locations for review — ','保持方向的建议仍有以下位置待复核 — ')+p.unresolved.map(r=>'RS '+r.rs).join(', '),'warning'));
+  preview.append(el('p',tr('The batch stops when ends are dry, the limit is reached, no compatible extension is available, or a computation fails. Original samples, bank plan positions, section directions, flows, boundaries and roughness are checked each round. Other hydraulic findings remain for review.',
+   '端点高于水位、达到轮数上限、没有可用延伸或计算失败时停止。每轮核验原内部采样、岸站实际位置、断面方向、流量、边界及糙率。其他水力问题继续保留待复核。')));
+  if(!p.changes.length){preview.append(el('p',tr('No first-round extension can be calculated from this preview. Review the listed locations or retain the computed baseline.','本次预览没有可计算的首轮延伸。请复核所列位置，或保留已计算基准。'),'status'));return;}
+  const confirmation=check(preview,'I confirm these bounds and conditional exterior assumptions for the complete batch','我确认以上上限及外部地形条件性假设，授权执行本批次',false,()=>{});
+  preview.append(button('Confirm and run repair batch','确认并运行修订批次',async()=>{
+   if(!proposal||!confirmation.checked)throw Error(tr('Review and confirm the current preview first.','请先核对并确认当前预览。'));
+   await api('study-start',{id:current.id,revision:current.revision,token:proposal.token,confirmed:true});await open(current.id);
+  },'primary'),el('small',tr('Up to ','最多 ')+policy.maximum_rounds+tr(' new calculations, within ',' 轮新计算，总宽度限于 ')+policy.maximum_width_ft+' ft.'));
+ }
+ if(pending&&current.coverage_preview){proposal={plan:current.pending_study_plan,token:current.pending_study.sha256,preview:current.coverage_preview};showProposal();}
+ const result=current.coverage_result;
+ if(!result)return;
+ const states={COVERAGE_RESOLVED_REVIEW_REQUIRED:tr('Section ends are dry. Hydraulic review remains open.','断面端点均高于水位，水力复核仍待完成。'),ROUND_LIMIT_REQUIRES_REVIEW:tr('Round limit reached. Wet ends remain.','达到轮数上限，仍有湿端待处理。'),GEOMETRY_REVIEW_REQUIRED:tr('No further compatible fixed-direction extension. Review geometry.','保持方向下暂无可用延伸，请复核几何。'),INCOMPLETE:tr('Batch incomplete. Review the saved failure and retry.','批次尚未完成，请查看失败记录并重试。')};
+ box.append(el('p',states[result.status]||result.status,result.status==='COVERAGE_RESOLVED_REVIEW_REQUIRED'?'status':'warning'));
+ table(box,[tr('Case','工况'),tr('Wet sections','湿端断面'),tr('Native messages','原生信息'),tr('Max successive |ΔWSE| ft','逐轮最大 |Δ水位| ft')],result.cases.map(r=>[
+  r.reused_baseline?tr('Saved baseline (reused)','已保存基准（复用）'):r.id,r.wet_sections?.length??'—',r.diagnostics?.native_messages??'—',Number.isFinite(r.max_wse_change_ft)?r.max_wse_change_ft.toFixed(6):'—']));
+ box.append(el('p',tr('The final case has its own reports and packages below. The original baseline remains available in the main results area. Section-end coverage, spacing convergence and engineering acceptance require their respective reviews.',
+  '最终工况的独立报告和交付包见下方，原基准保留在主结果区。断面端点覆盖、断面加密收敛及工程接受需分别判断。')),
+  button('Open repair evidence','打开修订证据',()=>api('open-folder',{id:current.id,path:current.latest_coverage.path.replace(/\/[^/]+$/,'')})));
+ const exports=current.coverage_exports;
+ if(exports){
+  box.append(button('Open final repair reports','打开最终修订报告',()=>api('open-folder',{id:current.id,path:exports.reports})));
+  for(const key of ['minimal','complete'])if(exports.delivery?.[key])box.append(button(key==='minimal'?'Open repaired Minimal':'Open repaired Complete',key==='minimal'?'打开修订后最小包':'打开修订后完整包',()=>api('open-folder',{id:current.id,path:exports.delivery[key].path})));
+  box.append(el('p',tr('Final delivery status — ','最终交付状态 — ')+exports.delivery?.status));
+  if(exports.delivery?.error)box.append(el('p',exports.delivery.error,'warning'));
+ }else box.append(el('p',tr('Final exports are pending. If the job stopped, retry the confirmed batch to reuse completed calculations and finish exporting.','最终导出待完成。如任务已停止，可重试已确认批次，复用完成的计算并继续导出。'),'warning'));
 }
 
 function renderSpacing(parent){

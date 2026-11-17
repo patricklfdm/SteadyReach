@@ -125,11 +125,11 @@ def _select(options):
         if best is not None:
             chosen.update(best)
         trials.append(dict(sections=sorted(component),visited=visited,search_limit_reached=limited or coverage_limited,
-                           status='CANDIDATE_FOUND' if best is not None else 'NO_COMPATIBLE_CANDIDATE',cost=best_cost))
+                           status='CANDIDATE_FOUND' if best is not None else 'NO_COMPATIBLE_CANDIDATE',cost=list(best_cost) if best_cost is not None else None))
     return chosen,trials
 
 
-def repair(geometry,sampler,water,maximum,protected=()):
+def repair(geometry,sampler,water,maximum,protected=(),allow_rotation=True):
     from .geometry_auto_qa import extend,terrain_owned
     rows=geometry['cross_sections']
     lines={r['id']:r['xy'] for r in geometry.get('flowlines',[])}
@@ -173,7 +173,7 @@ def repair(geometry,sampler,water,maximum,protected=()):
             eligible=False
             reasons['ORIGINAL_FLOWLINE_CROSSING_REQUIRES_REVIEW']+=1
         subdivided=any(row.get(k) for k in ('manning_segments','ineffective_left','ineffective_right'))
-        angles=ANGLES if eligible and not subdivided and position is not None else [0.]
+        angles=ANGLES if allow_rotation and eligible and not subdivided and position is not None else [0.]
         nearby=[original_crossings[j] for j in (i-1,i+1) if j in original_crossings and original_crossings[j] is not None and rows[j].get('reach_id')==row.get('reach_id')]
         span=min([abs(v-position)/2 for v in nearby]+[math.inf]) if position is not None else 0.
         for angle in angles:
@@ -239,6 +239,6 @@ def repair(geometry,sampler,water,maximum,protected=()):
         if level is not None and min(row['elevation_ft'][0],row['elevation_ft'][-1])<=level:
             unresolved.append(dict(rs=row['rs'],code='NO_COMPATIBLE_DRY_EXTENT',action='Inspect the bounded candidates, flow paths and available DEM coverage.'))
     return dict(geometry=result,changes=changes,unresolved=unresolved,
-                search=dict(method='joint_section_direction_coverage_v1',angles_deg=ANGLES,maximum_width_ft=maximum,
+                search=dict(method='joint_section_direction_coverage_v1',angles_deg=ANGLES if allow_rotation else [0.],maximum_width_ft=maximum,
                     max_search_nodes=MAX_SEARCH_NODES,attempts=attempts,components=search,
                     limitation='Coverage and intersection screening using prior/reference water levels. Rotated sections are resampled and need new banks and hydraulic calculation.'))

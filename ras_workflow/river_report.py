@@ -32,10 +32,10 @@ def build(data, plots, folder, language='en', detail='full', details=None):
     s=data['summary'];h=s['hydraulics'];g=data.get('geometry') or {};c=s['configuration']
     scenario=next(v for v in c['scenarios'] if v['id']==h['scenario_id'])
     title=c['title']
-    revisions=re.search(r'(?: · revision)+$',title)
+    revisions=re.search(r'(?: · revision)+(?= / coverage repair \d+$|$)',title)
     if revisions:
         count=revisions.group().count(' · revision')
-        title=title[:revisions.start()]+tr(' Revision ', ' 修订 ')+str(count)
+        title=title[:revisions.start()]+tr(' Revision ', ' 修订 ')+str(count)+title[revisions.end():]
     d=document(title+tr(' River Reach Analysis',' 河段水力分析'))
     d.core_properties.language='zh-CN' if cn else 'en-US'
     n=lambda v:'—' if v is None else f'{v:.3f}'
@@ -96,7 +96,8 @@ def build(data, plots, folder, language='en', detail='full', details=None):
     d.add_heading(tr('Interpretation and next steps','解释与后续步骤'),1)
     p('Confirm channel survey and present bed conditions, discharge applicability, roughness, boundary influence and section-spacing sensitivity. A 1D steady model does not reproduce the time history of a flood or a two-dimensional floodplain velocity field.',
       '需确认河槽测量及现状河床、流量适用性、糙率、边界影响和断面间距敏感性。一维恒定流模型不能还原洪水随时间变化过程或二维漫滩流速场。')
-    studies=data.get('studies',[])
+    coverage_studies=[study for study in data.get('studies',[]) if study.get('coverage')]
+    studies=[study for study in data.get('studies',[]) if not study.get('coverage')]
     d.add_heading(tr('Completed sensitivity tests','已完成的敏感性测试'),1)
     if studies:
         sensitivity=[]
@@ -133,7 +134,26 @@ def build(data, plots, folder, language='en', detail='full', details=None):
     else:
         p('No completed sensitivity study is bound to this exact baseline. Tests from prior geometry revisions are not reused.',
           '未发现绑定本次基准的已完成敏感性测试；不沿用旧几何修订版的测试结果。')
+    for batch in coverage_studies:
+        result=batch['coverage']
+        d.add_heading(tr('Automatic section-extent repair','断面范围自动修订'),1)
+        states={
+            'COVERAGE_RESOLVED_REVIEW_REQUIRED':tr('Computed section ends are dry. Hydraulic review remains open.','计算断面端点均已高于水位，水力复核继续待完成。'),
+            'ROUND_LIMIT_REQUIRES_REVIEW':tr('The confirmed round limit was reached with wet ends remaining.','已达到确认轮数上限，仍有湿端待处理。'),
+            'GEOMETRY_REVIEW_REQUIRED':tr('A further feasible fixed-direction extension requires geometry review.','继续处理需要复核几何，现有方向下可采用延伸已用尽。'),
+            'INCOMPLETE':tr('The calculation batch is incomplete.','计算批次尚未完成。')}
+        d.add_paragraph(states.get(result['status'],result['status']))
+        p('The saved baseline was reused. Each repair uses actual preceding water levels and DEM exterior samples within the confirmed width and round bounds. Existing interior samples, bank plan positions and hydraulic controls were verified. Exterior overbank roughness and floodplain connectivity remain conditional.',
+          '采用已保存的真实基准。每轮修订依据上轮实际水位，在已确认宽度和轮数范围内补充 DEM 端部采样。已核验原内部采样、岸站实际位置和水力控制。新增漫滩糙率及过流连通性仍属条件性解释。')
+        table(d,[tr('Case','工况'),tr('Wet sections','湿端断面'),tr('Native messages','原生信息'),tr('Max successive |ΔWSE| ft','逐轮最大 |Δ水位| ft')],
+            [[tr('Saved baseline','已保存基准') if row['id']=='saved_baseline' else row['id'],
+              len(row['wet_sections']) if 'wet_sections' in row else '—',
+              row.get('diagnostics',{}).get('native_messages','—'),n(row.get('max_wse_change_ft'))] for row in result['cases']],
+            [1.6,1.2,1.3,2.6])
     if full:
+        if coverage_studies and not d.paragraphs[-1].text:
+            spacer=d.paragraphs[-1]._p
+            spacer.getparent().remove(spacer)
         d.add_page_break();d.add_heading(tr('Inputs and model extent','输入与模型范围'),1)
         loc=c.get('location') or {}
         table(d,[tr('Input','输入'),tr('Adopted value','采用值')],[
@@ -181,7 +201,7 @@ def build(data, plots, folder, language='en', detail='full', details=None):
         p('Full paths and SHA-256 hashes, including study cases, are retained in report_data.json and the report manifest. Short names below are an index, not substitutes for those identifiers.',
           '完整路径、SHA-256 及敏感性工况证据保留在 report_data.json 和报告清单中；下列短文件名仅供索引。')
         table(d,[tr('Evidence','证据'),tr('Recorded source','来源文件')],[[v.get('role','source'),Path(v['path']).name] for v in data['sources'][:15]],[2.4,4.3])
-        for study in studies:
+        for study in studies+coverage_studies:
             p('Sensitivity evidence: '+study['analysis']['path'],'敏感性证据：'+study['analysis']['path'])
     # A trailing spacer paragraph after the final table can spill to a blank page.
     while d.paragraphs and not d.paragraphs[-1].text and not d.paragraphs[-1]._p.xpath('.//w:drawing|.//w:br'):

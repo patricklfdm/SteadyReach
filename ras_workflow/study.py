@@ -123,9 +123,44 @@ def reviewed(study_path, review_path):
     return study_path, study, review_path, review
 
 
-def run(study_path, review_path, timeout=180):
+def run_case(sp, study, rp, review, case, journal, journal_path, timeout):
+    """Execute one source-bound case and persist its progress through normal CLI entry."""
     from .cli import execute
+    dest = (ROOT/case['draft']['path']).parent; c = read(ROOT/case['draft']['path'])
+    geometry_hash=case['geometry']['sha256']
+    if study.get('analysis_kind') in ('section_spacing','coverage_repair'):
+        from .section_spacing import confirm_geometry
+        geometry=confirm_geometry(read(ROOT/case['geometry']['path']),item(rp),
+                basis=review['basis'] if study.get('analysis_kind')=='coverage_repair' else None)
+        target=dest/'geometry.confirmed.json'
+        if target.exists() and read(target)!=geometry:raise ValueError('Confirmed spacing geometry changed')
+        if not target.exists():save(target,geometry)
+        c['geometry']=target.name;geometry_hash=sha(target)
+    c['authorization'] = 'authorization.json'; c['geometry_review'] = review['basis']
+    auth = dict(project_id=study['project_id'], allowed_geometry_sha256=geometry_hash,
+                scope=study['case_kind'], study=item(sp), review=item(rp), authority=review['reviewer'], basis=review['basis'])
+    for name, content in [('authorization.json', auth), ('project.json', c)]:
+        p = dest/name
+        if p.exists() and read(p) != content: raise ValueError('Approved study configuration changed: ' + rel(p))
+        if not p.exists(): save(p, content)
+    record = dict(id=case['id'], status='IN_PROGRESS', started_utc=utc())
+    journal['cases'] = [r for r in journal['cases'] if r['id'] != case['id']] + [record]; save(journal_path, journal)
+    try:
+        code = execute(str(dest/'project.json'), study['scenario_id'], timeout=timeout)
+        state = read(dest/'state.json')
+        record.update(exit_code=code, status='COMPUTED' if code == 0 else 'BLOCKED' if code == 2 else 'FAILED',
+                      summary=state['latest_summary'], errors=state.get('errors', []))
+    except Exception as e:
+        record.update(exit_code=1, status='FAILED', error=str(e))
+    record['finished_utc'] = utc(); save(journal_path, journal)
+    return record
+
+
+def run(study_path, review_path, timeout=180):
     sp, study, rp, review = reviewed(study_path, review_path); folder = sp.parent
+    if study.get('analysis_kind')=='coverage_repair':
+        from .coverage_study import run as run_coverage
+        return run_coverage(sp, study, rp, review, timeout)
     with lock(folder/'study.lock'):
         journal_path = folder/'execution.json'
         previous = read(journal_path) if journal_path.exists() else None
@@ -134,32 +169,7 @@ def run(study_path, review_path, timeout=180):
         journal = previous or dict(study=item(sp), review=item(rp), status='IN_PROGRESS', cases=[], started_utc=utc())
         journal['status'] = 'IN_PROGRESS'; save(journal_path, journal)
         for case in study['cases']:
-            dest = (ROOT/case['draft']['path']).parent; c = read(ROOT/case['draft']['path'])
-            geometry_hash=case['geometry']['sha256']
-            if study.get('analysis_kind')=='section_spacing':
-                from .section_spacing import confirm_geometry
-                geometry=confirm_geometry(read(ROOT/case['geometry']['path']),item(rp))
-                target=dest/'geometry.confirmed.json'
-                if target.exists() and read(target)!=geometry:raise ValueError('Confirmed spacing geometry changed')
-                if not target.exists():save(target,geometry)
-                c['geometry']=target.name;geometry_hash=sha(target)
-            c['authorization'] = 'authorization.json'; c['geometry_review'] = review['basis']
-            auth = dict(project_id=study['project_id'], allowed_geometry_sha256=geometry_hash,
-                        scope=study['case_kind'], study=item(sp), review=item(rp), authority=review['reviewer'], basis=review['basis'])
-            for name, content in [('authorization.json', auth), ('project.json', c)]:
-                p = dest/name
-                if p.exists() and read(p) != content: raise ValueError('Approved study configuration changed: ' + rel(p))
-                if not p.exists(): save(p, content)
-            record = dict(id=case['id'], status='IN_PROGRESS', started_utc=utc())
-            journal['cases'] = [r for r in journal['cases'] if r['id'] != case['id']] + [record]; save(journal_path, journal)
-            try:
-                code = execute(str(dest/'project.json'), study['scenario_id'], timeout=timeout)
-                state = read(dest/'state.json')
-                record.update(exit_code=code, status='COMPUTED' if code == 0 else 'BLOCKED' if code == 2 else 'FAILED',
-                              summary=state['latest_summary'], errors=state.get('errors', []))
-            except Exception as e:
-                record.update(exit_code=1, status='FAILED', error=str(e))
-            record['finished_utc'] = utc(); save(journal_path, journal)
+            run_case(sp, study, rp, review, case, journal, journal_path, timeout)
         journal.update(status='COMPUTED' if all(r['status'] == 'COMPUTED' for r in journal['cases']) else 'INCOMPLETE', finished_utc=utc())
         save(journal_path, journal)
     return analyze(sp, rp)

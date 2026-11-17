@@ -15,6 +15,20 @@ def collect(summary_path, summary):
         study_entry = analysis.get('study')
         if not study_entry: continue
         plan = read(safe_path(ROOT, study_entry['path']))
+        if plan.get('analysis_kind') == 'coverage_repair':
+            if analysis.get('status') == 'INCOMPLETE':
+                continue
+            if target not in (analysis.get('baseline'), analysis.get('final_summary')):
+                continue
+            from .coverage_study import analyze
+            actual = analyze(study_entry['path'], analysis['review']['path'], save_result=False)
+            if actual != analysis:
+                raise ValueError('Coverage batch assessment differs from verified computation evidence')
+            studies.append(dict(analysis=item(path), coverage=analysis, cases=analysis['cases'],
+                                comparisons=[], hydraulic_qa='REVIEW_REQUIRED', engineering_acceptance='NOT_ASSESSED'))
+            sources += [item(path), study_entry, analysis['review'], analysis['execution'], plan['specification']]
+            sources += plan['evidence']+plan['source_inputs']+analysis['evidence']
+            continue
         if target not in plan.get('evidence', []): continue
         if analysis.get('status') not in ('COMPARISON_REQUIRES_REVIEW','STABLE_AT_REVIEW_THRESHOLD','NOT_CONVERGED') or analysis.get('failed_cases'):
             continue

@@ -21,6 +21,7 @@ For a new model, import the available material and check the crossing and terrai
 - Supports draggable DEM maps, fine zoom and explicit batch section rotation → real DEM preview → apply, with intersection checks and preserved draft history.
 - Joint QA proposals compare neighboring section directions and wet-end extensions, resample rotated profiles, and present bank candidates for consolidated confirmation. Search bounds and unresolved hydraulic findings remain visible.
 - River results offer two nested DEM spacing trials with one batch confirmation, actual solver runs and comparison of water levels, warnings and wet ends. [Results and spacing guide](docs/RESULTS_REVIEW_EN.md).
+- River wet-end repairs can run within a confirmed width and round limit, using each actual calculation to extend DEM ends and export final reports and both packages. [Repair batch guide](docs/RESULTS_REVIEW_EN.md#automatic-wet-end-repair-batches).
 - Queries USGS DEMs for U.S. locations, prepares terrain, samples cross sections and proposes bank positions.
 - Ranks bank pairs across adjacent sections, preserves manual controls and flags interpolation or unstable choices. Revision results show verified water-level changes at every matching section and changes in warning coverage.
 - Imports a supported existing steady model, or builds a model from entered and terrain-derived inputs.

@@ -63,6 +63,22 @@ Automatic trials currently support one continuous workflow-built river reach. Or
 
 HEC calls for sections at changes in discharge, slope, shape and roughness. The workflow uses that guidance for candidate locations and tests the native water-level response. [HEC cross-section guidance](https://www.hec.usace.army.mil/confluence/rasdocs/rasum/6.4/entering-and-editing-geometric-data/cross-section-data).
 
+## Automatic wet-end repair batches
+
+For a computed continuous river reach, open **Automatic wet-end repair batch** on Results.
+
+1. Set a maximum total section width between 120 and 2000 ft and a limit of one to five new calculations. The displayed 2000 ft and three rounds are editable search limits. Check available terrain and floodplain connectivity.
+2. Click **Preview bounded wet-end repair**. Inspect the proposed left/right extensions and expandable profiles. Blue shows the actual baseline water level. Existing samples and bank positions in plan are retained. Newly added exterior samples inherit the selected overbank roughness assumption.
+3. Review the conditional exterior-material assumption and limits, check the confirmation box and choose **Confirm and run repair batch**. Each round uses the previous actual water levels, prepares compatible fixed-direction DEM extensions and invokes HEC-RAS. Keep the launcher open. The saved baseline is explicitly identified as reused.
+4. The batch stops when all computed ends are dry, the confirmed round limit is reached, no compatible extension is available, or a computation fails. The progress table identifies unused rounds. Original profiles, bank plan positions, direction, flows, boundaries and roughness are verified at each step. Explicit roughness subdivisions, missing terrain or geometry conflicts can require manual review.
+5. Review the wet-section and native-message counts and successive water-level changes. Open **final repair reports**, **repaired Minimal** or **repaired Complete** for the last successful case. The main result links still refer to the starting baseline. The batch report records every completed round and its stopping condition.
+
+A failed export can be retried through the saved confirmed batch. Completed, authenticated calculations are reused and the existing confirmation is preserved. Modified source or confirmation evidence requires a new preview. The final packages are independent of the original baseline. When extension changes the map extent, the batch acquires imagery for the new bounds within the configured download budget. An intact mosaic is reused when its bounds and CRS match.
+
+If a calculation fails partway, completed case files remain saved. Resolve the reported error and retry the confirmed batch to finish the calculation and export the final packages.
+
+Dry section ends establish the implemented coverage check. Spacing convergence, submerged-bed adequacy, effective floodplain connectivity, boundary influence, other warnings and engineering acceptance require further assessment. Use an editable revision for repairs needing changes to direction, actual bank position or hydraulic controls, and review those changes together.
+
 ## Remaining human decisions
 
 Check source applicability, datum, physical opening identity, buried geometry, effective flow paths, uncertain banks, inlet/floor/obstruction assumptions and boundary validity. Review Mapper/QGIS alignment and final report pages. User-authored source notes are retained in their original language; if Chinese construction notes occur in an English report, the report flags language review. Supply suitable English wording before an English-only external delivery. No local translator is assumed to preserve engineering meaning.

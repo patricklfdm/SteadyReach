@@ -416,17 +416,31 @@ def view(key,detail=True):
     if result.get('job',{}).get('action')=='study' and m.get('active_study'):
         active=m['active_study'];plan=read(ROOT/active['study']['path'])
         journal_path=(ROOT/active['study']['path']).parent/'execution.json'
-        records={}
+        records={};journal={}
         if journal_path.exists():
             journal=read(journal_path)
             if journal['study']!=active['study'] or journal['review']!=active['review']:raise ValueError('Study progress identity changed')
             records={row['id']:row for row in journal['cases']}
+        cases=plan['cases']
+        waiting='QUEUED'
+        if plan.get('analysis_kind')=='coverage_repair':
+            cases=[dict(id='repair_'+str(i)) for i in range(1,plan['policy']['maximum_rounds']+1)]
+            prepared={case['id']:case for case in journal.get('prepared_cases',[])}
+            cases=[prepared.get(case['id'],case) for case in cases]
+            if journal.get('status') not in (None,'IN_PROGRESS'):waiting='SKIPPED'
         result['study_progress']=[dict(id=case['id'],section_count=case.get('section_count'),
-            status=records.get(case['id'],{}).get('status','QUEUED'),error=records.get(case['id'],{}).get('error')) for case in plan['cases']]
+            status=records.get(case['id'],{}).get('status',waiting),error=records.get(case['id'],{}).get('error')) for case in cases]
     if m.get('catalog_attempt') and intact([m['catalog_attempt']]):result['catalog_result']=read(ROOT/m['catalog_attempt']['path'])
     if m.get('latest_study') and intact([m['latest_study']]):result['study_result']=read(ROOT/m['latest_study']['path'])
     if m.get('latest_spacing') and intact([m['latest_spacing']]):result['spacing_result']=read(ROOT/m['latest_spacing']['path'])
-    if m.get('pending_study') and intact([m['pending_study']]):result['pending_study_plan']=read(ROOT/m['pending_study']['path'])
+    if m.get('latest_coverage') and intact([m['latest_coverage']]):result['coverage_result']=read(ROOT/m['latest_coverage']['path'])
+    if m.get('latest_coverage_exports') and intact([m['latest_coverage_exports']]):
+        exports=read(ROOT/m['latest_coverage_exports']['path'])
+        if exports['analysis']==m.get('latest_coverage'):result['coverage_exports']=exports
+    if m.get('pending_study') and intact([m['pending_study']]):
+        plan=read(ROOT/m['pending_study']['path']);result['pending_study_plan']=plan
+        if plan.get('analysis_kind')=='coverage_repair' and intact([plan['initial_preview']]):
+            result['coverage_preview']=read(ROOT/plan['initial_preview']['path'])
     if m.get('automatic_preparation') and intact([m['automatic_preparation']]):
         result['preparation_result']=read(ROOT/m['automatic_preparation']['path'])
     result['native']=native_preview(m)

@@ -12,6 +12,9 @@ def prepare(key,body):
     if body.get('kind')=='spacing':
         from .section_spacing import prepare as prepare_spacing
         return prepare_spacing(m,body)
+    if body.get('kind')=='coverage':
+        from .coverage_study import prepare as prepare_coverage
+        return prepare_coverage(m,body)
     choices=body.get('parameters',[])
     if not isinstance(choices,list) or not 1<=len(choices)<=3:raise ValueError('Choose 1–3 parameters (up to six variants plus baseline)')
     c=read(ROOT/m['active_project']);g=read((ROOT/m['active_project']).parent/c['geometry']);sc=next(s for s in c['scenarios'] if s['id']==m['scenario'])
@@ -59,7 +62,14 @@ def start(key,body):
     if m['summary'] not in plan['evidence']:raise ValueError('Baseline edition changed; prepare the study again')
     review=dict(study_sha256=sha(path),decision='APPROVE_CONDITIONAL_STUDY',policy=core.POLICY,confirmed=True,reviewer=None,
         basis='Displayed sensitivity cases confirmed for local computation; no named engineering approval.',approved_case_kind=plan['case_kind'],engineering_acceptance='NOT_ASSESSED',created_utc=utc())
-    save(path.parent/'local_confirmation.json',review);study.reviewed(path,path.parent/'local_confirmation.json')
+    if plan.get('analysis_kind')=='coverage_repair':
+        review['basis']='Confirmed bounded actual-water exterior DEM extension batch, preserving original samples, bank plan positions, direction, flow, boundaries and roughness. Exterior overbank material and floodplain connectivity remain conditional.'
+    review_path=path.parent/'local_confirmation.json'
+    if review_path.exists():
+        study.reviewed(path,review_path)
+    else:
+        save(review_path,review)
+    study.reviewed(path,review_path)
     m['active_study']=dict(study=entry,review=item(path.parent/'local_confirmation.json'));core.persist(m,'CONFIRM_SENSITIVITY')
     return core.launch(key,'study')
 
@@ -70,9 +80,19 @@ def execute(key):
     result=study.run(active['study']['path'],active['review']['path'])
     path=(ROOT/active['study']['path']).parent/'analysis.json'
     entry=item(path)
-    result_field='latest_spacing' if result.get('analysis_kind')=='section_spacing' else 'latest_study'
+    result_field={'section_spacing':'latest_spacing','coverage_repair':'latest_coverage'}.get(result.get('analysis_kind'),'latest_study')
     m.update(status='RESULTS_READY',phase='STUDY_FINISHED',errors=[])
     m[result_field]=entry
-    m.pop('pending_study',None)
+    if result.get('analysis_kind')=='coverage_repair':
+        if result['status']!='INCOMPLETE':
+            m.update(status='PROCESSING',phase='COVERAGE_EXPORTS')
+            core.persist(m,'COVERAGE_COMPUTED',dict(status=result['status'],analysis=entry))
+            from .coverage_study import export
+            m['latest_coverage_exports']=export(result,m)
+            exports=read(ROOT/m['latest_coverage_exports']['path'])
+            if exports['delivery']['status']=='READY_FOR_REVIEW':m.pop('pending_study',None)
+        m.update(status='RESULTS_READY',phase='STUDY_FINISHED')
+    else:
+        m.pop('pending_study',None)
     m['exports_need_refresh']=True
     core.persist(m,'SENSITIVITY_FINISHED',dict(status=result['status'],analysis=entry))

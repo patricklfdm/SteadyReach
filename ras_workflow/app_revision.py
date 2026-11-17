@@ -36,7 +36,7 @@ def create(key, body):
     draft.update(consent=False,reviewer=None,basis='Editable revision of an existing conditional calculation; confirm all current parameters before a new solve.')
     save(new_sp.parent/'draft.json',draft)
     m=copy.deepcopy(parent)
-    for field in ('summary','engine_state','active_project','latest_reports','latest_delivery','previous_delivery','run_confirmation','pending_review','task','run_scenario','exports_need_refresh','pending_study','active_study','latest_study','latest_spacing','exit_code'):
+    for field in ('summary','engine_state','active_project','latest_reports','latest_delivery','previous_delivery','run_confirmation','pending_review','task','run_scenario','exports_need_refresh','pending_study','active_study','latest_study','latest_spacing','latest_coverage','latest_coverage_exports','exit_code'):
         m.pop(field,None)
     m.update(id=key2,title=c['title'],project=rel(folder/'initial.json'),session=session['session'],revision=0,
              status='INPUTS_READY',phase='EDIT_REVISION',errors=[],created_utc=utc(),

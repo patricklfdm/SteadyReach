@@ -164,13 +164,13 @@ def refine(geometry, selected, sampler, reference_water=None):
     return result, changes, next_intervals
 
 
-def confirm_geometry(geometry, confirmation):
+def confirm_geometry(geometry, confirmation, basis=None):
     """Called only after the existing study review has authenticated exact case files."""
     result = copy.deepcopy(geometry)
     result.update(approved_for_model=True, status='CONDITIONAL_SPACING_TRIAL')
     for row in result['cross_sections']:
         row['terrain_review'] = dict(decision='ACCEPT', policy='local_computation_v1',
-            reviewer=None, basis='Displayed nested DEM spacing and inferred banks confirmed for this conditional batch',
+            reviewer=None, basis=basis or 'Displayed nested DEM spacing and inferred banks confirmed for this conditional batch',
             fingerprint=section_fingerprint(row), confirmation=confirmation)
         if row.get('review_status') == 'DRAFT_REQUIRES_REVIEW':
             row['review_status'] = 'CONDITIONAL_BATCH_CONFIRMED'

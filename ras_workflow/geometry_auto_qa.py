@@ -69,6 +69,8 @@ def boundary_study_water(summary_path, summary, geometry):
         return [{key:value for key,value in scenario.items() if key != 'parameter_source'}
                 for scenario in result['configuration']['scenarios']]
     for study in studies:
+        if study.get('coverage'):
+            continue
         if any(not change['path'].startswith(permitted)
                for case in study['cases'] for change in case['changes']):
             continue

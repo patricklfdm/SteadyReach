@@ -152,22 +152,25 @@ def associate(project,terrain,engine,log):
     if not linked or (geometry.parent/linked).resolve()!=terrain.resolve():raise ValueError('Native terrain association readback mismatch')
 
 
-def cached_imagery(package,crs,bounds):
+def cached_imagery(package,crs,bounds,allow_new_extent=False):
     """Reuse only an intact prior NAIP mosaic for the identical map extent."""
     package=safe_path(ROOT,package);verify(package)
     receipt=package/'Evidence/imagery.json';r=read(receipt)
     if r.get('method')=='REUSED_VERIFIED_OFFLINE_MOSAIC':r=r['acquisition']
     if r.get('status')!='READY_FOR_MAP_REVIEW':raise ValueError('Previous imagery has no verified acquisition record')
-    if not CRS.from_user_input(r['requested_crs']).equals(crs,ignore_axis_order=True):raise ValueError('Previous imagery CRS differs; acquire imagery for the revised extent')
+    same_crs=CRS.from_user_input(r['requested_crs']).equals(crs,ignore_axis_order=True)
     tolerance=max(bounds[2]-bounds[0],bounds[3]-bounds[1])*1e-8
-    if any(abs(a-b)>tolerance for a,b in zip(bounds,r['requested_bounds'])):raise ValueError('Previous imagery extent differs; acquire imagery for the revised extent')
+    same_extent=all(abs(a-b)<=tolerance for a,b in zip(bounds,r['requested_bounds']))
     raster=package/'GIS/Aerial.tif'
     if not raster.is_file() or sha(raster)!=r['raster']['sha256']:raise ValueError('Previous mosaic differs from its acquisition hash')
+    if not same_crs or not same_extent:
+        if allow_new_extent:return None
+        raise ValueError('Previous imagery extent or CRS differs; acquire imagery for the revised extent')
     return dict(method='REUSED_VERIFIED_OFFLINE_MOSAIC',acquisition=r,source=r['source'],raster=item(raster),
                 previous_receipt=item(receipt),previous_manifest=item(package/'PACKAGE_MANIFEST.json'),network_requests=0)
 
 
-def generate(summary_path,output,reuse_package=None):
+def generate(summary_path,output,reuse_package=None,refresh_imagery_extent=False):
     summary_path=safe_path(ROOT,summary_path);summary=read(summary_path);c=summary['configuration'];h=summary.get('hydraulics')
     if not h:raise ValueError('A verified actual solver run is required for a computed delivery')
     from .report_data import collect
@@ -275,8 +278,8 @@ def generate(summary_path,output,reuse_package=None):
             associate(project,terrain,engine,full/'Evidence/terrain_association.log')
             image_settings=settings.get('imagery',{});image=None
             if image_settings.get('mode')=='usgs_naip':
-                if reuse_package:
-                    acquired=cached_imagery(reuse_package,crs,bounds)
+                acquired=cached_imagery(reuse_package,crs,bounds,allow_new_extent=refresh_imagery_extent) if reuse_package else None
+                if acquired:
                     preserve_imagery_records(acquired,full)
                 else:
                     from .imagery import acquire as acquire_imagery
