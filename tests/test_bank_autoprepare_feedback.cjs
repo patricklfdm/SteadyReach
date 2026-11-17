@@ -18,4 +18,10 @@ for(const lang of [false,true]){
 }
 actions[0]();assert.equal(selected,'input-g.cross_sections.4.bank_stations_ft');
 const empty=node('root');context.renderPreparedBanks(empty,{});assert.equal(empty.children.length,0);
+for(const lang of [false,true]){
+ chinese=lang;const root=node('root');context.renderPreparedBanks(root,{terrain_extent:{status:'EXPANDED',buffer_m:550}});
+ assert.match(textTree(root),/550/);assert.ok(textTree(root).includes(lang?'旧栅格':'original'));
+ const failed=node('root');context.renderPreparedBanks(failed,{terrain_extent:{status:'UNAVAILABLE',error:'missing adjacent tiles'}});
+ assert.match(textTree(failed),/missing adjacent tiles/);
+}
 console.log('Bilingual automatic-bank draft summary, old/new values, edit link, and legacy absence PASS');

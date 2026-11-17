@@ -57,3 +57,9 @@ HEC guidance calls for representative geometry and sections approximately normal
 ## Nested spacing checks
 
 For completed continuous river models, the Results page can prepare two DEM refinement levels with baseline-WSE extent screening, preserved existing controls, one batch confirmation and real solver comparison. Review excluded intervals, fresh wet ends and native warnings. New-section coverage searches use a 2000 ft width bound, increased to the existing maximum section width when needed. [Step-by-step spacing guide](RESULTS_REVIEW_EN.md).
+
+## Automatic cached DEM coverage
+
+Before preparing an automatic draft, the app checks saved reach anchors or current cutlines against the requested width. When the working crop is too small, it attempts to expand from verified cached USGS originals, with no additional download. The automatic route is limited to a 2,000 m radius and 16 million cells. It preserves the old grid and every old cell; matching existing section sample records retain their old evidence and are rebound to the expanded raster. Geometry, banks, units and datum do not change during this coverage step.
+
+The preparation summary reports the new radius or the exact coverage problem. Missing adjacent tiles, differing datums and excessive extents retain the current terrain and require a focused action. No location or reach is invented to make expansion succeed. This bounds the geometry search, not the floodplain or a hydraulic boundary. The separate manual extent and preview tools remain available.

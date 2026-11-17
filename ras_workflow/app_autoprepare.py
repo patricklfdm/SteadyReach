@@ -129,6 +129,10 @@ def execute(key):
     protected_banks = bank_autoprepare.protected(before['geometry'], before['answers'])
     results = [fill(m)]
     m = core.model(key)
+    from .terrain_extent_auto import ensure as ensure_extent
+    progress(m, 'Checking DEM coverage / 检查 DEM 范围')
+    extent = ensure_extent(m, m.get('automatic_options'))
+    m = core.model(key)
     g = params.objects(m)[4]
     proposal = None
     geometry_applied = False
@@ -158,7 +162,7 @@ def execute(key):
     record = dict(created_utc=utc(), input_signature=digest(before), stages=results,
                   bank_preparation=bank_preparation,
                   refreshed_equivalent_fields=[r['field'] for r in refreshed],
-                  geometry_applied=geometry_applied, geometry_proposal=proposal,
+                  terrain_extent=extent, geometry_applied=geometry_applied, geometry_proposal=proposal,
                   solver_run=False, final_confirmation_required=True,
                   attention=params.attention(m, params.rows(m), automatic=True))
     target = core.folder(key)/'automatic_preparation'/unique_id()/'summary.json'

@@ -10,11 +10,11 @@ from rasterio.warp import Resampling, reproject, transform_bounds
 from rasterio.windows import from_bounds
 
 from . import app_core as core, geometry_editor as editor, intake
-from .common import ROOT, finite, intact, item, lock, read, rel, save, unique_id, utc
+from .common import ROOT, digest, finite, intact, item, lock, read, rel, save, unique_id, utc
 from .terrain import bbox_for
 
 
-def expand_cached(previous, configuration, radius, destination):
+def expand_cached(previous, configuration, radius, destination, maximum_cells=None):
     if not finite(radius) or not 50 <= radius <= 5000:
         raise ValueError('Use a DEM radius of 50–5000 m / DEM 范围半径须为 50–5000 米')
     products = previous.get('products', [])
@@ -36,6 +36,8 @@ def expand_cached(previous, configuration, radius, destination):
         width, height = right - left, bottom - top
         if width == old.width and height == old.height:
             raise ValueError('The current DEM already covers this radius / 当前 DEM 已覆盖该半径，请保留现有范围或增大半径')
+        if maximum_cells is not None and width*height > maximum_cells:
+            raise ValueError("Automatic DEM expansion exceeds the cell limit")
         transform = old.transform * Affine.translation(left, top)
         values = np.full((height, width), np.nan, dtype='float32')
         for product in products:
@@ -78,6 +80,40 @@ def expand_cached(previous, configuration, radius, destination):
 def expand(key, body):
     model = core.model(key)
     core.require_idle(model)
+    expand_model(model, body)
+    return core.view(key)
+
+
+def rebind_preserved_sections(geometry, previous, expanded, unit, datum):
+    """Rebind only intact DEM sample records covered by the unchanged old grid."""
+    result = copy.deepcopy(geometry)
+    rebound = []
+    with rasterio.open(ROOT / previous['raster']['path']) as old:
+        if (not unit or not datum or not geometry.get('horizontal_crs')
+                or not CRS.from_user_input(geometry['horizontal_crs']).equals(CRS.from_user_input(old.crs).to_2d())):
+            return result, rebound
+        bounds = old.bounds
+        for index, row in enumerate(result['cross_sections']):
+            stamp = row.get('terrain_sampling') or {}
+            fingerprint = digest({k: row.get(k) for k in ('cutline_xy', 'station_ft', 'elevation_ft', 'center_xy')})
+            points = row.get('cutline_xy') or []
+            if (stamp.get('raster', {}).get('sha256') != previous['raster']['sha256']
+                    or stamp.get('spatial_fingerprint') != fingerprint
+                    or stamp.get('vertical_unit') != unit or stamp.get('vertical_datum') != datum
+                    or not points or any(not (bounds.left <= x <= bounds.right and bounds.bottom <= y <= bounds.top) for x, y in points)):
+                continue
+            row.setdefault('previous_terrain_sampling', []).append(copy.deepcopy(stamp))
+            row['terrain_sampling'] = dict(stamp, raster=expanded['raster'],
+                coverage_rebind=dict(method='Cached expansion preserved every original cell',
+                                     previous_raster=previous['raster']))
+            rebound.append(index)
+    return result, rebound
+
+
+def expand_model(model, body, maximum_cells=None):
+    key = model['id']
+    if model.get('active_project') or model.get('native_review'):
+        raise ValueError('Create an editable revision before expanding terrain')
     if body.get('revision') != model['revision']:
         raise ValueError('Inputs changed; refresh before expanding / 参数已改变，请刷新后扩展')
     sp, _, _, draft, configuration, geometry, terrain_config, current, _ = editor.context(ROOT / model['session'])
@@ -85,7 +121,9 @@ def expand(key, body):
     if current['raster']['sha256'] != previous['raster']['sha256']:
         raise ValueError('The draft uses a different DEM; review its terrain source before expansion')
     destination = core.folder(key) / 'preparation' / unique_id() / 'terrain'
-    expanded = expand_cached(previous, configuration, body.get('buffer_m'), destination)
+    expanded = expand_cached(previous, configuration, body.get('buffer_m'), destination, maximum_cells=maximum_cells)
+    rebound_geometry, rebound = rebind_preserved_sections(geometry, previous, expanded,
+        model['metadata'].get('dem_vertical_unit'), model['metadata'].get('dem_vertical_datum'))
     checkpoint_path = sp.parent / 'terrain_checkpoint.json'
     checkpoint = read(checkpoint_path)
     before = dict(model=model, draft=draft, checkpoint=checkpoint)
@@ -98,7 +136,8 @@ def expand(key, body):
                    terrain_base=rel(destination), section_count=len(geometry['cross_sections']))
     receipt['sources'] = receipt.get('sources', []) + [previous['raster'], expanded['raster'], item(destination / 'terrain.json')]
     updated_draft = copy.deepcopy(draft)
-    updated_draft.update(section_workflow=receipt, consent=False, revision=draft['revision'] + 1)
+    updated_draft.update(geometry=rebound_geometry, section_workflow=receipt, consent=False, revision=draft['revision'] + 1)
+    receipt['preserved_sample_rebindings'] = rebound
     # Replace only stored terrain path answers that would override the new receipt.
     for field in ('c.terrain.raster', 'c.terrain.provenance'):
         updated_draft['answers'].pop(field, None)
@@ -118,4 +157,4 @@ def expand(key, body):
             save(sp.parent / 'draft.json', draft)
             save(core.folder(key) / 'app.json', model)
             raise
-    return core.view(key)
+    return updated_model

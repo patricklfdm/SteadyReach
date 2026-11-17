@@ -17,13 +17,15 @@ For a reach between two excluded bridges, place the upstream limit downstream of
 1. Start `start_workflow.cmd`, choose **River reach (bridges excluded)**, and enter the project title and coordinates. Supply flow in **cfs** if known. The location marker is only a search location, not an automatically accepted centerline.
 2. Prepare the project. Review the USGS DEM source, age, horizontal CRS, vertical datum and vertical units. Import the available survey, hydrology and reference documents through the same source panel used for other projects.
 3. On the DEM map select river anchors **in upstream-to-downstream order**. At least two are required; add points through bends and keep both ends inside the intended bridge limits. Save the anchors.
-4. Click **Prepare an automatic draft**. The program searches a terrain corridor through those anchors, proposes a continuous flowline, adaptive cross sections and banks, and tests section intersections/coverage. Review the preview before adopting it. The section identifiers are sequential RS labels, not surveyed chainage.
+4. Click **Prepare an automatic draft**. The program searches a terrain corridor through those anchors, proposes a continuous flowline, adaptive cross sections and banks, and tests section intersections/coverage. An eligible layout is saved as editable geometry; inspect its map, profiles and remaining issues before the final calculation confirmation. Use the separate proposal tool when you prefer preview-only preparation. The section identifiers are sequential RS labels, not surveyed chainage.
 5. Resolve highlighted geometry issues. Use the existing map pan/zoom, section rotation/resampling, profile grids and numeric bank editing. Check direction and flow connectivity yourself; the lowest DEM corridor can follow a wrong branch or a flattened water surface.
 6. Review the collapsed parameter groups. River mode removes barrel, invert, roadway and inlet fields. Save the channel/overbank roughness, bed representation and active boundary parameters. Suggested values remain labelled assumptions until reviewed; a reference FEMA water level is not a bed elevation.
 
 You can also open **Enter or paste reach coordinates** to enter 2–100 easting/northing pairs, one pair per line in upstream-to-downstream order. Use the DEM CRS and horizontal units shown on the map. **Save coordinates and show on map** checks the format and coverage and displays the saved line for review.
 
 ## DEM coverage
+
+**Prepare an automatic draft** now attempts bounded expansion from cached originals before geometry generation. See [automatic coverage](DEM_AUTOMATION_EN.md#automatic-cached-dem-coverage). Manual expansion below is an optional fallback.
 
 If either end of the reach is outside the downloaded map, open **Reach extent and DEM → Expand DEM coverage**, enter the coverage radius in metres, and click **Expand from downloaded DEM**. This radius describes acquisition around the project coordinate. Select the hydraulic endpoints separately. The action verifies the cached original USGS files and full cell coverage, retains saved inputs and all existing DEM cells, and refreshes the map after completion. Use **Fit DEM** to see the expanded extent. A coverage failure retains the current map and inputs. Reduce the radius or obtain adjoining tiles if the cached originals are insufficient.
 

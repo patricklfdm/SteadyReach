@@ -11,7 +11,7 @@ from pyproj import Transformer
 from rasterio.transform import from_origin
 
 from ras_workflow import app_core, app_geometry, app_terrain_extent, geometry_editor, intake
-from ras_workflow.common import ROOT, item, read, save
+from ras_workflow.common import ROOT, digest, item, read, save
 
 
 class TerrainExtentTests(unittest.TestCase):
@@ -49,6 +49,27 @@ class TerrainExtentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'do not fully cover'):
             app_terrain_extent.expand_cached(self.previous, self.configuration, 500., destination)
         self.assertFalse((destination/'terrain_aoi.tif').exists())
+
+    def test_automatic_cell_limit_rejects_before_output(self):
+        destination=self.folder/'over_budget'
+        with self.assertRaisesRegex(ValueError,'cell limit'):
+            app_terrain_extent.expand_cached(self.previous,self.configuration,100.,destination,maximum_cells=100)
+        self.assertFalse(destination.exists())
+
+    def test_rebinding_preserves_samples_banks_and_old_evidence(self):
+        row=dict(cutline_xy=[[self.x-20,self.y],[self.x+20,self.y]],center_xy=[self.x,self.y],
+                 station_ft=[0,20,40],elevation_ft=[3,1,4],bank_stations_ft=[10,30])
+        row['terrain_sampling']=dict(raster=self.previous['raster'],vertical_unit='m',vertical_datum='TEST',
+            spatial_fingerprint=digest({k:row[k] for k in ('cutline_xy','station_ft','elevation_ft','center_xy')}))
+        changed=copy.deepcopy(row);changed['elevation_ft'][1]=2
+        other=copy.deepcopy(row);other['terrain_sampling']['raster']=dict(sha256='other')
+        geometry=dict(cross_sections=[row,changed,other],horizontal_crs='EPSG:26913');before=copy.deepcopy(geometry)
+        updated,indices=app_terrain_extent.rebind_preserved_sections(geometry,self.previous,dict(raster=dict(sha256='expanded')),'m','TEST')
+        self.assertEqual(indices,[0]);self.assertEqual(geometry,before)
+        for key in ('cutline_xy','station_ft','elevation_ft','center_xy','bank_stations_ft'):
+            self.assertEqual(updated['cross_sections'][0][key],row[key])
+        self.assertEqual(updated['cross_sections'][0]['previous_terrain_sampling'],[row['terrain_sampling']])
+        self.assertEqual(updated['cross_sections'][1:],geometry['cross_sections'][1:])
 
     def test_invalid_and_unchanged_extents_are_rejected(self):
         for radius in (None, True, float('nan'), 0, 5001):
