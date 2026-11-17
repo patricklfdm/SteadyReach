@@ -332,6 +332,8 @@ def view(session_path):
     geometry_review['physical_screen']=screen(g)
     from .bank_review import inventory
     geometry_review['bank_review']=inventory(g,d['answers'])
+    from .bank_reassessment import saved_preview
+    geometry_review['bank_reassessment']=saved_preview(sp,g,d)
     checkpoint=sp.parent/'geometry_checkpoint.json'
     from .geometry_editor import setup_view
     from .intake_native import preview as native_preview

@@ -100,6 +100,7 @@ function renderBankBatch(parent,review){
  review=structuredClone(review);
  const box=details(parent,'Bank-profile gallery / batch selection','岸站剖面总览／集中选择');
  box.append(el('p',tr('Saved banks are retained by default. Check uncertain profiles together; select only the changes you want to save. Clicking a dot changes the chosen left/right bank. This is a terrain interpretation, not engineering acceptance.','默认保留已存岸站。集中查看不确定剖面，只勾选需要保存的更改；选左／右岸后点击采样点。此处是地形解释，不是工程验收。')));
+ renderBankReassessment(box,review);
  const inventory=review.bank_review;
  const assessments=new Map((inventory?.sections||[]).map(row=>[row.index,row]));
  if(inventory)box.append(el('p',inventory.section_count+tr(' sections · ',' 条断面 · ')+inventory.attention_count+tr(' with unresolved interpretation flags. Saved values are retained.',' 条含未解决的判读提示；已保存数值保持不变。'),'status'));
@@ -137,6 +138,55 @@ function renderBankBatch(parent,review){
   selected.clear();count();
  }
  box.append(button('Save all selected changes','保存全部所选更改',async()=>{await saveAll();await open(current.id);notify(tr('All selected changes saved.','全部所选更改已保存。'));},'primary'));count();
+}
+
+function stableBankChoices(proposal){return (proposal.rows||[]).filter(r=>r.changed&&r.proposed_ft&&r.recommended).map(r=>r.index);}
+function bankValuesText(values){return (Array.isArray(values)?values:[]).map(v=>Number.isFinite(v)?v.toFixed(2):'—').join(' / ')||'—';}
+function retainBankProposal(project,proposal){if(current?.id!==project)throw Error(tr('Project changed; reopen its bank preview.','项目已切换，请重新打开岸站预览。'));current.intake.geometry_review.bank_reassessment=structuredClone(proposal);}
+
+function renderBankReassessment(parent,review){
+ const panel=details(parent,'Suggest bank replacements together','集中生成岸站修订候选');
+ panel.append(el('p',tr('Re-evaluate inherited or missing banks against current terrain profiles and reach continuity. Other saved banks act as fixed controls. Previewing does not move banks or run HEC-RAS.','按当前剖面和沿程连续性重新评估推定或缺失岸站，其余已存岸站作为固定控制。生成预览不会移动岸站或运行 HEC-RAS。')));
+ const scope=field(panel,'bank-reassessment-scope','Proposal scope','候选范围',review.bank_reassessment?.scope||'inferred','select',[
+  ['inferred','Inherited / missing banks','推定／缺失岸站'],['attention','All banks with interpretation flags','所有带判读提示的岸站']]);
+ panel.append(el('small',tr('The broader scope can propose changes to saved conditional choices. Structure approach controls, explicit roughness subdivisions and spatial conflicts are excluded.','扩大范围可对已存条件性选择提出修订。设施邻近控制断面、显式糙率分区及空间冲突会被排除。')));
+ const output=el('div');let proposal=review.bank_reassessment,selected=new Set(),checks=new Map();
+ function clear(){selected.clear();stageChange('bank-reassessment',tr('Bank replacements','岸站修订'),0,null);}
+ scope.onchange=()=>{clear();proposal=null;output.replaceChildren(el('p',tr('Scope changed; prepare a new preview.','范围已改变，请重新生成预览。'),'status'));notify(tr('No bank values changed.','岸站数值未改变。'));};
+ panel.append(button('Prepare bank replacement preview','生成岸站修订预览',async()=>{
+  clear();await saveAll();const project=current.id;proposal=await api('geometry/bank-proposal-prepare',{id:project,revision:current.revision,scope:scope.value});retainBankProposal(project,proposal);
+  clear();draw();notify(tr('Bank candidates ready; compare saved and proposed positions before selecting changes.','岸站候选已生成；请对照旧值和候选后集中选择。'));output.scrollIntoView({block:'nearest'});
+ }));panel.append(output);
+ function draw(){
+  output.replaceChildren();checks=new Map();if(!proposal)return;
+  if(proposal.status==='APPLIED'){output.append(el('p',proposal.adopted_count+tr(' bank candidates already adopted. Saved positions are shown in the gallery below.',' 项岸站候选已采用；下方总览显示已存位置。'),'status'));return;}
+  if(proposal.status==='STALE'){output.append(el('p',tr('Saved proposal belongs to earlier inputs. Prepare it again.','已存候选属于旧输入，请重新生成。'),'warning'));return;}
+  output.append(el('p',proposal.changed_count+tr(' changed candidates · ',' 项变化候选 · ')+proposal.recommended_count+tr(' stable under the tested scales/continuity weights. Stability is not site verification.',' 项通过已测试尺度／连续性权重的稳定性检查；稳定不等于现场验证。'),'status'));
+  const feedback=el('p','', 'status'),controls=el('div',undefined,'actions');output.append(controls,feedback);
+  const count=()=>{feedback.textContent=selected.size+tr(' bank replacements selected, pending adoption. Final calculation confirmation is still required.',' 项岸站修订已选，待采用；计算仍需最终参数确认。');stageChange('bank-reassessment',tr('Bank replacements','岸站修订'),selected.size,commit);};
+  controls.append(button('Select stable candidates','集中选中稳定候选',async()=>{selected=new Set(stableBankChoices(proposal));checks.forEach((c,i)=>c.checked=selected.has(i));count();notify(feedback.textContent);}),button('Clear bank replacements','清空岸站修订选择',async()=>{clear();checks.forEach(c=>c.checked=false);count();notify(feedback.textContent);}));
+  for(const entry of proposal.rows){
+   const old=bankValuesText(entry.before_ft),next=bankValuesText(entry.proposed_ft);
+   const box=details(output,'RS '+entry.rs+' · '+old+' → '+next+' ft','RS '+entry.rs+' · '+old+' → '+next+' ft');
+   if(entry.changed){const choose=check(box,'Adopt this candidate','采用此候选',selected.has(entry.index),v=>{if(v)selected.add(entry.index);else selected.delete(entry.index);count();});checks.set(entry.index,choose);}
+   box.append(el('p',tr('Saved → proposed (left / right): ','旧值 → 候选（左／右）：')+old+' → '+next+' ft'));
+   if(entry.shift_ft)box.append(el('p',tr('Station changes: ','站距变化：')+entry.shift_ft.map(v=>v.toFixed(2)).join(' / ')+' ft'));
+   box.append(el('p',entry.confidence+' · '+entry.reasons.map(bankReviewReason).join(' · '),'warning'));
+   if(entry.basis)box.append(el('small',tr(entry.basis,entry.basis_zh||entry.basis)));
+   if(!entry.proposed_ft)box.append(el('p',tr('No supported pair was found. Retain the saved values and inspect this profile.','未找到可用岸站对；保留旧值并检查此剖面。'),'warning'));
+   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 700 220');svg.classList.add('repair-profile');box.append(svg);
+   let drawn=false;const drawProfile=()=>{if(drawn||!box.parentElement.open)return;drawn=true;const row=review.sections[entry.index],x=row.station_ft,z=row.elevation_ft.filter(Number.isFinite);if(!z.length)return;const lo=Math.min(...z),hi=Math.max(...z),px=v=>45+(v-x[0])/Math.max(1,x.at(-1)-x[0])*620,py=v=>175-(v-lo)/Math.max(1,hi-lo)*145;profileGrid(svg,x,lo,hi,[45,665,30,175]);svgEl(svg,'polyline',{points:row.elevation_ft.map((v,j)=>Number.isFinite(v)?px(x[j])+','+py(v):'').join(' '),fill:'none',stroke:'#286954','stroke-width':2});for(const [values,color,dash] of [[entry.before_ft,'#286ba6','5,4'],[entry.proposed_ft,'#b55c16','']])for(const v of (values||[]).filter(Number.isFinite))svgEl(svg,'line',{x1:px(v),x2:px(v),y1:30,y2:175,stroke:color,'stroke-width':2,'stroke-dasharray':dash});};
+   box.parentElement.addEventListener('toggle',drawProfile);drawProfile();box.append(el('p',tr('Blue dashed: saved banks · Orange: proposed banks','蓝色虚线：旧岸站 · 橙色：候选岸站'),'muted'));
+  }
+  for(const row of proposal.excluded||[])output.append(el('p','RS '+row.rs+' · '+tr('Excluded: ','未参与：')+row.reason,'warning'));
+  output.append(button('Adopt selected bank candidates','采用所选岸站候选',async()=>{if(!selected.size)throw Error(tr('Select candidate changes first.','请先选择需要采用的候选。'));await saveAll();await open(current.id);notify(tr('Selected bank positions saved. Review all parameters before computing.','所选岸站已保存，请核对全部参数后再计算。'));},'primary'));count();
+ }
+ async function commit(){
+  if(!selected.size)return;
+  if(dirty||mapDirty||pendingChanges.has('banks')||pendingChanges.has('single-banks'))throw Error(tr('Save other bank/geometry edits, then prepare a fresh bank preview.','请先保存其他岸站／几何编辑，再重新生成岸站预览。'));
+  current=await api('geometry/bank-proposal-apply',{id:current.id,revision:current.revision,proposal_id:proposal.id,indices:[...selected],confirmed:true});clear();
+ }
+ draw();
 }
 
 function profileGrid(svg, x, lo, hi, bounds) {

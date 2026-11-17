@@ -35,6 +35,18 @@ New spacing sections record their neighboring-section bank fractions as low-conf
 
 Continuing a computed refinement refreshes the reach summary against current station identities and preserves saved bank positions. It does not reuse old section-array indices or rerank retained controls. The final parameter review also includes unresolved bank interpretations. Imagery, survey interpretation and effective floodplain connectivity still require judgment; this feature does not independently validate banks against aerial imagery.
 
+### Propose bank replacements in one batch
+
+In **Bank-profile gallery / batch selection**, expand **Suggest bank replacements together**. This is useful after section refinement, when many new banks were inherited from adjacent sections.
+
+1. Keep **Inherited / missing banks** to retain the other saved banks as fixed controls. The optional **All banks with interpretation flags** scope also evaluates saved conditional bank choices. Structure approach controls, explicit roughness subdivisions and spatial conflicts are excluded.
+2. Click **Prepare bank replacement preview**. The workflow compares current-profile slope breaks at three smoothing scales and ranks candidate pairs along the reach using the existing continuity checks. It shows saved/proposed left and right stations, movement, confidence, reasons and expandable profile overlays. Blue dashed lines are saved banks; orange lines are candidates. Preparing a new preview clears its previous unadopted selections. Existing unrelated pending edits are saved first.
+3. Click **Select stable candidates** to select changed candidates that meet the implemented scale/continuity checks. This is a grouped selection, not automatic acceptance. No candidates are selected merely by opening the preview. Check the overlays; select or clear individual candidates as needed. Ambiguous and unavailable pairs are not part of the stable selection.
+4. Choose **Adopt selected bank candidates**, or use the normal **Save all changes / Review all parameters** action. Only selected pairs change. Changed geometry, other edits or a stale preview require a new proposal. Saved choices retain their full method, previous values and selection evidence; low-confidence interpretations remain flagged after adoption.
+5. Open **Review all parameters**, inspect the changes and confirm before running HEC-RAS. Equivalent dependent values rebind automatically. A materially changed derivation still needs a choice. No reviewer name or written justification is required.
+
+The preview survives reopening and language changes. Adoption reports success and the gallery shows the saved positions. The Complete package retains the proposal and selected-section record through its source-evidence index. The replacement logic uses terrain morphology and fixed controls; it does not independently interpret aerial imagery, identify bankfull discharge, validate submerged geometry or certify effective flow areas. A bank change can materially change computed water levels, so review the resulting native warnings and comparison.
+
 ### Detailed steps
 
 1. **Acquire/import the site material.** The existing USGS DEM/catalog lookup and document extraction run first. Inspect the source count, survey CRS, elevation units/datum and failed attempts. Import a site folder if anonymous public downloading is unavailable. Automated acquisition is limited to supported providers and document formats.

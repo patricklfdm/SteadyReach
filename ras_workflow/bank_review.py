@@ -38,7 +38,9 @@ def inventory(geometry, answers=None):
         review = row.get('terrain_review') or {}
         local_choice = (valid and review.get('identity')=='LOCAL_SELECTION_NO_ENGINEERING_REVIEW'
                         and review.get('fingerprint')==section_fingerprint(row))
-        inherited = not local_choice and (bool(row.get('spacing_assumptions')) or method.get('method')=='adjacent_bank_fraction_v1')
+        reassessed = (method.get('reassessment',{}).get('banks_ft')==banks
+                      and method.get('profile_context')==profile_context(row))
+        inherited = not local_choice and not reassessed and (bool(row.get('spacing_assumptions')) or method.get('method')=='adjacent_bank_fraction_v1')
         if inherited:
             reasons.append('INFERRED_SPACING_BANKS_REQUIRE_REVIEW')
         if not local_choice and method.get('profile_context') and method['profile_context']!=profile_context(row):

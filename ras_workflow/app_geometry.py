@@ -15,6 +15,9 @@ def perform(key,action,body):
     if action.startswith('repair-'):
         from .app_section_repair import perform as repair
         return repair(m,action[7:],body)
+    if action.startswith('bank-proposal-'):
+        from .bank_reassessment import perform as reassess
+        return reassess(m,action[len('bank-proposal-'):],body)
     if action=='map':
         from .app_acquisition import overlay
         return overlay(m,editor.map_view(sp,body.get('bounds')))

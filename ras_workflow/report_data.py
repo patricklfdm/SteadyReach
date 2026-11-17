@@ -66,6 +66,8 @@ def collect(summary_path, comparisons=()):
             geometry_source=candidates[0]
             if not intact([geometry_source]):raise ValueError('Report geometry snapshot changed')
             geometry=read(ROOT/geometry_source['path']);sources+=[geometry_source]
+            from .bank_reassessment import selection_sources
+            sources+=selection_sources(geometry)
         raster=s.get('terrain',{}).get('raster')
         if raster:
             matched=[e for e in snapshots if e['path'].endswith('/inputs_before/'+raster['path']) and e['sha256']==raster['sha256']]

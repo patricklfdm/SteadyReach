@@ -89,6 +89,8 @@ Dry section ends establish the implemented coverage check. Spacing convergence, 
 
 ## Continue from a computed case
 
+An editable revision can now prepare [grouped bank replacements](AUTOMATION_EN.md#propose-bank-replacements-in-one-batch). Review old and proposed stations together and adopt selected candidates before the ordinary full-parameter confirmation. This changes the bank interpretation while keeping section samples and locations unchanged; it is not a section-spacing convergence test. The resulting report comparison identifies bank changes and their computed water-level effects. Terrain-derived stability does not establish hydraulic accuracy.
+
 For refined models, use the [focused bank gallery](AUTOMATION_EN.md#focused-bank-review-after-refinement) in the new editable revision. Bank-review categories use current station identities. Added sections whose banks came from neighboring fractions remain explicitly assumed, even when the source case had no confidence metadata. Retained bank coordinates are not changed by this bookkeeping refresh.
 
 The isolated Pagosa regression had 83 sections: 51 with inherited bank assumptions and 40 with terrain-interpretation flags, overlapping to give 80 distinct flagged sections. This is an unresolved interpretation inventory, not a new hydraulic warning count. Native `.prj`, `.g01`, `.p01` and `.f01` files were byte-identical before and after the metadata repair. The regression did not rerun HEC-RAS or establish engineering acceptance.
