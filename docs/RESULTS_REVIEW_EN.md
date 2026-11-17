@@ -128,3 +128,13 @@ Check source applicability, datum, physical opening identity, buried geometry, e
 
 
 After boundary sensitivity completes, **Prepare QA revision suggestions** also reads verified cases bound to that exact baseline. It screens wet ends against their maximum computed water levels and reports the included study count. Geometry, flow, roughness and regime must match. The preview preserves source hashes and requires adoption followed by a fresh calculation. [Preparation and automation assessment](AUTOMATION_EN.md).
+
+## Automatic next-step guidance
+
+On Results, **Suggested next steps from this calculation** automatically checks the native result identity, warning evidence and completed studies belonging to that exact baseline. It groups the work into native evidence, flow/output consistency, boundary response, wet-end repair, flow-path interpretation, section spacing, physical inputs and delivery. Unknown messages remain explicitly listed. The order is a work sequence, not a risk score or engineering acceptance.
+
+Expand an item and choose **Open relevant review tool**. The matching panel opens and receives focus; no input changes and no calculation starts. Preview and final-confirmation controls in that tool still apply. The guidance reports temporary failures with a retry button and ignores responses from a project you have already left.
+
+A completed repair batch is a separate calculation: baseline warnings remain visible, and the guide points to the existing batch before suggesting repetition. A small boundary response does not validate the boundary. A spacing test for a parent model does not establish convergence of the current changed geometry. Source or study evidence changes remain errors; incomplete studies cannot suppress required work. The guide does not prescribe ineffective-flow areas, relocate banks, select boundary slopes or close warnings automatically.
+
+The Pagosa regression used the existing isolated 83-section Q100 calculation and its nine-case sensitivity batch. All 52 current diagnostic records were assigned to review groups, the four boundary variants were authenticated, and the maximum tested boundary response was 1.59375 ft. The guide correctly retained spacing as untested for this exact baseline and avoided repeating a complete native-warning export. This test reused verified real outputs and did not invoke HEC-RAS or change either the original or isolated project.

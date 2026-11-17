@@ -1,4 +1,5 @@
 'use strict';
+function guidanceTarget(node,key){node.id='qa-tool-'+key;return node;}
 function renderDeliveryRecovery(parent,delivery){
  if(!delivery?.error)return;
  parent.append(el('p',tr('Calculation and reports are saved. Resolve the export error below, then retry delivery without solving. A temporary map-service failure may only need a retry.','计算和报告已保存。请处理下方导出错误，再单独重试交付包，无需重新求解。地图服务临时故障可先重试。'),'warning'),
@@ -69,7 +70,8 @@ function renderResultTools(parent){
  renderSpacing(parent);
  renderCoverage(parent);
  if(current.delivery?.mapped&&!current.exports_need_refresh)parent.append(button('Open QGIS review copy','打开 QGIS 复核副本',async()=>{const r=await api('qgis-preview',{id:current.id});notify(tr('Opened a separate preview copy: ','已打开独立复核副本：')+r.path);}));
- const box=details(parent,'Complete native outputs / refresh deliverables','补齐原生输出／更新交付包',!!current.exports_need_refresh||['UNAVAILABLE','COMPLETE_WITH_DIFFERENCES'].includes(current.automatic_native_outputs?.status));
+ const box=details(parent,'Complete native outputs / refresh deliverables','补齐原生输出／更新交付包',!!current.exports_need_refresh||['UNAVAILABLE','COMPLETE_WITH_DIFFERENCES'].includes(current.automatic_native_outputs?.status));box.id='qa-tool-native';
+ const deliveryAnchor=el('div');guidanceTarget(deliveryAnchor,'delivery');box.append(deliveryAnchor);
  if(current.model_type==='river')box.append(el('p',tr('The workflow exports the full native warning table for the river reach. There are no culvert group tables.','工作流导出整个河段的原生警告表，纯河道没有涵孔组表。')));
  else box.append(el('p',tr('After a new calculation, SteadyReach automatically exports every computed culvert group/profile and the full native warning table, then cross-checks them before reporting. Hydraulic interpretation still needs review.','新计算结束后，SteadyReach 自动导出各工况、各孔组明细及完整原生警告表，交叉核验后纳入报告。水力含义仍需工程判断。')));
  const automatic=current.automatic_native_outputs;
@@ -113,7 +115,7 @@ function renderStudyProgress(parent,progress){
 function renderCoverage(parent){
  if(current.native_review||current.model_type!=='river')return;
  const pending=current.pending_study_plan?.analysis_kind==='coverage_repair';
- const box=details(parent,'Automatic wet-end repair batch','湿端自动修订批次',pending||!!current.coverage_result);
+ const box=details(parent,'Automatic wet-end repair batch','湿端自动修订批次',pending||!!current.coverage_result);box.id='qa-tool-coverage';
  box.append(el('p',tr('Confirm a width and calculation limit once. Starting from this saved baseline, each round uses the preceding actual HEC-RAS water levels to extend DEM section ends, then calculates again. Final reports and both mapped packages are exported automatically.',
   '集中确认宽度与计算轮数上限后，程序从本次已保存基准出发，按上轮真实 HEC-RAS 水位延伸 DEM 断面端部，再计算。最后自动生成报告及两种带地图交付包。')));
  const policy=pending?current.pending_study_plan.policy:{};
@@ -178,7 +180,7 @@ function renderCoverage(parent){
 
 function renderSpacing(parent){
  if(current.native_review||current.model_type!=='river')return;
- const box=details(parent,'Section-spacing trial','断面加密试算',!!current.spacing_result);
+ const box=details(parent,'Section-spacing trial','断面加密试算',!!current.spacing_result);box.id='qa-tool-spacing';
  box.append(el('p',tr('Prepare two nested DEM refinements around spacing-related warnings or throughout the reach. Review the added sections and inferred banks once, then run the baseline and both refinements sequentially.','按加密相关警告定位区间，或选择全河段，准备两级嵌套 DEM 加密。集中核对新增断面和推定岸站后，依次计算基准及两级加密。')));
  const scope=field(box,'spacing-scope','Refinement extent','加密范围',current.pending_study_plan?.scope||'warnings','select',[
   ['warnings','Intervals beside spacing-related warnings','加密相关警告相邻区间'],['all','Entire continuous reach','完整连续河段']]);
@@ -252,7 +254,7 @@ function renderSpacing(parent){
 
 function renderStudy(parent){
  if(current.native_review)return;
- const box=details(parent,'Optional sensitivity batch','可选：敏感性批量计算');
+ const box=details(parent,'Optional sensitivity batch','可选：敏感性批量计算');box.id='qa-tool-sensitivity';
  renderSuggestedSensitivity(box);
  const manual=details(box,'Or enter a single range manually','或手动输入单项范围');
  manual.append(el('p',tr('Choose explicit low/high values for one parameter. The baseline and changed cases will run sequentially after one confirmation, with automatic water-level comparison. Bounds are assumptions, not measured uncertainty.','选择一个参数并填写明确的低／高值，统一确认后自动依次计算基准与变化工况并对比水位。范围属于假设，不是实测误差。')));
