@@ -4,13 +4,14 @@ import math
 import numpy as np
 from pyproj import CRS
 from .common import *
+from .river import is_river, boundary_errors
 
 def template(site_id, lat, lon):
     identifier(site_id)
     if not finite(lat) or not finite(lon) or not (-180 <= lon <= 180 and -90 <= lat <= 90):
         raise ValueError('Invalid WGS84 latitude/longitude')
     return dict(schema_version='1.0', project_id=site_id, title=site_id,
-        case_kind='site_conditional', location=dict(latitude=lat, longitude=lon, source='user_coordinate', crossing_confirmed=False),
+        case_kind='site_conditional', model_type='culvert', location=dict(latitude=lat, longitude=lon, source='user_coordinate', crossing_confirmed=False),
         terrain=dict(mode='usgs', buffer_m=300, max_download_bytes=600_000_000, dataset_contains='1 meter', selected_source_ids=None),
         delivery=dict(enabled=True,imagery=dict(mode='usgs_naip')),
         geometry=None, geometry_review=None, authorization=None,
@@ -22,6 +23,7 @@ def load(config_path):
     path = safe_path(ROOT, config_path); c = read(path)
     if c.get('schema_version') != '1.0': raise ValueError('Unsupported project schema')
     identifier(c['project_id'])
+    if c.get('model_type','culvert') not in ['culvert','river']:raise ValueError('Unsupported model_type')
     if c.get('case_kind') not in ['site_conditional', 'official_benchmark','software_validation']:
         raise ValueError('Unsupported case_kind')
     if c.get('solver_logging','off') not in ['off','diagnostic']:raise ValueError('solver_logging must be off or diagnostic')
@@ -73,6 +75,10 @@ def geometry_errors(g,allow_synthetic=False):
     try:
         crs=CRS.from_user_input(g['horizontal_crs']); need(crs.is_projected, 'Projected GIS CRS required')
     except Exception: errors.append('Invalid horizontal_crs')
+    need(g.get('model_type','culvert') in ['culvert','river'],'Unsupported model_type')
+    if is_river(g):
+        need(not any(g.get('structure',{}).values()),'River-only geometry must not contain structure data')
+        need(g.get('channel_geometry_basis') in ['surveyed_channel','combined_survey_and_dem','conditional_surface_dem'],'Explicit channel bed representation is required')
     xs=g.get('cross_sections',[]); need(len(xs)>=4,'At least four external sections required')
     stations=[r.get('rs') for r in xs]
     need(all(finite(v) for v in stations), 'RS must be finite numeric identifiers')
@@ -101,73 +107,77 @@ def geometry_errors(g,allow_synthetic=False):
         need(len(losses)==2 and all(finite(v) and 0<=v<=1 for v in losses),f'XS {i}: loss coefficients required')
         from .section_hydraulics import errors as hydraulic_errors
         errors.extend(f'XS {i}: '+v for v in hydraulic_errors(r))
-    s=g.get('structure') or {}; groups=s.get('groups',[])
-    need(1<=len(groups)<=10,'Builder requires 1..10 explicit culvert groups')
-    names=[b.get('name',f'Group {i+1}') for i,b in enumerate(groups)]
-    need(len(names)==len(set(names)),'Culvert group names must be unique')
-    need(all(isinstance(n,str) and n.isascii() and 0<len(n)<=12 and not any(x in n for x in ',\n\r') for n in names),'Culvert group names must be ASCII 1..12 characters without commas/newlines')
-    need(all(finite(s.get(k)) for k in ['rs','us_xs_rs','ds_xs_rs']),'Structure and face river stations must be finite')
-    if all(finite(s.get(k)) for k in ['rs','us_xs_rs','ds_xs_rs']):
-        need(round(s['us_xs_rs'],2)>round(s['rs'],2)>round(s['ds_xs_rs'],2),'Structure river station must lie between face sections at native precision')
-    if finite(s.get('us_xs_rs')) and finite(s.get('ds_xs_rs')) and s['us_xs_rs'] in stations and s['ds_xs_rs'] in stations:
-        ui=stations.index(s['us_xs_rs']); di=stations.index(s['ds_xs_rs'])
-        need(di==ui+1 and ui>=1 and di<len(xs)-1,'Four functional structure sections must bracket adjacent faces')
-    else: ui=None;errors.append('Explicit US/DS face sections required')
-    for b in groups:
-        need(b.get('shape') in ['box','circular'], 'Supported shapes: box and circular')
-        for k in ['span_ft','rise_ft','length_ft','distance_us_ft']:
-            need(finite(b.get(k)) and b[k]>0, 'Invalid/missing '+k)
-        for k in ['us_invert_ft','ds_invert_ft','entrance_loss','exit_loss']:
-            need(finite(b.get(k)), 'Invalid/missing '+k)
-        for k in ['entrance_loss','exit_loss']:
-            need(finite(b.get(k)) and b[k]>=0,'Nonnegative '+k+' required')
-        need(isinstance(b.get('count'),int) and 1<=b['count']<=25,'barrel count 1..25')
-        need(b.get('chart_scale') in ([[8,1],[8,2],[10,2]] if b.get('shape')=='box' else [[1,1]]),'Chart/scale outside validated adapter')
-        need(bool(b.get('bottom_type')) and bool(b.get('inlet_description')),'Floor and inlet description required')
-        blocked=b.get('depth_blocked_ft');rise=b.get('rise_ft');bottom_depth=b.get('bottom_n_depth_ft',0.)
-        need(finite(blocked) and finite(rise) and 0<=blocked<rise,'Explicit depth blocked must be >=0 and less than rise; full closure uses an explicit removed-barrel scenario')
-        need(finite(bottom_depth) and finite(rise) and finite(blocked) and blocked<=bottom_depth<=rise,'Bottom roughness depth must explicitly cover blockage and stay within rise')
-        if finite(blocked) and blocked>0:
-            need('mann_bottom' in b and bool(b.get('blockage_basis')),'Blocked/sediment scenario requires explicit bottom roughness and provenance')
-        for k in ['mann_top','mann_bottom']:
-            if k in b:need(finite(b[k]) and 0<b[k]<1,'Invalid '+k)
-        need(b.get('evidence_class') not in ([None,'missing'] if allow_synthetic else [None,'missing','synthetic']),'Traceable structure evidence class required; synthetic site input prohibited')
-        centers=b.get('centers_ft',[])
-        need(len(centers)==b.get('count') and all(len(p)==2 and all(finite(v) for v in p) for p in centers),'US/DS centerline pairs required')
-        if ui is not None and all(finite(b.get(k)) for k in ['length_ft','distance_us_ft']):
-            need(b['length_ft']+b['distance_us_ft']<xs[ui]['reach_lengths_ft'][1],'Culvert exceeds face reach length')
+    if not is_river(g):
+        s=g.get('structure') or {}; groups=s.get('groups',[])
+        need(1<=len(groups)<=10,'Builder requires 1..10 explicit culvert groups')
+        names=[b.get('name',f'Group {i+1}') for i,b in enumerate(groups)]
+        need(len(names)==len(set(names)),'Culvert group names must be unique')
+        need(all(isinstance(n,str) and n.isascii() and 0<len(n)<=12 and not any(x in n for x in ',\n\r') for n in names),'Culvert group names must be ASCII 1..12 characters without commas/newlines')
+        need(all(finite(s.get(k)) for k in ['rs','us_xs_rs','ds_xs_rs']),'Structure and face river stations must be finite')
+        if all(finite(s.get(k)) for k in ['rs','us_xs_rs','ds_xs_rs']):
+            need(round(s['us_xs_rs'],2)>round(s['rs'],2)>round(s['ds_xs_rs'],2),'Structure river station must lie between face sections at native precision')
+        if finite(s.get('us_xs_rs')) and finite(s.get('ds_xs_rs')) and s['us_xs_rs'] in stations and s['ds_xs_rs'] in stations:
+            ui=stations.index(s['us_xs_rs']); di=stations.index(s['ds_xs_rs'])
+            need(di==ui+1 and ui>=1 and di<len(xs)-1,'Four functional structure sections must bracket adjacent faces')
+        else: ui=None;errors.append('Explicit US/DS face sections required')
+        for b in groups:
+            need(b.get('shape') in ['box','circular'], 'Supported shapes: box and circular')
+            for k in ['span_ft','rise_ft','length_ft','distance_us_ft']:
+                need(finite(b.get(k)) and b[k]>0, 'Invalid/missing '+k)
+            for k in ['us_invert_ft','ds_invert_ft','entrance_loss','exit_loss']:
+                need(finite(b.get(k)), 'Invalid/missing '+k)
+            for k in ['entrance_loss','exit_loss']:
+                need(finite(b.get(k)) and b[k]>=0,'Nonnegative '+k+' required')
+            need(isinstance(b.get('count'),int) and 1<=b['count']<=25,'barrel count 1..25')
+            need(b.get('chart_scale') in ([[8,1],[8,2],[10,2]] if b.get('shape')=='box' else [[1,1]]),'Chart/scale outside validated adapter')
+            need(bool(b.get('bottom_type')) and bool(b.get('inlet_description')),'Floor and inlet description required')
+            blocked=b.get('depth_blocked_ft');rise=b.get('rise_ft');bottom_depth=b.get('bottom_n_depth_ft',0.)
+            need(finite(blocked) and finite(rise) and 0<=blocked<rise,'Explicit depth blocked must be >=0 and less than rise; full closure uses an explicit removed-barrel scenario')
+            need(finite(bottom_depth) and finite(rise) and finite(blocked) and blocked<=bottom_depth<=rise,'Bottom roughness depth must explicitly cover blockage and stay within rise')
+            if finite(blocked) and blocked>0:
+                need('mann_bottom' in b and bool(b.get('blockage_basis')),'Blocked/sediment scenario requires explicit bottom roughness and provenance')
+            for k in ['mann_top','mann_bottom']:
+                if k in b:need(finite(b[k]) and 0<b[k]<1,'Invalid '+k)
+            need(b.get('evidence_class') not in ([None,'missing'] if allow_synthetic else [None,'missing','synthetic']),'Traceable structure evidence class required; synthetic site input prohibited')
+            centers=b.get('centers_ft',[])
+            need(len(centers)==b.get('count') and all(len(p)==2 and all(finite(v) for v in p) for p in centers),'US/DS centerline pairs required')
+            if ui is not None and all(finite(b.get(k)) for k in ['length_ft','distance_us_ft']):
+                need(b['length_ft']+b['distance_us_ft']<xs[ui]['reach_lengths_ft'][1],'Culvert exceeds face reach length')
+                if finite(b.get('span_ft')):
+                    for side in [0,1]:
+                        ctr=sorted(p[side] for p in centers if len(p)==2 and finite(p[side]))
+                        need(all(v-u>=b['span_ft'] for u,v in zip(ctr,ctr[1:])),'Barrel openings overlap')
+                        if ctr:
+                            sec=xs[ui+side];need(ctr[0]-b['span_ft']/2>=sec['station_ft'][0] and ctr[-1]+b['span_ft']/2<=sec['station_ft'][-1],'Barrel lies outside face section')
+            if b.get('shape')=='circular': need(b.get('span_ft')==b.get('rise_ft'),'Circular diameter must equal rise/span')
+        # Compare all groups, including lateral crossing between upstream/downstream ends.
+        openings=[]
+        for b in groups:
             if finite(b.get('span_ft')):
-                for side in [0,1]:
-                    ctr=sorted(p[side] for p in centers if len(p)==2 and finite(p[side]))
-                    need(all(v-u>=b['span_ft'] for u,v in zip(ctr,ctr[1:])),'Barrel openings overlap')
-                    if ctr:
-                        sec=xs[ui+side];need(ctr[0]-b['span_ft']/2>=sec['station_ft'][0] and ctr[-1]+b['span_ft']/2<=sec['station_ft'][-1],'Barrel lies outside face section')
-        if b.get('shape')=='circular': need(b.get('span_ft')==b.get('rise_ft'),'Circular diameter must equal rise/span')
-    # Compare all groups, including lateral crossing between upstream/downstream ends.
-    openings=[]
-    for b in groups:
-        if finite(b.get('span_ft')):
-            openings.extend((p[0],p[1],b['span_ft']) for p in b.get('centers_ft',[]) if len(p)==2 and all(finite(v) for v in p))
-    for i,a in enumerate(openings):
-        for b in openings[i+1:]:
-            need((a[0]-b[0])*(a[1]-b[1])>0 and all(abs(a[k]-b[k])>=(a[2]+b[2])/2 for k in [0,1]),'Barrel openings overlap or cross between groups/ends')
-    road=s.get('road',{}); aa=road.get('station_ft',[]);zz=road.get('elevation_ft',[])
-    need(len(aa)==len(zz) and len(aa)>=2 and all(finite(v) for v in aa+zz),'Road crest profile required')
-    if aa: need(all(a<b for a,b in zip(aa,aa[1:])),'Road station order')
-    need(road.get('profile_mode','shared') in ['shared','distinct'],'Road profile mode must be shared or distinct')
-    if road.get('profile_mode')=='distinct':
-        da=road.get('downstream_station_ft') or [];dz=road.get('downstream_elevation_ft') or []
-        need(len(da)==len(dz) and len(da)>=2 and all(finite(v) for v in da+dz),'Distinct downstream road profile required')
-        if da:need(all(a<b for a,b in zip(da,da[1:])),'Downstream road station order')
-    elif road.get('downstream_station_ft') or road.get('downstream_elevation_ft'):
-        errors.append('Select distinct road profiles to use downstream values; unused geometry must not be silently discarded')
-    for k in ['width_ft','distance_us_ft','weir_coefficient']:
-        need(finite(road.get(k)) and road[k]>0,'Road '+k+' required')
+                openings.extend((p[0],p[1],b['span_ft']) for p in b.get('centers_ft',[]) if len(p)==2 and all(finite(v) for v in p))
+        for i,a in enumerate(openings):
+            for b in openings[i+1:]:
+                need((a[0]-b[0])*(a[1]-b[1])>0 and all(abs(a[k]-b[k])>=(a[2]+b[2])/2 for k in [0,1]),'Barrel openings overlap or cross between groups/ends')
+        road=s.get('road',{}); aa=road.get('station_ft',[]);zz=road.get('elevation_ft',[])
+        need(len(aa)==len(zz) and len(aa)>=2 and all(finite(v) for v in aa+zz),'Road crest profile required')
+        if aa: need(all(a<b for a,b in zip(aa,aa[1:])),'Road station order')
+        need(road.get('profile_mode','shared') in ['shared','distinct'],'Road profile mode must be shared or distinct')
+        if road.get('profile_mode')=='distinct':
+            da=road.get('downstream_station_ft') or [];dz=road.get('downstream_elevation_ft') or []
+            need(len(da)==len(dz) and len(da)>=2 and all(finite(v) for v in da+dz),'Distinct downstream road profile required')
+            if da:need(all(a<b for a,b in zip(da,da[1:])),'Downstream road station order')
+        elif road.get('downstream_station_ft') or road.get('downstream_elevation_ft'):
+            errors.append('Select distinct road profiles to use downstream values; unused geometry must not be silently discarded')
+        for k in ['width_ft','distance_us_ft','weir_coefficient']:
+            need(finite(road.get(k)) and road[k]>0,'Road '+k+' required')
     regime=g.get('flow_regime','mixed')
     need(regime in ['subcritical','mixed'],'Select a supported steady flow regime: subcritical or mixed')
-    for side in (['downstream'] if regime=='subcritical' else ['upstream','downstream']):
-        v=g.get('boundary_slopes',{}).get(side)
-        need(finite(v) and v>0,'Positive normal-depth slope required: '+side)
+    if is_river(g):
+        errors.extend(boundary_errors(g))
+    else:
+        for side in (['downstream'] if regime=='subcritical' else ['upstream','downstream']):
+            v=g.get('boundary_slopes',{}).get(side)
+            need(finite(v) and v>0,'Positive normal-depth slope required: '+side)
     need(bool(g.get('provenance')),'Geometry provenance required')
     errors.extend(q['code']+' XS '+','.join(map(str,q['sections'])) for q in spatial_issues(xs))
     errors.extend(review_errors(g))
@@ -206,10 +216,13 @@ def gate(path, c, scenario):
                     missing.append('Prepared benchmark inputs or source snapshots changed')
             except Exception as e:missing.append('Benchmark preparation record: '+str(e))
     else:
-        if not c.get('geometry'): missing.append('Reviewed flowline, complete external XS, banks, reach lengths, culvert dimensions/inverts/floor/inlet, road crest and boundary slopes')
+        if not c.get('geometry'): missing.append('Reviewed river flowline, complete XS, banks, reach lengths, channel bed basis and boundary conditions' if is_river(c) else 'Reviewed flowline, complete external XS, banks, reach lengths, culvert dimensions/inverts/floor/inlet, road crest and boundary slopes')
         else:
             try:
-                g=read(safe_path(path.parent,c['geometry']));missing.extend(geometry_errors(g,c['case_kind']=='software_validation'))
+                g=read(safe_path(path.parent,c['geometry']))
+                if is_river(g)!=is_river(c):missing.append('Project/geometry model types differ')
+                if is_river(g):missing.extend(boundary_errors(g,len(scenario.get('profiles',[]))))
+                missing.extend(geometry_errors(g,c['case_kind']=='software_validation'))
             except Exception as e:missing.append('Invalid geometry input: '+str(e))
         if not c.get('geometry_review'): missing.append('Recorded geometry review')
         if not c.get('authorization'): missing.append('Site-specific conditional scenario authorization/evidence; no inherited site approval')
@@ -220,7 +233,7 @@ def gate(path, c, scenario):
                 if not c.get('geometry') or auth.get('allowed_geometry_sha256')!=sha(safe_path(path.parent,c['geometry'])):
                     missing.append('Geometry changed or not covered by recorded authorization')
             except Exception as e:missing.append('Authorization record: '+str(e))
-        for key in ['channel_n','overbank_n','culvert_n']:
+        for key in (['channel_n','overbank_n'] if is_river(c) else ['channel_n','overbank_n','culvert_n']):
             if not finite(scenario.get(key)) or not 0<scenario[key]<1: missing.append(key)
         if not scenario.get('parameter_source'): missing.append('Roughness parameter provenance')
     profiles=scenario.get('profiles',[])

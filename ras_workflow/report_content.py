@@ -329,7 +329,10 @@ def generate(summary_path,folder,culvert_details=None,comparisons=(),context=Non
         supplementary_sources=data['sources'],language_review=data.get('language_review',[]),new_solver_calls_by_report=0)
     if details:manifest['supplementary_sources']+=[item(culvert_details)]+details['sources']
     for language,detail,name in REPORT_VARIANTS:
-        path=folder/(name+'.docx');build(data,plots,folder,language,detail,details).save(path)
+        builder=build
+        if data['summary']['hydraulics'].get('model_type')=='river':
+            from .river_report import build as builder
+        path=folder/(name+'.docx');builder(data,plots,folder,language,detail,details).save(path)
         pdf,n,pages=render(path)
         manifest['reports'].append(dict(language=language,detail=detail,docx=item(path),pdf=item(pdf),pages=n,rendered_pages=[item(p) for p in pages],render_evidence=item(path.parent/'qa'/path.stem/'render_manifest.json')))
     manifest['figure_files']=[item(p) for p in sorted((folder/'figures').glob('*.png'))]

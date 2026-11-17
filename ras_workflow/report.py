@@ -95,8 +95,8 @@ def build_incomplete(s, summary_path, language='en', detail='full'):
     c=s['configuration'];t=s.get('terrain',{});d=document(c['title']+tr(' Workflow Status Report' if full else ' Executive Summary',' 工作流状态报告' if full else ' 执行摘要'))
     d.core_properties.language='zh-CN' if cn else 'en-US'
     d.add_paragraph(tr('Calculation incomplete','计算尚未完成'),'Subtitle')
-    d.add_paragraph(tr('Site culvert computation is incomplete. This report records available preparation and missing inputs; no hydraulic results are provided.',
-        '本站涵洞计算尚未完成。本报告记录已完成的准备工作及缺失输入，不提供水力结果。'))
+    d.add_paragraph(tr('Site steady-flow computation is incomplete. This report records available preparation and missing inputs; no hydraulic results are provided.',
+        '本站恒定流计算尚未完成。本报告记录已完成的准备工作及缺失输入，不提供水力结果。'))
     status=s.get('workflow_status')
     if status=='WAITING_FOR_INPUT':
         d.add_paragraph(tr('The workflow is waiting for your input or review. Complete the local wizard, save for later, or explicitly cancel. Missing information is not a completed calculation.',

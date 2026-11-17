@@ -7,6 +7,7 @@ import copy
 import os
 from .common import ROOT, digest, finite, intact, item, lock, read, rel, safe_path, save, sha, unique_id, utc
 from . import inputs
+from .river import is_river, add_fields, boundary_errors
 
 WAITING = 'WAITING_FOR_INPUT'
 CLASSES = ['reported', 'user_reported_measurement', 'as_built', 'terrain_derived', 'inferred', 'assumed']
@@ -55,18 +56,18 @@ def _set(obj, parts, value):
     else: obj[p] = value
 
 
-def blank_geometry():
+def blank_geometry(model_type='culvert'):
     # Serialization conventions only; every engineering value starts unknown.
-    return dict(schema_version='1.0', hydraulic_unit='international_ft', vertical_datum=None,
+    return dict(schema_version='1.0', model_type=model_type, boundaries={}, hydraulic_unit='international_ft', vertical_datum=None,
                 horizontal_crs=None, flow_regime=None, cross_sections=[], boundary_slopes={},
-                structure=dict(road=dict(profile_mode=None), groups=[{}]), provenance=[])
+                structure=dict(road={},groups=[]) if model_type=='river' else dict(road=dict(profile_mode=None), groups=[{}]), provenance=[])
 
 
 def normalize_geometry(g):
     """Accept incomplete drafts, but reject containers that the form cannot edit."""
     if not isinstance(g,dict):raise ValueError('Geometry must be an object')
     g=copy.deepcopy(g)
-    for key in ['boundary_slopes','structure']:
+    for key in ['boundary_slopes','boundaries','structure']:
         if g.get(key) is None:g[key]={}
         if not isinstance(g[key],dict):raise ValueError(key+' must be an object')
     s=g['structure']
@@ -99,6 +100,7 @@ def fields(c, g, scenario):
             add(base+'.source',p['id']+' flow source',p['id']+' 流量来源',kind='text')
         if c.get('native_project'):continue
         for name,en,cn in [('channel_n','Channel Manning n','主槽糙率'),('overbank_n','Overbank Manning n','左右滩地糙率'),('culvert_n','Culvert Manning n','涵洞糙率')]:
+            if name=='culvert_n' and is_river(g):continue
             add(f'c.scenarios.{i}.'+name,en,cn,unit='Manning n')
             if name == 'culvert_n':
                 for condition,cn_condition,lo,normal,hi in [
@@ -116,46 +118,49 @@ def fields(c, g, scenario):
     add('g.horizontal_crs','Projected coordinate system','平面投影坐标系','text',help_en='For example EPSG:xxxx from reviewed survey/DEM metadata.',help_cn='填写测量/DEM 元数据中核实的 EPSG 编号或 WKT，不可猜测。')
     add('g.vertical_datum','Elevation datum','高程基准','text',help_en='All geometry elevations must already use this datum and international feet.',help_cn='全部几何高程必须已统一至此基准，并使用国际英尺。')
     add('g.functional_section_basis','Functional section and boundary placement basis','功能断面及边界布置依据','text',required=False,
-        help_en='Identify approach, inlet/outlet and expansion-recovery sections and why the boundary extent is adequate. This records a review basis, not automatic acceptance.',help_cn='说明接近段、进出口、扩散恢复断面的河站号，以及边界范围的依据。仅记录复核理由，不自动认定合格。')
+        help_en=('Identify the reach endpoints, floodplain coverage and boundary influence.' if is_river(g) else 'Identify approach, inlet/outlet and expansion-recovery sections and why the boundary extent is adequate. This records a review basis, not automatic acceptance.'),help_cn=('说明河段端点、漫滩覆盖和边界影响。' if is_river(g) else '说明接近段、进出口、扩散恢复断面的河站号，以及边界范围的依据。仅记录复核理由，不自动认定合格。'))
     add('g.flow_regime','Steady flow regime','恒定流流态','choice',options=['subcritical','mixed'],
         help_en='Subcritical requires a downstream boundary; mixed requires both. Legacy geometry without this field retains mixed flow. Native imports preserve their selected plan.',
         help_cn='缓流需下游边界；混合流需上下游边界。旧几何未记录此字段时沿用混合流。原生导入保留所选计划。')
     if 'flow_regime' not in g:result[-1]['value']='mixed'
-    for side,cn in [('upstream','上游'),('downstream','下游')]:
-        add('g.boundary_slopes.'+side,side.title()+' normal-depth slope',cn+' 正常水深边界坡降',unit='ft/ft',
-            required=side=='downstream' or g.get('flow_regime','mixed')!='subcritical',
-            help_en='Use the representative remote reach; do not substitute culvert slope.',help_cn='依据远端代表性河段，不能用涵底坡度直接代替。')
-    for name,en,cn in [('rs','Structure river station','结构河站号'),('us_xs_rs','Upstream face section station','进口外侧断面站号'),('ds_xs_rs','Downstream face section station','出口外侧断面站号')]:
-        add('g.structure.'+name,en,cn,unit='ft')
-    add('g.structure.road.profile_mode','Road profile arrangement','路顶剖面方式','choice',options=['shared','distinct'],help_en='Shared uses the same reviewed profile on both faces. Distinct requires both surveyed/derived profiles; their station origins must match their face sections.',help_cn='共用表示两侧采用同一经审核剖面；独立表示分别提供两侧剖面，横向站距基点须匹配对应外侧断面。')
-    if 'profile_mode' not in g['structure']['road']:result[-1]['value']='shared'
-    for name,en,cn,kind,unit in [
-        ('width_ft','Road width','路堤宽度','number','ft'),('distance_us_ft','Road distance from upstream face section','路堤距进口外侧断面','number','ft'),
-        ('weir_coefficient','Road overflow coefficient','路堤溢流系数','number','US customary coefficient'),
-        ('station_ft','Road crest stations','路顶剖面横向站距','array','ft'),('elevation_ft','Road crest elevations','路顶剖面高程','array','ft')]:
-        add('g.structure.road.'+name,en,cn,kind,unit)
-    for key,en,cn in [('downstream_station_ft','Downstream road crest stations','下游路顶横向站距'),('downstream_elevation_ft','Downstream road crest elevations','下游路顶高程')]:
-        add('g.structure.road.'+key,en,cn,'array','ft',required=g['structure']['road'].get('profile_mode')=='distinct',help_en='Leave empty for a shared profile. For distinct profiles the existing road station/elevation fields describe the upstream side.',help_cn='共用剖面时留空；独立剖面时，前面的路顶站距/高程字段表示上游侧。')
-    for i,b in enumerate(g.get('structure',{}).get('groups',[])):
-        pre=f'g.structure.groups.{i}.';title=f'Group {i+1}: ';zh=f'涵洞组 {i+1}：'
-        add(pre+'name',title+'model name',zh+'模型名称','text',required=False,help_en='Optional ASCII name, at most 12 characters. If omitted, the model uses Group 1, Group 2, etc.',help_cn='可选 ASCII 名称，最多 12 个字符；不填时模型使用 Group 1、Group 2 等标识。')
-        add(pre+'shape',title+'opening shape',zh+'孔形','choice',options=['box','circular'])
-        add(pre+'count',title+'identical barrel count',zh+'相同孔数','integer')
-        for name,en,cn in [('span_ft','clear width / diameter','净宽 / 直径'),('rise_ft','clear height / diameter','净高 / 直径'),
-                            ('length_ft','barrel length','涵长'),('us_invert_ft','inlet invert','进口涵底高程'),('ds_invert_ft','outlet invert','出口涵底高程'),
-                            ('distance_us_ft','distance from upstream section','距进口外侧断面'),('depth_blocked_ft','blocked depth','底部填塞深度')]:
-            add(pre+name,title+en,zh+cn,unit='ft',
-                help_en='Document each opening. Split into separate groups if inverts/dimensions differ. Buried geometry cannot be measured from surface DEM.',
-                help_cn='各孔尺寸或涵底不同时应分组。埋藏几何不能当作地表 DEM 实测值。')
-        for name,en,cn in [('entrance_loss','entrance loss coefficient','入口损失系数'),('exit_loss','exit loss coefficient','出口损失系数')]: add(pre+name,title+en,zh+cn)
-        for name,en,cn in [('bottom_type','floor form/material','底板形式/材质'),('inlet_description','entrance construction','入口构造')]:add(pre+name,title+en,zh+cn,'text')
-        add(pre+'chart_scale',title+'validated inlet chart/scale',zh+'已适配入口图号/尺度','array',help_en='Box: [8,1], [8,2], [10,2]; circular: [1,1]. Select only from applicable inlet evidence.',help_cn='箱涵支持 [8,1]、[8,2]、[10,2]；圆管支持 [1,1]。应依据入口构造选择，不是建议默认值。')
-        add(pre+'centers_ft',title+'inlet/outlet center pairs',zh+'各孔进口/出口横向中心位置','matrix','ft',help_en='One inlet,outlet pair per barrel.',help_cn='每孔一行：进口中心站距,出口中心站距。')
-        filled=finite(b.get('depth_blocked_ft')) and b['depth_blocked_ft']>0
-        add(pre+'mann_top',title+'group roughness override',zh+'本组糙率覆盖值',unit='Manning n',required=False,help_en='Leave absent to use the reviewed scenario culvert roughness.',help_cn='未设置时沿用已审核的工况涵洞糙率。')
-        add(pre+'mann_bottom',title+'bottom roughness',zh+'底部糙率',unit='Manning n',required=filled)
-        add(pre+'bottom_n_depth_ft',title+'bottom roughness depth',zh+'底部糙率作用深度',unit='ft',required=filled)
-        add(pre+'blockage_basis',title+'blockage evidence',zh+'填塞依据','text',required=filled)
+    if is_river(g):
+        add_fields(add,g)
+    else:
+        for side,cn in [('upstream','上游'),('downstream','下游')]:
+            add('g.boundary_slopes.'+side,side.title()+' normal-depth slope',cn+' 正常水深边界坡降',unit='ft/ft',
+                required=side=='downstream' or g.get('flow_regime','mixed')!='subcritical',
+                help_en='Use the representative remote reach; do not substitute culvert slope.',help_cn='依据远端代表性河段，不能用涵底坡度直接代替。')
+        for name,en,cn in [('rs','Structure river station','结构河站号'),('us_xs_rs','Upstream face section station','进口外侧断面站号'),('ds_xs_rs','Downstream face section station','出口外侧断面站号')]:
+            add('g.structure.'+name,en,cn,unit='ft')
+        add('g.structure.road.profile_mode','Road profile arrangement','路顶剖面方式','choice',options=['shared','distinct'],help_en='Shared uses the same reviewed profile on both faces. Distinct requires both surveyed/derived profiles; their station origins must match their face sections.',help_cn='共用表示两侧采用同一经审核剖面；独立表示分别提供两侧剖面，横向站距基点须匹配对应外侧断面。')
+        if 'profile_mode' not in g['structure']['road']:result[-1]['value']='shared'
+        for name,en,cn,kind,unit in [
+            ('width_ft','Road width','路堤宽度','number','ft'),('distance_us_ft','Road distance from upstream face section','路堤距进口外侧断面','number','ft'),
+            ('weir_coefficient','Road overflow coefficient','路堤溢流系数','number','US customary coefficient'),
+            ('station_ft','Road crest stations','路顶剖面横向站距','array','ft'),('elevation_ft','Road crest elevations','路顶剖面高程','array','ft')]:
+            add('g.structure.road.'+name,en,cn,kind,unit)
+        for key,en,cn in [('downstream_station_ft','Downstream road crest stations','下游路顶横向站距'),('downstream_elevation_ft','Downstream road crest elevations','下游路顶高程')]:
+            add('g.structure.road.'+key,en,cn,'array','ft',required=g['structure']['road'].get('profile_mode')=='distinct',help_en='Leave empty for a shared profile. For distinct profiles the existing road station/elevation fields describe the upstream side.',help_cn='共用剖面时留空；独立剖面时，前面的路顶站距/高程字段表示上游侧。')
+        for i,b in enumerate(g.get('structure',{}).get('groups',[])):
+            pre=f'g.structure.groups.{i}.';title=f'Group {i+1}: ';zh=f'涵洞组 {i+1}：'
+            add(pre+'name',title+'model name',zh+'模型名称','text',required=False,help_en='Optional ASCII name, at most 12 characters. If omitted, the model uses Group 1, Group 2, etc.',help_cn='可选 ASCII 名称，最多 12 个字符；不填时模型使用 Group 1、Group 2 等标识。')
+            add(pre+'shape',title+'opening shape',zh+'孔形','choice',options=['box','circular'])
+            add(pre+'count',title+'identical barrel count',zh+'相同孔数','integer')
+            for name,en,cn in [('span_ft','clear width / diameter','净宽 / 直径'),('rise_ft','clear height / diameter','净高 / 直径'),
+                                ('length_ft','barrel length','涵长'),('us_invert_ft','inlet invert','进口涵底高程'),('ds_invert_ft','outlet invert','出口涵底高程'),
+                                ('distance_us_ft','distance from upstream section','距进口外侧断面'),('depth_blocked_ft','blocked depth','底部填塞深度')]:
+                add(pre+name,title+en,zh+cn,unit='ft',
+                    help_en='Document each opening. Split into separate groups if inverts/dimensions differ. Buried geometry cannot be measured from surface DEM.',
+                    help_cn='各孔尺寸或涵底不同时应分组。埋藏几何不能当作地表 DEM 实测值。')
+            for name,en,cn in [('entrance_loss','entrance loss coefficient','入口损失系数'),('exit_loss','exit loss coefficient','出口损失系数')]: add(pre+name,title+en,zh+cn)
+            for name,en,cn in [('bottom_type','floor form/material','底板形式/材质'),('inlet_description','entrance construction','入口构造')]:add(pre+name,title+en,zh+cn,'text')
+            add(pre+'chart_scale',title+'validated inlet chart/scale',zh+'已适配入口图号/尺度','array',help_en='Box: [8,1], [8,2], [10,2]; circular: [1,1]. Select only from applicable inlet evidence.',help_cn='箱涵支持 [8,1]、[8,2]、[10,2]；圆管支持 [1,1]。应依据入口构造选择，不是建议默认值。')
+            add(pre+'centers_ft',title+'inlet/outlet center pairs',zh+'各孔进口/出口横向中心位置','matrix','ft',help_en='One inlet,outlet pair per barrel.',help_cn='每孔一行：进口中心站距,出口中心站距。')
+            filled=finite(b.get('depth_blocked_ft')) and b['depth_blocked_ft']>0
+            add(pre+'mann_top',title+'group roughness override',zh+'本组糙率覆盖值',unit='Manning n',required=False,help_en='Leave absent to use the reviewed scenario culvert roughness.',help_cn='未设置时沿用已审核的工况涵洞糙率。')
+            add(pre+'mann_bottom',title+'bottom roughness',zh+'底部糙率',unit='Manning n',required=filled)
+            add(pre+'bottom_n_depth_ft',title+'bottom roughness depth',zh+'底部糙率作用深度',unit='ft',required=filled)
+            add(pre+'blockage_basis',title+'blockage evidence',zh+'填塞依据','text',required=filled)
     for i,x in enumerate(g.get('cross_sections',[])):
         pre=f'g.cross_sections.{i}.'; title=f'XS {i+1}: ';zh=f'断面 {i+1}：'
         add(pre+'manning_segments',title+'horizontal Manning subdivisions',zh+'横向糙率分区','matrix',required=False,
@@ -226,8 +231,8 @@ def prepare(project,scenario,refresh=False):
                     project_id=c['project_id'],location=c.get('location'),sources=sources,
                     original_project=item(folder/'original_project.json'),original_geometry=item(folder/'original_geometry.json'))
         save(folder/'packet.json',packet)
-        try:draft_geometry=normalize_geometry(g) if g else blank_geometry()
-        except ValueError:draft_geometry=blank_geometry()  # Original invalid file remains bound in the packet.
+        try:draft_geometry=normalize_geometry(g) if g else blank_geometry(c.get('model_type','culvert'))
+        except ValueError:draft_geometry=blank_geometry(c.get('model_type','culvert'))  # Original invalid file remains bound in the packet.
         draft=dict(schema_version='intake_draft_1.0',packet=item(folder/'packet.json'),revision=0,answers={},
                    geometry=draft_geometry,uploads=[],reviewer='',basis='',consent=False)
         save(folder/'draft.json',draft)
@@ -264,6 +269,13 @@ def _objects(p,d):
             t[key]=os.path.relpath(safe_path(ROOT/receipt['terrain_base'],t[key]),(ROOT/p['project']).parent)
         c['terrain']=t
     allowed={f['key'] for f in fields(c,g,p['scenario'])}
+    if is_river(g):
+        # Boundary selectors are stored in answers, while the base geometry may
+        # still use the previous type. Retain inactive values without using them;
+        # validate only the final selected boundary, including profile count.
+        allowed.update({'g.boundaries.upstream.type','g.boundaries.downstream.type',
+                        'g.boundaries.downstream.stages_ft',
+                        'g.boundary_slopes.upstream','g.boundary_slopes.downstream'})
     for key,a in d['answers'].items():
         if key not in allowed:raise ValueError('Unknown input field: '+key)
         if not isinstance(a,dict):raise ValueError('Answer must be an object: '+key)
@@ -380,10 +392,13 @@ def validate(session_path,draft=None,require_consent=True,*,direct_start=False):
         for scenario in c['scenarios']:
             if scenario['id']!=p['scenario']:continue
             if not scenario.get('profiles'):err('','At least one flow profile is required','至少需要一个流量工况')
+            if is_river(g):
+                for message in boundary_errors(g,len(scenario.get('profiles',[]))):
+                    err('g.boundaries.downstream.stages_ft',message,'边界输入需修正：'+message)
             for profile in scenario.get('profiles',[]):
                 if not finite(profile.get('flow_cfs')) or profile['flow_cfs']<=0 or not profile.get('source'):err('','Positive flow and source are required','流量应大于零，并注明来源')
             if not c.get('native_project'):
-                for n in ['channel_n','overbank_n','culvert_n']:
+                for n in (['channel_n','overbank_n'] if is_river(g) else ['channel_n','overbank_n','culvert_n']):
                     if not finite(scenario.get(n)) or not 0<scenario[n]<1:err('',n+' must be between 0 and 1',n+' 必须大于 0、小于 1')
     except (TypeError,ValueError,KeyError,IndexError,AttributeError) as e:err('','Geometry format: '+str(e),'几何格式错误：'+str(e))
     if require_consent and not direct_start:

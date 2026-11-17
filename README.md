@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-A Windows desktop workflow for one-dimensional steady-flow culvert analysis with HEC-RAS. Work locally through three browser screens, **Project → Model → Results**, with no AI service required.
+A Windows desktop workflow for one-dimensional steady-flow river and culvert analysis with HEC-RAS. Work locally through three browser screens, **Project → Model → Results**, with no AI service required.
 
 For a new model, import the available material and check the crossing and terrain metadata. Click **Prepare an automatic draft** to prepare sections, banks and labelled estimates together. Resolve highlighted issues, then confirm the complete model once. Numeric bank editing and profile grids support corrections. [Preparation guide](docs/AUTOMATION_EN.md).
 
@@ -26,7 +26,7 @@ For a new model, import the available material and check the crossing and terrai
 - Automatically exports all supported culvert-group/profile tables and the full native warning table; earlier runs can retry export and refresh deliverables without solving again. See [scope and desktop requirements](docs/RESULTS_REVIEW_EN.md).
 - Produces a small native-model delivery folder and a complete folder with reports and, when GIS is enabled and available, Mapper terrain/contours, QGIS layouts and exhibits.
 
-The supported calculation scope is one river/reach and one box or circular culvert crossing, potentially with multiple barrel groups. Surface DEM does not establish buried inverts. Successful calculation/package creation is not engineering approval.
+The supported calculation scope is one river/reach: either a river without structures, or one box/circular culvert crossing with supported barrel groups. [River-reach guide](docs/RIVER_REACH_EN.md) covers bridge-excluded limits, known-stage boundaries and sensitivity. Surface DEM does not establish submerged beds or buried inverts. Successful calculation/package creation is not engineering approval.
 
 ## Source-assisted input
 

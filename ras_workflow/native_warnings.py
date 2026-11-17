@@ -36,6 +36,9 @@ def parse(text, clipboard_plan_label=None):
         plan_label=clipboard_plan_label;body=lines;first_line=1
     else:
         raise ValueError('Not a native English Summary Errors, Warnings and Notes export')
+    nonempty=[line.strip() for line in body if line.strip()]
+    if nonempty==['No Errors, Warnings or Notes in Computations']:
+        return dict(plan_label=plan_label,records=[],counts={})
     location = None
     current = None
     rows = []

@@ -135,11 +135,12 @@ def configure(session_path,revision,payload):
         # Keep separately reviewed structure context, but its face identifiers
         # cannot be carried to new sequential RS numbers without a new decision.
         generated['structure']=copy.deepcopy(g['structure'])
-        for key in ['rs','us_xs_rs','ds_xs_rs']:generated['structure'][key]=None
-        generated['structure']['road']['station_ft']=None
-        if generated['structure']['road'].get('profile_mode')=='distinct':generated['structure']['road']['downstream_station_ft']=None
-        for group in generated['structure']['groups']:group['centers_ft']=None
-        for key in ['river','reach','boundary_slopes','flow_regime']:
+        if g.get('model_type')!='river':
+            for key in ['rs','us_xs_rs','ds_xs_rs']:generated['structure'][key]=None
+            generated['structure']['road']['station_ft']=None
+            if generated['structure']['road'].get('profile_mode')=='distinct':generated['structure']['road']['downstream_station_ft']=None
+            for group in generated['structure']['groups']:group['centers_ft']=None
+        for key in ['river','reach','boundary_slopes','boundaries','flow_regime','channel_geometry_basis']:
             if g.get(key):generated[key]=copy.deepcopy(g[key])
     with lock(sp.parent/'session.lock'):
         _,_,_,current=intake._load(sp)

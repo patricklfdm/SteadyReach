@@ -39,6 +39,10 @@ def proposals(m,c,g):
         if s['id']!=m['scenario']:continue
         add(f'c.scenarios.{i}.channel_n',.030,'Clean, straight minor natural stream without deep pools/rifts. Select only if photographs and channel conditions support this description.','顺直洁净小河槽、无深潭或明显急滩；仅在照片和河槽条件相符时采用。',url=LOSSES,range_=[.025,.033])
         add(f'c.scenarios.{i}.overbank_n',.050,'Floodplain with scattered brush and heavy weeds; vegetation and flow depth affect roughness.','漫滩有零散灌木和茂密杂草；糙率受植被及水深影响。',url=LOSSES,range_=[.035,.070])
+    if g.get('model_type')=='river':
+        add('g.channel_geometry_basis','conditional_surface_dem','Conditional surface DEM only; submerged bed is unmeasured. This is an explicit approximation requiring survey before engineering acceptance.','仅用地表 DEM 的条件性近似，水下河床未实测；工程接受前需补测。')
+        for side in ['upstream','downstream']:
+            add('g.boundaries.'+side+'.type','normal_depth','Conditional normal-depth boundary; review bridge backwater and sensitivity.','条件性正常水深边界；核对桥梁壅水影响并检查敏感性。')
     add('g.structure.road.weir_coefficient',3.,'US customary weir coefficient for flow over elevated roadway approaches. Check crest form and submergence; not a low lateral-weir default.','美制单位、抬高道路路堤的堰流系数；核对堰顶形状与淹没，不适合作为低侧堰默认。',url=BASE+'modeling-culverts/culvert-data-and-coefficients/weir-flow-coefficient')
     for i,b in enumerate(g['structure']['groups']):
         pre=f'g.structure.groups.{i}.'
@@ -126,7 +130,7 @@ def proposals(m,c,g):
         add(pre+'expansion_contraction',[.3,.1],'Expansion then contraction for gradual subcritical transitions; not a universal culvert-face default.','顺序为扩散、收缩；适用于缓流渐变段，不能统一代替涵洞突变段。',url=LOSSES)
         add(pre+'expansion_contraction',[.5,.3],'Expansion then contraction for abrupt subcritical transitions; review applicability to mixed flow.','顺序为扩散、收缩；缓流突变段候选，混合流需判断适用性。',url=LOSSES)
     # Bed-slope alternatives use exterior section center elevations and spacing.
-    for reach,rows in [('upstream',[x for x in xs if x.get('reach_id')=='upstream'][:3]),('downstream',[x for x in xs if x.get('reach_id')=='downstream'][-3:])]:
+    for reach,rows in [('upstream',(xs[:3] if g.get('model_type')=='river' else [x for x in xs if x.get('reach_id')=='upstream'][:3])),('downstream',(xs[-3:] if g.get('model_type')=='river' else [x for x in xs if x.get('reach_id')=='downstream'][-3:]))]:
         if factor and len(rows)>=2:
             slopes=[]
             def bed(r):
@@ -276,6 +280,8 @@ def attention(m, fields, automatic=False):
     """Keep unresolved interpretations visible at the single run confirmation."""
     from .app_acquisition import snapshot
     notices = []
+    if m.get('model_type')=='river':
+        notices.append(dict(code='RIVER_SCOPE',en='Confirm the exact reach ends and bridge influence. Surface DEM does not measure submerged channel geometry. Normal-depth or known-stage values need an applicable basis.',zh='确认河段两端及桥梁影响。地表 DEM 不能实测水下河槽；正常水深或已知水位边界需有适用依据。'))
     if automatic or m.get('automatic_preparation'):
         notices.append(dict(code='AUTOMATIC_GEOMETRY_REVIEW',
             en='Check the crossing, upstream/downstream direction and floodplain coverage on the DEM. Automatic layout and section widening use terrain screening. Hydraulic suitability still requires review.',

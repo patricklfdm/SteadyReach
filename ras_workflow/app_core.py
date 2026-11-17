@@ -62,8 +62,11 @@ def create(body):
     if route not in ('coordinates','native'):raise ValueError('Choose coordinates or an existing steady model')
     lat=number(body.get('latitude'),'Latitude',-90,90);lon=number(body.get('longitude'),'Longitude',-180,180)
     if (lat is None)!=(lon is None) or route=='coordinates' and lat is None:raise ValueError('Supply latitude and longitude / 请填写经纬度')
+    model_type=body.get('model_type','culvert')
+    if model_type not in ('culvert','river'):raise ValueError('Choose river or culvert analysis')
+    if model_type=='river' and route=='native':raise ValueError('River mode currently starts from coordinates and reviewed sections')
     key='site_'+unique_id().lower();f=folder(key);f.mkdir(parents=True)
-    c=template(key,lat if lat is not None else 0.,lon if lon is not None else 0.);c['title']=title
+    c=template(key,lat if lat is not None else 0.,lon if lon is not None else 0.);c['title']=title;c['model_type']=model_type
     if lat is None:c['location']=None;c['terrain']={'mode':'not_applicable'}
     p=c['scenarios'][0]['profiles'][0]
     p['flow_cfs']=number(body.get('flow_cfs'),'Discharge',0)
@@ -72,7 +75,7 @@ def create(body):
         c['scenarios'][0][k]=number(body.get(k),k,0,1)
     if any(c['scenarios'][0].get(k) is not None for k in ['channel_n','overbank_n']):c['scenarios'][0]['parameter_source']=USER_SOURCE
     save(f/'project.json',c);save(f/'initial.json',c)
-    m=dict(id=key,title=title,route=route,revision=0,status='NEW',phase='CREATED',project=rel(f/'project.json'),
+    m=dict(id=key,title=title,model_type=model_type,route=route,revision=0,status='NEW',phase='CREATED',project=rel(f/'project.json'),
         scenario='q100',created_utc=utc(),gis=bool(body.get('gis',lat is not None)),metadata={},attachments=[],
         engineering_acceptance='NOT_ASSESSED',policy=POLICY,errors=[])
     for k in ['native_length_unit','vertical_datum','horizontal_crs','dem_vertical_unit','dem_vertical_datum']:
@@ -438,7 +441,7 @@ def view(key,detail=True):
         result['automatic_native_outputs']=m.get('native_export_attempt') or s.get('automatic_native_outputs')
         result['results']=dict(calculation=s['calculation_status'],run_id=h.get('run_id'),solver_reused=s['solver_reused'],hydraulic_qa=h.get('hydraulic_qa_status'),
             diagnostics=read(ROOT/h['diagnostics']['path']) if h.get('diagnostics') and intact([h['diagnostics']]) else None,
-            metrics=h.get('profiles'),engineering_acceptance='NOT_ASSESSED')
+            metrics=h.get('profiles'),flow_regime=h.get('flow_regime'),boundaries=h.get('boundaries'),engineering_acceptance='NOT_ASSESSED')
         jobdir=(ROOT/m['summary']['path']).parent
         reports=ROOT/m.get('latest_reports',rel(jobdir/'reports'))
         result['report_files']=[dict(name=p.name,path=rel(p)) for p in reports.glob('*') if p.suffix in ('.pdf','.docx')]

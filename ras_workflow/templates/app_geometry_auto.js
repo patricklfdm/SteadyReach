@@ -2,9 +2,10 @@
 function renderAutoGeometry(parent){
  const isInitial=!current.intake?.section_count,project=current.id;
  const box=details(parent,'Automatic DEM layout / QA repair','自动提出 DEM 布置／QA 修正',isInitial||!!current.parent_revision);
- box.append(el('p',tr('The program proposes exterior anchors, section locations and widths. Review the map, uncertain banks and remaining issues together. This step never runs the solver or changes the original completed project.','程序提出外部锚点、断面位置与范围。在同一处核对地图、不确定岸站及剩余问题；此步骤不启动求解器，也不修改原已完成项目。')));
+ box.append(el('p',tr('The program proposes reach anchors, section locations and widths. Review the map, uncertain banks and remaining issues together. This step never runs the solver or changes the original completed project.','程序提出外部锚点、断面位置与范围。在同一处核对地图、不确定岸站及剩余问题；此步骤不启动求解器，也不修改原已完成项目。')));
  const settings=details(box,'Optional search bounds (editable)','可选：搜索范围（可修改）');
  const length=field(settings,'auto-reach-length','Exterior search length per side (ft)','每侧外部河段搜索长度（ft）',400,'number');
+ if(current.model_type==='river')length.parentElement.hidden=true;
  const width=field(settings,'auto-width-limit','Maximum section search width (ft)','断面搜索宽度上限（ft）',isInitial?800:1200,'number');
  settings.append(el('small',tr('Search limits are algorithm controls, not accepted model limits or flood extents. Initial widths use terrain relief, not a calculated water level.','搜索上限是算法控制值，不是已确认的模型边界或洪水范围。初始宽度采用地形起伏筛查，不是计算水位。')));
  const note=el('p','', 'status'),out=el('div');box.append(note,out);let proposal=null,layout=null;
@@ -22,7 +23,7 @@ function renderAutoGeometry(parent){
  }
  function renderLayout(v,detail){
   layout=v;detail.replaceChildren();const changed=new Set(v.changed_sections),selected=new Set(v.changed_sections),rows=v.geometry.cross_sections;
-  const symbols={DIRECTION_AND_CROSSING_UNCONFIRMED:'流向／设施位置仍需确认',BOUNDARY_REACH_EXTENT_NOT_HYDRAULICALLY_VERIFIED:'外部边界距离尚未经过水力验证',PRIOR_WSE_IS_A_SCREEN_NOT_NEW_HYDRAULICS:'前次水位仅作筛查，需新计算验证'};
+  const symbols={VERIFY_BRIDGE_BOUNDARY_EFFECTS:'核对边界断面及桥梁壅水影响',VERIFY_SUBMERGED_CHANNEL_GEOMETRY:'核对水下河槽测量／地表 DEM 假设',DIRECTION_AND_CROSSING_UNCONFIRMED:'流向／设施位置仍需确认',BOUNDARY_REACH_EXTENT_NOT_HYDRAULICALLY_VERIFIED:'外部边界距离尚未经过水力验证',PRIOR_WSE_IS_A_SCREEN_NOT_NEW_HYDRAULICS:'前次水位仅作筛查，需新计算验证'};
   detail.append(el('p',tr('Basis: ','依据：')+(v.seed?.basis||'QA / DEM')));
   for(const w of v.warnings||[])detail.append(el('p',tr(w,symbols[w]||w),'warning'));
   if(v.seed&&!v.seed.direction_known)detail.append(el('p',tr('The arrow is inferred from surface elevations around the pin. Verify the facility, road gap and flow direction. If wrong, use the manual map tools; buried openings are not inferred.','箭头仅由坐标周围地表高程推测。请核对设施、道路间隔及上下游；不正确时使用手动地图工具，不推测埋藏涵孔。'),'warning'));

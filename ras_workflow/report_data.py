@@ -145,7 +145,7 @@ def figures(data, folder):
         ax.plot(x,[r['profiles'][name]['egl_ft'] for r in rows],color=color,ls='--',lw=1,label=name+' energy grade')
         fr.plot(x,[r['profiles'][name]['froude'] for r in rows],color=color,marker='.',lw=1)
     us,ds=h['profiles'][0]['headwater_rs'],h['profiles'][0]['tailwater_rs']
-    if us in stations and ds in stations:
+    if h.get('model_type')!='river' and us in stations and ds in stations:
         for a in [ax,fr]:a.axvspan(stations.index(us),stations.index(ds),color='#edd8b2',alpha=.4)
     ax.set_ylabel('Elevation ('+unit+')');ax.legend(ncol=2,loc='best');ax.grid(alpha=.2)
     fr.axhline(1,color='#9c4a36',ls='--',lw=1);fr.set_ylabel('Channel Froude');fr.grid(alpha=.2)
@@ -163,7 +163,7 @@ def figures(data, folder):
             for pi,p in enumerate(h['profiles']):
                 w=row['profiles'][p['profile_id']]['wse_ft'];color=plt.get_cmap('tab10')(pi%10)
                 ax.axhline(w,color=color,lw=1.1,label=p['profile_id']+' WSE')
-            ax.set_title('RS '+row['rs']+('  /  HW' if row['rs']==us else '  /  TW' if row['rs']==ds else ''))
+            ax.set_title('RS '+row['rs']+(('  /  Upstream' if row['rs']==us else '  /  Downstream' if row['rs']==ds else '') if h.get('model_type')=='river' else ('  /  HW' if row['rs']==us else '  /  TW' if row['rs']==ds else '')))
             ax.set(xlabel='Station ('+unit+')',ylabel='Elevation ('+unit+')');ax.grid(alpha=.15);ax.legend(loc='best',fontsize=7)
         for ax in axes[len(rows[begin:begin+4]):]:ax.set_visible(False)
         fig.tight_layout(pad=1.6);path=folder/f'sections_{begin+1:03d}.png';fig.savefig(path,dpi=190);plt.close(fig)

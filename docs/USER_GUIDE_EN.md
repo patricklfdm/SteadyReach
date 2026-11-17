@@ -2,6 +2,8 @@
 
 **English** | [简体中文](USER_GUIDE_CN.md) | [Home](../README.md)
 
+For a reach without structures, choose **River reach (bridges excluded)** and follow the [river guide](RIVER_REACH_EN.md). It removes culvert/road fields and requires channel-bed representation and active boundary conditions. The crossing-specific steps below apply to culvert projects.
+
 For a new site, import available material, check the crossing and terrain metadata, then click **Prepare an automatic draft**. Inspect the staged geometry, labelled estimates and highlighted uncertainties before confirming the full model once. [Consolidated preparation](AUTOMATION_EN.md).
 
 ## 1. Open the app

@@ -27,9 +27,16 @@ def inspect(summary_entry,files,scope_confirmed=False,automatic_receipt=None):
     decode=lambda x:x.decode('ascii').strip()
     with h5py.File(hdf) as f:
         if not decode(f.attrs['File Version']).startswith('HEC-RAS 7.0.1 ') or decode(f.attrs['Units System'])!='US Customary':raise ValueError('Native text adapter requires inspected HEC-RAS 7.0.1 English / US Customary output')
-        structures=f['Geometry/Structures/Attributes'][:];groups=f['Geometry/Structures/Culvert Groups/Attributes'][:]
-        if len(structures)!=1 or not 1<=len(groups)<=10:raise ValueError('One crossing with 1–10 groups is supported')
-        struct=structures[0];river,reach,station=[decode(struct[k]) for k in ('River','Reach','RS')]
+        if h.get('model_type')=='river':
+            groups=[]
+            attrs=f['Geometry/Cross Sections/Attributes'][:]
+            identities={(decode(a['River']),decode(a['Reach'])) for a in attrs}
+            if len(identities)!=1:raise ValueError('River warning scope must be one reach')
+            river,reach=next(iter(identities));station=None
+        else:
+            structures=f['Geometry/Structures/Attributes'][:];groups=f['Geometry/Structures/Culvert Groups/Attributes'][:]
+            if len(structures)!=1 or not 1<=len(groups)<=10:raise ValueError('One crossing with 1–10 groups is supported')
+            struct=structures[0];river,reach,station=[decode(struct[k]) for k in ('River','Reach','RS')]
         names=[decode(g['Name']) for g in groups]
         if len(set(names))!=len(names):raise ValueError('Ambiguous native group names')
         profiles={p['profile_id']:p for p in h['profiles']};expected={(p,n) for p in profiles for n in names}
@@ -91,7 +98,7 @@ def inspect(summary_entry,files,scope_confirmed=False,automatic_receipt=None):
         original=[item(project.with_suffix(ext)) for ext in ('.prj','.p01','.g01','.f01','.O01','.p01.hdf')]
         if [(r['sha256'],r['size_bytes']) for r in original]!=[(r['sha256'],r['size_bytes']) for r in receipt['sources']]:raise ValueError('Automatic export is not bound to this exact computed model')
         if receipt.get('profiles')!=list(profiles) or receipt.get('group_tables')!=len(expected) or expected!=seen or warnings is None:raise ValueError('Automatic export is incomplete')
-        if receipt.get('scope')!='ONE_RIVER_ONE_REACH_ONE_CULVERT_CROSSING' or receipt.get('warning_scope')!=AUTOMATIC_SCOPE:raise ValueError('Unverified automatic warning scope')
+        if receipt.get('scope')!=('ONE_RIVER_ONE_REACH_NO_STRUCTURES' if h.get('model_type')=='river' else 'ONE_RIVER_ONE_REACH_ONE_CULVERT_CROSSING') or receipt.get('warning_scope')!=AUTOMATIC_SCOPE:raise ValueError('Unverified automatic warning scope')
         actions=[r for r in receipt.get('trace',[]) if r.get('action')=='warning_export']
         if len(actions)!=1 or not actions[0].get('all_profiles') or (actions[0].get('river'),actions[0].get('reach'))!=(river,reach) or actions[0].get('counts')!=warnings['counts']:raise ValueError('Native warning selection trace mismatch')
         bundle.update(automatic_receipt=automatic_receipt,warning_scope=AUTOMATIC_SCOPE,

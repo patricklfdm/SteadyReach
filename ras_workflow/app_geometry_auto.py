@@ -32,7 +32,10 @@ def prepare(m,body):
     before=signature(m)
     if mode=='initial':
         if g['cross_sections']:raise ValueError('Initial automatic layout applies to an empty draft; existing sections use QA suggestions')
-        from .terrain_auto import initial
+        if g.get('model_type')=='river':
+            from .river_layout import initial
+        else:
+            from .terrain_auto import initial
         proposal=initial(m,g,c,s,length,maximum)
     elif mode=='qa':
         if not g['cross_sections']:raise ValueError('Generate initial sections first')
@@ -80,12 +83,13 @@ def apply(m,body):
     g.setdefault('provenance',[]).extend(v['sources']+[entry])
     invalid=set()
     if v['mode']=='initial':
-        for key in ('rs','us_xs_rs','ds_xs_rs'):g['structure'][key]=None;invalid.add('g.structure.'+key)
-        for key in ('station_ft','downstream_station_ft','distance_us_ft'):
-            if key in g['structure']['road']:g['structure']['road'][key]=None;invalid.add('g.structure.road.'+key)
-        for i,group in enumerate(g['structure']['groups']):
-            for key in ('centers_ft','distance_us_ft'):
-                group[key]=None;invalid.add(f'g.structure.groups.{i}.{key}')
+        if g.get('model_type')!='river':
+            for key in ('rs','us_xs_rs','ds_xs_rs'):g['structure'][key]=None;invalid.add('g.structure.'+key)
+            for key in ('station_ft','downstream_station_ft','distance_us_ft'):
+                if key in g['structure']['road']:g['structure']['road'][key]=None;invalid.add('g.structure.road.'+key)
+            for i,group in enumerate(g['structure']['groups']):
+                for key in ('centers_ft','distance_us_ft'):
+                    group[key]=None;invalid.add(f'g.structure.groups.{i}.{key}')
         invalid.update(k for k in d['answers'] if k.startswith(('c.terrain.','g.cross_sections.')) or k in ('g.horizontal_crs','g.vertical_datum'))
         # Same terrain receipt format as the existing section-generation path.
         provenance=folder/'terrain_provenance.json';save(provenance,dict(proposal=entry,terrain=v['terrain']))

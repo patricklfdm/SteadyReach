@@ -2,6 +2,8 @@
 
 **English** | [简体中文](AUTOMATION_CN.md) | [No-model guide](NO_MODEL_GUIDE_EN.md)
 
+For a reach without structures, choose **River reach (bridges excluded)** and follow the [river guide](RIVER_REACH_EN.md). It removes culvert/road fields and requires channel-bed representation and active boundary conditions. The crossing-specific steps below apply to culvert projects.
+
 Use the model page's **Prepare together, confirm once** panel. It reduces repeated transcription and review without treating unknown buried geometry as measured data. It works locally without an AI service. It does not start HEC-RAS until the final parameter confirmation.
 
 ## Fast path for a new model

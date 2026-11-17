@@ -7,6 +7,7 @@ import os, re, shutil, subprocess, sys, time, platform
 from pathlib import Path
 import numpy as np
 from .common import *
+from .river import is_river, boundary_errors, boundary_cards
 
 RAS_SHA='ce2ca395c68c4ee17387376ea3a7152c24db483488dced4eb96a59e85fd72985'
 RUNTIME_SHA='1d1a1ae540ba132f998d60d3622f0297b6e86ae399332c3b47462d7c0f560a36'
@@ -91,12 +92,18 @@ def build(folder,c,s,g):
     templates=ROOT/'ras_workflow/templates'
     provenance=read(templates/'manifest.json')
     if not intact(provenance['files']):raise ValueError('Native templates changed')
-    xs=g['cross_sections'];struct=g['structure'];road=struct['road']
+    river_only=is_river(g)
+    xs=g['cross_sections'];struct=g.get('structure',{});road=struct.get('road',{})
     from .section_hydraulics import manning,ineffective,cards,road_profiles
-    roads=road_profiles(road);road_min=min(v[1] for rows in roads.values() for v in rows)
-    from .structures import native_groups
-    group_text,expected_groups=native_groups(struct['groups'],s,fixed)
-    ui=next(i for i,r in enumerate(xs) if r['rs']==struct['us_xs_rs']);di=ui+1
+    if river_only:
+        issues=boundary_errors(g,len(s['profiles']))
+        if issues:raise ValueError('; '.join(issues))
+        roads={};road_min=None;expected_groups=[];ui=None
+    else:
+        roads=road_profiles(road);road_min=min(v[1] for rows in roads.values() for v in rows)
+        from .structures import native_groups
+        group_text,expected_groups=native_groups(struct['groups'],s,fixed)
+        ui=next(i for i,r in enumerate(xs) if r['rs']==struct['us_xs_rs']);di=ui+1
     river=g['river'];reachname=g['reach']
     for name in [river,reachname]:
         if not name.isascii() or len(name)>16 or any(x in name for x in ',\n\r'):raise ValueError('Native river/reach must be ASCII <=16 chars without commas')
@@ -148,14 +155,21 @@ def build(folder,c,s,g):
     flow+='\n'.join(''.join(vals[i:i+10]) for i in range(0,len(vals),10))+'\n'
     for i in range(len(pp)):
         flow+=f"Boundary for River Rch & Prof#={river},{reachname}, {i+1}\n"
+        if river_only:
+            flow+=boundary_cards(g,i)
+            continue
         flow+=('Up Type= 0\n' if regime=='subcritical' else f"Up Type= 3\nUp Slope={g['boundary_slopes']['upstream']:.8f}\n")
         flow+=f"Dn Type= 3\nDn Slope={g['boundary_slopes']['downstream']:.8f}\n"
     (folder/'Model.f01').write_text(flow,encoding='ascii')
-    expected=dict(groups=expected_groups,
-        xs_count=len(xs),xs_stations=[f"{r['rs']:.2f}" for r in xs],channel_n=s['channel_n'],overbank_n=s['overbank_n'],culvert_n=s['culvert_n'],
+    expected=dict(model_type=g.get('model_type','culvert'),groups=expected_groups,
+        xs_count=len(xs),xs_stations=[f"{r['rs']:.2f}" for r in xs],channel_n=s['channel_n'],overbank_n=s['overbank_n'],culvert_n=s.get('culvert_n'),
         road_profiles=roads,manning_by_section=[manning(r,s) for r in xs],ineffective_by_section=[ineffective(r) for r in xs],
         weir_minimum_override_ft=road_min,
-        road_width_ft=road['width_ft'],road_min_ft=road_min,us_xs_rs=f"{struct['us_xs_rs']:.2f}",ds_xs_rs=f"{struct['ds_xs_rs']:.2f}",structure_rs=f"{struct['rs']:.2f}",vertical_datum=g['vertical_datum'],cross_sections=xs)
+        vertical_datum=g['vertical_datum'],cross_sections=xs,channel_geometry_basis=g.get('channel_geometry_basis'),boundaries=g.get('boundaries'),boundary_slopes=g.get('boundary_slopes'),flow_regime=regime)
+    if river_only:
+        expected.update(us_xs_rs=f"{xs[0]['rs']:.2f}",ds_xs_rs=f"{xs[-1]['rs']:.2f}")
+    else:
+        expected.update(road_width_ft=road['width_ft'],road_min_ft=road_min,us_xs_rs=f"{struct['us_xs_rs']:.2f}",ds_xs_rs=f"{struct['ds_xs_rs']:.2f}",structure_rs=f"{struct['rs']:.2f}")
     return folder/'Model.prj',expected
 
 def import_native(folder,config_path,c):

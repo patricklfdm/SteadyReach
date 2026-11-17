@@ -4,6 +4,7 @@ function revealParameter(key){const input=document.getElementById('input-'+key);
 function renderAutomation(parent){
  const data=current.automation;if(!data)return;
  const card=el('section',undefined,'card automation');parent.append(card);
+ if(current.model_type==='river'){renderRiverAutomation(card,data);return;}
  card.append(el('h2',tr('Prepare together, confirm once','集中准备，运算前统一确认')),el('p',tr('Associate opening points → inspect early geometry checks → review derived values and bank profiles. Saved values stay selected. No HEC-RAS run starts here.','关联洞口测点 → 提前检查几何 → 集中核对推导值和岸站。默认保留已保存的数值，此处不启动 HEC-RAS。')));
  const checks=data.checks,issues=checks.issues||[];
  const status=el('p',tr('Early checks: ','提前检查：')+checks.blocking_count+tr(' blocking · ',' 项待解决 · ')+(issues.length-checks.blocking_count)+tr(' notices',' 项提醒'),issues.length?'warning':'status');card.append(status);
@@ -12,7 +13,7 @@ function renderAutomation(parent){
  automatic.append(button('Prepare an automatic draft','自动准备草稿（含标注的估计值）',async()=>{await saveAll();await api('automatic-prepare',{id:current.id,revision:current.revision});await open(current.id);},'primary'));
  card.append(el('p',tr('Extract materials, repair DEM geometry and fill dependent values together. All estimates stay editable in the final confirmation. Check crossing direction, construction assumptions and conflicting sources.','集中提取资料、修正 DEM 几何并填入关联参数；估计值可在最终确认前修改。重点核对流向、结构假设及资料冲突。'),'muted'));
  const prepared=current.preparation_result;if(prepared){const last=prepared.stages.at(-1);card.append(el('p',tr('Automatic draft saved · ','自动草稿已保存 · ')+prepared.stages.reduce((n,s)=>n+s.changed_fields.length,0)+tr(' field updates · ',' 次参数更新 · ')+last.missing_required.length+tr(' required items remaining · ',' 个必填项待补 · ')+last.conflicts.length+tr(' source differences',' 处来源差异'),'status'));renderPreparationAttention(card,prepared.attention);}
- renderOpeningAssociations(card,data);
+ if(current.model_type!=='river')renderOpeningAssociations(card,data);
  renderCandidateBatch(card);
  if(current.intake?.geometry_review?.sections?.length)renderBankBatch(card,current.intake.geometry_review);
  card.append(el('p',tr('Remaining judgment: same-barrel correspondence, interior versus exterior crown, net clear dimensions, floor/inlet condition and local blockage, hydraulic flow paths, boundaries and uncertain banks. Unknowns stay blank; estimates are labelled.','仍需判断：是否同一涵孔、内顶还是外顶、有效净尺寸、底板／入口及局部淤堵、过流路径、边界和不确定岸站。未知值留空，估计值明确标注。'),'muted'));

@@ -1,6 +1,7 @@
 """Small, explicit sensitivity batches from a completed baseline."""
 from .common import ROOT,read,save,item,intact,unique_id,rel,finite,sha,utc
 from . import app_core as core,study
+from .river import is_river
 
 
 def prepare(key,body):
@@ -13,6 +14,11 @@ def prepare(key,body):
     c=read(ROOT/m['active_project']);g=read((ROOT/m['active_project']).parent/c['geometry']);sc=next(s for s in c['scenarios'] if s['id']==m['scenario'])
     allowed={'scenario.channel_n','scenario.overbank_n','boundary_slopes.upstream','boundary_slopes.downstream'}
     allowed|={f'groups.{i}.depth_blocked_ft' for i in range(len(g['structure']['groups']))}
+    if is_river(g):
+        for side in ('upstream','downstream'):
+            if g.get('boundaries',{}).get(side,{}).get('type')!='normal_depth' or side=='upstream' and g.get('flow_regime')=='subcritical':allowed.discard('boundary_slopes.'+side)
+        if g.get('boundaries',{}).get('downstream',{}).get('type')=='known_stage':
+            allowed|={f'boundaries.downstream.stages_ft.{i}' for i in range(len(sc['profiles']))}
     topics=[];cases=[];seen=set()
     for i,v in enumerate(choices):
         path=v.get('path');low=v.get('low');high=v.get('high')
@@ -27,7 +33,7 @@ def prepare(key,body):
             basis+=' DepthBlocked represents uniform bottom fill along the barrel, not a local inlet obstruction.'
         topics.append(dict(id=topic,measurement_action='Review site evidence and model response for '+path,evidence_status='ASSUMED_TEST_RANGE',range_basis=basis))
         for suffix,value in [('low',low),('high',high)]:
-            current=sc[path.split('.')[1]] if path.startswith('scenario.') else g['boundary_slopes'][path.split('.')[1]] if path.startswith('boundary_slopes.') else g['structure']['groups'][int(path.split('.')[1])].get('depth_blocked_ft')
+            current=sc[path.split('.')[1]] if path.startswith('scenario.') else g['boundary_slopes'][path.split('.')[1]] if path.startswith('boundary_slopes.') else g['boundaries']['downstream']['stages_ft'][int(path.split('.')[-1])] if path.startswith('boundaries.') else g['structure']['groups'][int(path.split('.')[1])].get('depth_blocked_ft')
             if value==current:continue
             changes=[dict(path=path,value=value,basis=basis)]
             if path.endswith('depth_blocked_ft'):changes.append(dict(path=path.rsplit('.',1)[0]+'.blockage_basis',value=basis,basis=basis))

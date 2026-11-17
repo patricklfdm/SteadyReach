@@ -122,6 +122,10 @@ def diagnostics(hydraulics, folder, native_bundle=None):
                     add('CULVERT_GROUP_DETAIL_NOT_EXTRACTED',name,None,'EVIDENCE_GAP',
                         dict(group_id=group['group_id'],group_name=group['name'],coverage=group['detail_coverage']),
                         'Review the native group detail table. Derived remainder flow does not supply velocities or control-state details.')
+            if hydraulics.get('model_type')=='river':
+                if residual is None or residual>.002:
+                    add('RIVER_DISCHARGE_MISMATCH',name,None,'WARNING',dict(max_difference_cfs=residual),'Check imposed discharge and native section outputs.')
+                continue
             if residual is None:
                 add('FLOW_SPLIT_NOT_FULLY_OBSERVED', name, None, 'EVIDENCE_GAP',
                     dict(residual_cfs=None, reason='A required structure-flow output is undefined or not extracted'),

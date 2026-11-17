@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 import numpy as np
 import rasterio
 from rasterio.transform import from_bounds
+from rasterio.warp import transform_bounds
 from rasterio.enums import ColorInterp
 from PIL import Image
 from pyproj import CRS
@@ -56,9 +57,12 @@ def acquire(crs, bounds, output, max_download_bytes=40_000_000, max_pixels=1600)
         if 'NaturalColor' not in functions or 'LockRaster' not in service.get('allowedMosaicMethods','').split(','):
             raise ValueError('USGS natural-color or locked-source export is unavailable')
         authority=crs.to_authority();sr=int(authority[1]) if authority and authority[0]=='EPSG' else json.dumps(dict(wkt=crs.to_wkt(version='WKT1_ESRI')))
-        envelope=dict(zip(['xmin','ymin','xmax','ymax'],bounds))
-        catalog=get_json('/query',dict(f='json',geometry=json.dumps(envelope),geometryType='esriGeometryEnvelope',
-            inSR=sr,spatialRel='esriSpatialRelIntersects',outFields='*',returnGeometry='false'), 'catalog.json')
+        # Query the catalog in geographic coordinates. The USGS service can
+        # return gateway errors for projected JSON envelopes although the same
+        # geographic extent succeeds. The exported raster still uses model CRS.
+        geographic=transform_bounds(crs,'EPSG:4326',*bounds,densify_pts=21)
+        catalog=get_json('/query',dict(f='json',geometry=','.join(map(str,geographic)),geometryType='esriGeometryEnvelope',
+            inSR=4326,spatialRel='esriSpatialRelIntersects',outFields='*',returnGeometry='false'), 'catalog.json')
         if catalog.get('exceededTransferLimit'):raise ValueError('Imagery catalog truncated; reduce map extent')
         if not primary:
             category=next((f.get('domain') or {} for f in catalog.get('fields',[]) if f['name']=='Category'),{})

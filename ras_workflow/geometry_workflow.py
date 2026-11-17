@@ -54,7 +54,7 @@ def seed(session_path, project_path, config, terrain_result, folder):
         save(folder/'alignment_spec.json',working_spec);sources.append(item(alignment_path))
         candidate=draft(local_path,folder/'alignment_spec.json',folder/'alignment')
         sources+=candidate['sources']+[item(folder/'alignment/candidates.json')]
-        g=intake.blank_geometry()
+        g=intake.blank_geometry(config.get('model_type','culvert'))
         g.update(horizontal_crs=candidate['horizontal_crs'],vertical_datum=candidate['vertical_datum'],
             cross_sections=candidate['cross_sections'],flowlines=candidate['flowlines'])
         # RS is an identifier, not a surveyed distance. A reviewable descending

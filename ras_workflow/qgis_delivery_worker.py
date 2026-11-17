@@ -50,6 +50,7 @@ def main(request):
     styles={'river':('#0077aa','0.65'),'cross_sections':('#8b2395','0.45'),'structures':('#ff8500','1.0')}
     display={'river':'Model flow path','cross_sections':'Cross sections','banks':'Reviewed bank stations','structures':'Native culvert section'}
     for name,features in sp['layers'].items():
+        if name=='structures' and not features:continue
         kind='Point' if name=='banks' else 'LineString';v=QgsVectorLayer(kind,display[name],'memory');v.setCrs(project.crs())
         v.dataProvider().addAttributes([QgsField('name',QVariant.String),QgsField('rs',QVariant.String),QgsField('basis',QVariant.String)])
         v.updateFields()
@@ -121,8 +122,8 @@ def main(request):
         legend.setStyleFont(Qgis.LegendComponent.SymbolLabel,QFont('Arial',9));layout.addLayoutItem(legend);place(legend,20,223,390,20)
         notes=[
             ('坐标与来源' if zh else 'COORDINATES & SOURCES',cfg['crs_label']+'\n'+cfg['vertical_datum']+'; '+cfg['vertical_unit_label']+'\n'+cfg['terrain_label'][:83]),
-            ('模型与运行' if zh else 'MODEL & RUN',cfg['flow_label']+'\n'+('运行 ' if zh else 'Run ')+cfg['run_id']+'\n'+('橙线为计算结构线，非涵孔轮廓。' if zh else 'Orange line: computational structure, not barrel footprint.')),
-            ('复核与限制' if zh else 'REVIEW & LIMITS',('水力 QA 待复核；结构输入为条件性资料。\n地面等高线不代表水位或洪泛边界。\n' if zh else 'Hydraulic QA remains open; conditional inputs.\nGround contours are not water levels or flood limits.\n')+cfg['imagery_label'][:80])]
+            ('模型与运行' if zh else 'MODEL & RUN',cfg['flow_label']+'\n'+('运行 ' if zh else 'Run ')+cfg['run_id']+'\n'+(('橙线为计算结构线，非涵孔轮廓。' if zh else 'Orange line: computational structure, not barrel footprint.') if sp['layers'].get('structures') else ('纯河道，未建桥梁结构。' if zh else 'River reach; bridge structures excluded.'))),
+            ('复核与限制' if zh else 'REVIEW & LIMITS',('水力 QA 待复核；条件性输入须核实。\n地面等高线不代表水位或洪泛边界。\n' if zh else 'Hydraulic QA remains open; conditional inputs.\nGround contours are not water levels or flood limits.\n')+cfg['imagery_label'][:80])]
         for x,(heading,body) in zip([12,151,290],notes):
             label(layout,heading,x,249,130,5,9,True,zh);label(layout,body,x,255,130,17,7.5,False,zh)
         label(layout,'QGIS native Print Layout | 17 x 11 in | '+('等高距不代表测量精度。' if zh else 'Contour interval is not survey accuracy.'),12,273,406,4,7.5,False,zh,color=gray)

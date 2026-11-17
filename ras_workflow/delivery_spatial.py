@@ -36,6 +36,7 @@ def extract(hdf, crs_value):
             ('River Centerlines','Polyline Info','Polyline Points','river'),
             ('Cross Sections','Polyline Info','Polyline Points','cross_sections'),
             ('Structures','Centerline Info','Centerline Points','structures')]:
+            if target=='structures' and ('Geometry/Structures/Attributes' not in h or len(h['Geometry/Structures/Attributes'])==0):continue
             g=h['Geometry/'+group];infos=g[info_name][:];points=g[point_name][:];attrs=g['Attributes'][:]
             if len(attrs)!=len(infos):raise ValueError('Native spatial attribute/line count mismatch')
             if target!='cross_sections' and len(infos)!=1:raise ValueError('Delivery supports one reach and one crossing')
@@ -84,7 +85,9 @@ def mapper(project, terrain, projection, bounds, interval, imagery=None, contour
     ET.SubElement(g,'Layer',Type='RASRiver',Checked='True')
     xs=ET.SubElement(g,'Layer',Type='RASXS',Checked='True')
     ET.SubElement(xs,'PlotOption',Name='Bank Stations')
-    ET.SubElement(g,'Layer',Type='BridgesCulvertsLayer',Checked='True')
+    with h5py.File(project.with_suffix('.p01.hdf')) as native:
+        has_structures='Geometry/Structures/Attributes' in native and len(native['Geometry/Structures/Attributes'])>0
+    if has_structures:ET.SubElement(g,'Layer',Type='BridgesCulvertsLayer',Checked='True')
     ET.SubElement(root,'Plans');ET.SubElement(root,'EventConditions')
     results=ET.SubElement(root,'Results')
     ET.SubElement(results,'Layer',Name='Steady results',Type='RASResults',Filename=relative(project.with_suffix('.p01.hdf')))

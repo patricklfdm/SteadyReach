@@ -9,6 +9,9 @@ def value(v):
     return v if math.isfinite(v) and abs(v)<1e30 else None
 
 def extract(project,expected,config,scenario,run_id,folder):
+    if expected.get('model_type')=='river':
+        from .river_results import extract as river_extract
+        return river_extract(project,expected,config,scenario,run_id,folder)
     hdf=project.with_suffix('.p01.hdf');com=read(project.parent/'controller_output.json')
     if com['hdf_sha256']!=sha(hdf):raise ValueError('Controller/HDF identity mismatch')
     from .native_log import extract as extract_log, supplement

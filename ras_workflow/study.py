@@ -6,6 +6,7 @@ import os
 from .common import ROOT, finite, intact, item, lock, read, rel, safe_path, save, sha, utc, identifier
 from .inputs import dependencies, gate, geometry_errors, load
 from .qa import compare, THRESHOLDS
+from .river import is_river, boundary_errors
 
 SCENARIO_FIELDS = {'channel_n', 'overbank_n', 'culvert_n'}
 GROUP_FIELDS = {'span_ft', 'rise_ft', 'length_ft', 'us_invert_ft', 'ds_invert_ft',
@@ -28,7 +29,14 @@ def apply_changes(geometry, scenario, changes, case_kind):
         if len(parts) == 2 and parts[0] == 'scenario' and parts[1] in SCENARIO_FIELDS:
             parent, field = s, parts[1]
         elif len(parts) == 2 and parts[0] == 'boundary_slopes' and parts[1] in ['upstream', 'downstream']:
+            if is_river(g) and (g.get('boundaries',{}).get(parts[1],{}).get('type')!='normal_depth' or parts[1]=='upstream' and g.get('flow_regime')=='subcritical'):
+                raise ValueError('This plan does not use the selected normal-depth boundary')
             parent, field = g['boundary_slopes'], parts[1]
+        elif len(parts)==4 and parts[:3]==['boundaries','downstream','stages_ft'] and parts[3].isdigit() and is_river(g):
+            boundary=g.get('boundaries',{}).get('downstream',{})
+            if boundary.get('type')!='known_stage':raise ValueError('This plan does not use known downstream WSE')
+            parent,field=boundary['stages_ft'],int(parts[3])
+            if field>=len(parent) or not finite(change['value']):raise ValueError('Invalid downstream profile or WSE')
         elif len(parts) == 3 and parts[0] == 'groups' and parts[1].isdigit() and parts[2] in GROUP_FIELDS:
             index = int(parts[1])
             if index >= len(g['structure']['groups']): raise ValueError('Unknown culvert group')
@@ -36,11 +44,12 @@ def apply_changes(geometry, scenario, changes, case_kind):
             parent['evidence_class'] = 'synthetic' if case_kind == 'software_validation' else 'assumed'
         else:
             raise ValueError('Unsupported study parameter: ' + path)
-        before = copy.deepcopy(parent.get(field)); parent[field] = copy.deepcopy(change['value'])
+        before = copy.deepcopy(parent[field] if isinstance(parent,list) else parent.get(field)); parent[field] = copy.deepcopy(change['value'])
         records.append(dict(path=path, before=before, after=change['value'], basis=change['basis']))
     if all(r['before'] == r['after'] for r in records): raise ValueError('Variant does not change any parameter')
     errors = geometry_errors(g, case_kind == 'software_validation')
-    for field in SCENARIO_FIELDS:
+    if is_river(g):errors+=boundary_errors(g,len(s.get('profiles',[])))
+    for field in (SCENARIO_FIELDS-{'culvert_n'} if is_river(g) else SCENARIO_FIELDS):
         if not finite(s.get(field)) or not 0 < s[field] < 1: errors.append('Invalid ' + field)
     if errors: raise ValueError('Invalid study variant: ' + '; '.join(errors))
     return g, s, records
@@ -206,6 +215,6 @@ def analyze(study_path, review_path):
             '仅比较明确审核的测试范围；未测试不等于不敏感。水力 QA 待审，工程接受 NOT_ASSESSED。', '']
     for r in rows:
         text += ['## '+r['id'], '', r['priority'], '', '范围依据：'+r['range_basis'],
-                 '', '最大涵前变化（ft）：'+str(r['max_abs_hw_change_ft']), '', '补测/核查：'+r['measurement_action'], '']
+                 '', '最大上游参考断面水位变化（ft）：'+str(r['max_abs_hw_change_ft']), '', '补测/核查：'+r['measurement_action'], '']
     (folder/'MEASUREMENT_PRIORITIES.md').write_text('\n'.join(text), encoding='utf-8')
     return result

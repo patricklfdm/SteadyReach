@@ -4,6 +4,7 @@ from pathlib import Path
 import h5py, numpy as np
 import pythoncom, win32com.client.dynamic
 from .common import *
+from .river import is_river
 
 BASE='Results/Steady/Output/Output Blocks/Base Output/Steady Profiles'
 WANTED=['W.S. Elev','E.G. Elev','Q Total','Vel Chnl','Froude # Chl','Crit W.S.',
@@ -16,27 +17,32 @@ WANTED=['W.S. Elev','E.G. Elev','Q Total','Vel Chnl','Froude # Chl','Crit W.S.',
 def verify_native(hdf, expected, profiles):
     checks={}
     with h5py.File(hdf) as h:
-        groups=h['Geometry/Structures/Culvert Groups/Attributes'][:]
-        if len(groups)!=len(expected['groups']):raise ValueError('Wrong culvert group count')
-        names={'count':'Barrels','span_ft':'Span','rise_ft':'Rise','length_ft':'Length','us_invert_ft':'US Invert','ds_invert_ft':'DS Invert'}
-        barrels=h['Geometry/Structures/Culvert Groups/Barrels/Attributes'][:]
-        for gi,(actual,b) in enumerate(zip(groups,expected['groups'])):
-            for key,field in names.items():
-                if not np.isclose(float(actual[field]),b[key],rtol=0,atol=.002):raise ValueError('Culvert readback mismatch: '+key)
-            if int(actual['Shape'])!={'circular':1,'box':2}[b['shape']]:raise ValueError('Wrong culvert shape')
-            for key,field in {'chart':'Chart','scale':'Scale','culvert_n':'Mann Top','bottom_n':'Mann Bottom',
-                    'bottom_n_depth_ft':'Depth for Bottom Mann','depth_blocked_ft':'Depth Blocked',
-                    'entrance_loss':'Entrance Loss','exit_loss':'Exit Loss','distance_us_ft':'US Distance'}.items():
-                if key in b and not np.isclose(float(actual[field]),b[key],rtol=0,atol=.002):raise ValueError('Culvert field mismatch: '+field)
-            if 'name' in b and actual['Name'].decode().strip()!=b['name']:raise ValueError('Culvert group identity mismatch')
-            if 'centers_ft' in b:
-                subset=barrels[barrels['Culvert Group ID']==gi]
-                wanted=np.asarray(b['centers_ft']);points=np.column_stack([subset['US Station'],subset['DS Station']])
-                if wanted.shape!=points.shape or not np.allclose(wanted,points,rtol=0,atol=.002):raise ValueError('Barrel centerline readback mismatch')
-        structures=h['Geometry/Structures/Attributes'][:]
-        if len(structures)!=1 or structures[0]['Type']!=b'Culvert' or structures[0]['Culvert Groups']!=len(groups):raise ValueError('Unexpected additional bridge/opening')
-        from .native_geometry import verify_road
-        road_check=verify_road(structures[0],h['Geometry/Structures/Table Info'][0],h['Geometry/Structures/Profile Data'][:],expected)
+        if is_river(expected):
+            groups=[];road_check={'status':'NOT_APPLICABLE_RIVER_ONLY'}
+            for path in ['Geometry/Structures/Attributes','Geometry/Structures/Culvert Groups/Attributes']:
+                if path in h and len(h[path]):raise ValueError('Unexpected structure in river-only model')
+        else:
+            groups=h['Geometry/Structures/Culvert Groups/Attributes'][:]
+            if len(groups)!=len(expected['groups']):raise ValueError('Wrong culvert group count')
+            names={'count':'Barrels','span_ft':'Span','rise_ft':'Rise','length_ft':'Length','us_invert_ft':'US Invert','ds_invert_ft':'DS Invert'}
+            barrels=h['Geometry/Structures/Culvert Groups/Barrels/Attributes'][:]
+            for gi,(actual,b) in enumerate(zip(groups,expected['groups'])):
+                for key,field in names.items():
+                    if not np.isclose(float(actual[field]),b[key],rtol=0,atol=.002):raise ValueError('Culvert readback mismatch: '+key)
+                if int(actual['Shape'])!={'circular':1,'box':2}[b['shape']]:raise ValueError('Wrong culvert shape')
+                for key,field in {'chart':'Chart','scale':'Scale','culvert_n':'Mann Top','bottom_n':'Mann Bottom',
+                        'bottom_n_depth_ft':'Depth for Bottom Mann','depth_blocked_ft':'Depth Blocked',
+                        'entrance_loss':'Entrance Loss','exit_loss':'Exit Loss','distance_us_ft':'US Distance'}.items():
+                    if key in b and not np.isclose(float(actual[field]),b[key],rtol=0,atol=.002):raise ValueError('Culvert field mismatch: '+field)
+                if 'name' in b and actual['Name'].decode().strip()!=b['name']:raise ValueError('Culvert group identity mismatch')
+                if 'centers_ft' in b:
+                    subset=barrels[barrels['Culvert Group ID']==gi]
+                    wanted=np.asarray(b['centers_ft']);points=np.column_stack([subset['US Station'],subset['DS Station']])
+                    if wanted.shape!=points.shape or not np.allclose(wanted,points,rtol=0,atol=.002):raise ValueError('Barrel centerline readback mismatch')
+            structures=h['Geometry/Structures/Attributes'][:]
+            if len(structures)!=1 or structures[0]['Type']!=b'Culvert' or structures[0]['Culvert Groups']!=len(groups):raise ValueError('Unexpected additional bridge/opening')
+            from .native_geometry import verify_road
+            road_check=verify_road(structures[0],h['Geometry/Structures/Table Info'][0],h['Geometry/Structures/Profile Data'][:],expected)
         actual_names=[b.decode().strip() for b in h[BASE+'/Profile Names'][:]]
         if actual_names!=[p['id'] for p in profiles]:raise ValueError('Profile identities mismatch')
         flows=h[BASE+'/Cross Sections/Flow'][:]
@@ -77,7 +83,10 @@ def verify_native(hdf, expected, profiles):
                     if not np.isclose(row[field],v,rtol=0,atol=.002):raise ValueError('Bank station mismatch')
         w=h[BASE+'/Cross Sections/Water Surface'][:]
         if not np.isfinite(w).all() or (np.abs(w)>1e30).any():raise ValueError('Invalid WSE output')
-        checks=dict(profile_names=actual_names,profiles_and_flows=True,culvert_groups=len(groups),road_readback=road_check,
+        if is_river(expected) and (expected.get('boundaries') or {}).get('downstream',{}).get('type')=='known_stage':
+            wanted=expected['boundaries']['downstream']['stages_ft']
+            if not np.allclose(w[:,-1],wanted,rtol=0,atol=.002):raise ValueError('Known downstream water level readback mismatch')
+        checks=dict(model_type=expected.get('model_type','culvert'),profile_names=actual_names,profiles_and_flows=True,culvert_groups=len(groups),road_readback=road_check,
             barrels=[int(x['Barrels']) for x in groups],geometry_and_structure=True,no_additional_bridge=True,
             xs_count=len(attrs),roughness='verified' if 'channel_n' in expected or 'manning_by_section' in expected else 'preserved reviewed native input',
             ineffective_areas='verified' if 'ineffective_by_section' in expected else 'preserved reviewed native input')

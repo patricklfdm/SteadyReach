@@ -18,7 +18,7 @@ def perform(key,action,body):
     if body.get('revision') is not None and body['revision']!=m['revision']:raise ValueError('Inputs changed; reload the map / 参数已变更，请刷新地图')
     if action=='picks':
         import math
-        picks=body.get('picks',{});allowed={'upstream','downstream','inlet','outlet','road'}
+        picks=body.get('picks',{});allowed={'upstream','downstream','inlet','outlet','road','river'}
         if set(picks)-allowed:raise ValueError('Unknown map point type')
         for kind,points in picks.items():
             if not isinstance(points,list) or len(points)>(1 if kind in ('inlet','outlet') else 100) or any(not isinstance(p,list) or len(p)!=2 or not all(finite(v) for v in p) for p in points):raise ValueError('Invalid map points')

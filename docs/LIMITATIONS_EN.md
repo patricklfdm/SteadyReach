@@ -2,7 +2,7 @@
 
 **English** | [简体中文](LIMITATIONS_CN.md) | [Home](../README.md)
 
-This application supports Windows-native, one-reach 1D steady analysis for one box/circular culvert crossing, including supported groups of barrels. It does not provide unsteady-flow, 2D flooding, sediment transport, structural design or a universal HEC-RAS importer.
+This application supports Windows-native, one-reach 1D steady analysis for a river without structures or one box/circular culvert crossing, including supported groups of barrels. The river builder supports normal-depth/known downstream WSE boundaries; river-only native imports are not yet supported. It does not provide unsteady-flow, 2D flooding, sediment transport, structural design or a universal HEC-RAS importer.
 
 **Information still requiring a person:** representative design flow, structure opening/floor/entrance, applicability of estimates, units/datums, real flow direction, section/bank/road coverage and interpretation of hydraulic warnings. Automated estimates are conditional choices; surface DEM cannot establish buried inverts. Coordinates alone cannot produce an accepted engineering conclusion.
 

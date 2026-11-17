@@ -123,32 +123,41 @@ def capture(controller, project, pid, output, profiles):
         guard();controller.ShowRas();main=wait(lambda:window('HEC-RAS 7.0.1'),'main window')
         with h5py.File(project.with_suffix('.p01.hdf')) as f:
             if not f.attrs['File Version'].decode().startswith('HEC-RAS 7.0.1 ') or f.attrs['Units System']!=b'US Customary':raise ValueError('Uninspected native export version/units')
-            structs=f['Geometry/Structures/Attributes'][:]
-            if len(structs)!=1:raise ValueError('Automatic export supports one crossing')
-            river,reach,rs=[structs[0][k].decode().strip() for k in ('River','Reach','RS')]
-            groups=[g['Name'].decode().strip() for g in f['Geometry/Structures/Culvert Groups/Attributes'][:]]
-        if not groups or len(groups)!=len(set(groups)) or len(groups)>10:raise ValueError('Ambiguous or unsupported group list')
+            structs=f['Geometry/Structures/Attributes'][:] if 'Geometry/Structures/Attributes' in f else []
+            if len(structs)==0:
+                attrs=f['Geometry/Cross Sections/Attributes'][:]
+                identities={(a['River'].decode().strip(),a['Reach'].decode().strip()) for a in attrs}
+                if len(identities)!=1:raise ValueError('River export requires one reach')
+                river,reach=next(iter(identities));rs=None;groups=[]
+                result['scope']='ONE_RIVER_ONE_REACH_NO_STRUCTURES'
+            elif len(structs)==1:
+                river,reach,rs=[structs[0][k].decode().strip() for k in ('River','Reach','RS')]
+                groups=[g['Name'].decode().strip() for g in f['Geometry/Structures/Culvert Groups/Attributes'][:]]
+                if not groups:raise ValueError('Unsupported non-culvert structure')
+            else:raise ValueError('Automatic export supports one reach with zero or one crossing')
+        if len(groups)!=len(set(groups)) or len(groups)>10:raise ValueError('Ambiguous or unsupported group list')
         ptext=project.with_suffix('.p01').read_text(encoding='ascii')
         short=next(l.split('=',1)[1].strip() for l in ptext.splitlines() if l.startswith('Short Identifier='))
         title=next(l.split('=',1)[1].strip() for l in ptext.splitlines() if l.startswith('Plan Title='))
         rivers=controller.Output_GetRivers(0,None);reaches=controller.Output_GetReaches(1,0,None)
         if [s.strip() for s in rivers[1]]!=[river] or [s.strip() for s in reaches[2]]!=[reach]:raise ValueError('Native warning scope is not one verified river/reach')
-        controller.TableXS(river,reach,rs)
-        table=wait(lambda:window('Culvert Output'),'Culvert Output')
-        for pi,profile in enumerate(profiles):
-            select(table,3,short,[short]);select(table,6,river,[river]);select(table,4,reach,[reach]);select(table,5,rs)
-            select(table,8,profile['id'],[p['id'] for p in profiles])
-            for gi,group in enumerate(groups):
-                select(table,7,'Culv Group:  '+group,['Culv Group:  '+g for g in groups])
-                header=f"Plan: {short}    {river}    {reach}  RS: {rs}   Culv Group:  {group}   Profile: {profile['id']}"
-                text=clipboard_table(table,header)
-                from .culvert_details import parse
-                path=output/f'profile_{pi+1:02d}_group_{gi+1:02d}.txt'
-                path.write_text(text,encoding='utf-8',newline='')
-                files.append(item(path,'automatic_native_group_export'))
-                parsed=parse(text)
-                trace.append(dict(action='group_export',profile=profile['id'],group=group,header=parsed['header'],file=files[-1]))
-        post(table,wc.WM_CLOSE);wait(lambda:not wg.IsWindow(table) or not wg.IsWindowVisible(table),'close table')
+        if groups:
+            controller.TableXS(river,reach,rs)
+            table=wait(lambda:window('Culvert Output'),'Culvert Output')
+            for pi,profile in enumerate(profiles):
+                select(table,3,short,[short]);select(table,6,river,[river]);select(table,4,reach,[reach]);select(table,5,rs)
+                select(table,8,profile['id'],[p['id'] for p in profiles])
+                for gi,group in enumerate(groups):
+                    select(table,7,'Culv Group:  '+group,['Culv Group:  '+g for g in groups])
+                    header=f"Plan: {short}    {river}    {reach}  RS: {rs}   Culv Group:  {group}   Profile: {profile['id']}"
+                    text=clipboard_table(table,header)
+                    from .culvert_details import parse
+                    path=output/f'profile_{pi+1:02d}_group_{gi+1:02d}.txt'
+                    path.write_text(text,encoding='utf-8',newline='')
+                    files.append(item(path,'automatic_native_group_export'))
+                    parsed=parse(text)
+                    trace.append(dict(action='group_export',profile=profile['id'],group=group,header=parsed['header'],file=files[-1]))
+            post(table,wc.WM_CLOSE);wait(lambda:not wg.IsWindow(table) or not wg.IsWindowVisible(table),'close table')
         menu(main,'Summary Err,Warn, Notes ...')
         warning=wait(lambda:window('Errors Warnings and Notes for Plan : '+short),'warning window')
         select(warning,2,title,[title]);select(warning,8,river,['(All Rivers)',river]);select(warning,9,reach,['(All Reaches)',reach])
