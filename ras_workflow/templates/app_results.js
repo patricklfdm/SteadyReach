@@ -260,6 +260,7 @@ function renderSpacing(parent){
    box.append(el('p',tr('Wet section ends make this spacing comparison provisional, even when water-level differences meet the threshold. Use the computed case below to prepare an independent geometry revision. Review its proposed coverage changes, confirm and compute it, then repeat spacing assessment from the revised baseline. The existing nested trial remains unchanged.','湿端使本次加密对比仍属暂定，即使水位差达到阈值也不代表收敛验收完成。可从下方已计算工况自动准备独立几何修订版，核对覆盖建议、确认计算后，再从新基准进行加密评估。现有嵌套试算保留不变。'),'warning'));
    table(box,[tr('Case','工况'),tr('Wet RS retained from baseline','基准已有断面的湿端 RS'),tr('Wet RS added by refinement','加密新增断面的湿端 RS')],wetCases.map(v=>[v.id,v.retained_wet_sections?(v.retained_wet_sections.join(', ')||tr('None','无')):tr('Not classified in this saved result','旧结果未分类'),v.added_wet_sections?(v.added_wet_sections.join(', ')||tr('None','无')):tr('Not classified in this saved result','旧结果未分类')]));
   }
+  if(r.cases.length===3&&!r.failed_cases?.length&&r.cases.every(row=>row.status==='COMPUTED'))renderSpacingDiagnostics(box);
   const completed=r.cases.filter(row=>row.status==='COMPUTED'&&row.id!=='baseline');
   if(completed.length){
    const selected=field(box,'spacing-continue-case','Continue from computed case','选择继续使用的已计算工况',completed.at(-1).id,'select',completed.map(row=>[row.id,row.id,row.id]));
