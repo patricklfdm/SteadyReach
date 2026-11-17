@@ -156,6 +156,8 @@ def annotate(geometry, settings=None):
             row['geometry_issues'].append(dict(code=row['bank_candidates']['reasons'][0],severity='REVIEW_REQUIRED',sections=[i]))
         row['review_status']='DRAFT_REQUIRES_REVIEW'
     rows=geometry['cross_sections']
+    from .bank_reach import refresh
+    refresh(geometry)
     faces=geometry.get('structure') or {}
     for i in range(1,len(rows)):
         a,b=rows[i-1:i+1]

@@ -59,19 +59,11 @@ def fill(m, estimates=True, owned_only=False):
     settled = False
     for _ in range(12):
         c, g = intake._objects(packet, draft)
-        if g.get('flowlines'):
-            from .banks import propose
-            for i,row in enumerate(g['cross_sections']):
-                answer=draft['answers'].get(f'g.cross_sections.{i}.bank_stations_ft',{})
-                if not row.get('bank_stations_ft') or answer.get('automatic_preparation'):
-                    nearby = propose(row, dict(window_ft=6., center_search_fraction=.1, distance_penalty=1.))
-                    if nearby.get('selected_indices'):
-                        row['bank_candidates'] = nearby
-                    elif not (row.get('bank_candidates') or {}).get('selected_indices'):
-                        from .conditional_estimates import continuity_banks
-                        continued=continuity_banks(g,i)
-                        if continued:row['bank_candidates']=continued
         rows = params.rows(m, context=(sp, packet, draft, c, g))
+        if g.get('bank_reach_summary'):
+            draft['geometry']['bank_reach_summary']=copy.deepcopy(g['bank_reach_summary'])
+            for target,row in zip(draft['geometry']['cross_sections'],g['cross_sections']):
+                target['bank_candidates']=copy.deepcopy(row.get('bank_candidates'))
         batch = {}
         for field in rows:
             previous = draft['answers'].get(field['key'], {})
@@ -100,6 +92,7 @@ def fill(m, estimates=True, owned_only=False):
             break
         draft['answers'].update(batch)
         changes.update(batch)
+    bank_summary=g.get('bank_reach_summary')
     c, g = intake._objects(packet, draft)
     # Derived source labels remove bookkeeping text entry while keeping the
     # individual numbers and source hashes in the input register.
@@ -110,13 +103,14 @@ def fill(m, estimates=True, owned_only=False):
             changes[field['key']] = draft['answers'][field['key']]
     if changes:
         draft.update(consent=False, reviewer=None, basis='Automatically prepared editable draft; final user confirmation is pending.')
-        intake.save_draft(sp, draft)
+        intake.save_draft(sp, draft, refresh_banks=True)
         m['revision'] += 1
         m.pop('pending_review', None)
         m.pop('run_confirmation', None)
         core.persist(m, 'AUTOMATIC_PARAMETER_DRAFT', dict(fields=list(changes)))
     rows = params.rows(m)
     return dict(changed_fields=list(changes), invalidated_fields=sorted(invalidated), dependencies_settled=settled,
+                bank_reach=bank_summary,
                 missing_required=[f['key'] for f in rows if f['required'] and f['missing']],
                 conflicts=[f['key'] for f in rows if f.get('source_conflict')],
                 assumptions=[f['key'] for f in rows if f['evidence_class'] in ('assumed', 'inferred')])

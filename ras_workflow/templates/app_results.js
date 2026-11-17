@@ -1,4 +1,46 @@
 'use strict';
+function renderRevisionComparison(parent,comparison){
+ const box=details(parent,'Comparison with previous calculation','与上次计算对比',true);
+ const format=value=>Number.isFinite(value)?value.toFixed(4):'—';
+ if(comparison.status!=='COMPARISON_NOT_ACCEPTANCE'){
+  box.append(el('p',tr('Comparison needs attention. ','对比需要处理。')+(comparison.error||comparison.status),'warning'));
+  return;
+ }
+ const labels={upstream_wse_ft:tr('Upstream WSE (ft)','上游水位（ft）'),downstream_wse_ft:tr('Downstream WSE (ft)','下游水位（ft）'),
+  max_channel_velocity_fts:tr('Maximum channel velocity (ft/s)','最大主槽流速（ft/s）'),max_channel_froude:tr('Maximum channel Froude number','最大主槽弗劳德数'),
+  headwater_wse_ft:tr('Headwater WSE (ft)','进口上游水位（ft）'),tailwater_wse_ft:tr('Tailwater WSE (ft)','出口下游水位（ft）'),
+  inlet_velocity_fts:tr('Inlet velocity (ft/s)','进口流速（ft/s）'),roadway_flow_software_cfs:tr('Roadway flow (cfs)','道路越流（cfs）')};
+ table(box,[tr('Profile','工况'),tr('Metric','指标'),tr('Previous','上次'),tr('Current','本次'),tr('Change','变化')],
+  comparison.rows.map(row=>[row.profile,labels[row.metric]||row.metric,format(row.previous),format(row.current),
+   row.location_changed?tr('Endpoint changed','端部断面已改变'):format(row.change)]));
+ for(const profile of comparison.profiles||[]){
+  const maximum=profile.maximum;
+  if(!maximum){box.append(el('p',profile.profile+tr(' has no matched section IDs.',' 没有匹配的断面编号。'),'warning'));continue;}
+  box.append(el('p',profile.profile+' · '+profile.matched_sections+tr(' matched sections. Maximum absolute WSE change ',' 条匹配断面，最大绝对水位差 ')+
+   format(Math.abs(maximum.change))+' ft · RS '+maximum.station,profile.exceeds_review_threshold?'warning':'status'));
+  if(profile.added_stations.length||profile.removed_stations.length)box.append(el('p',tr('Added / removed section IDs — ','增加／移除断面编号 — ')+profile.added_stations.join(', ')+' / '+profile.removed_stations.join(', ')));
+ }
+ const unmatched=[...(comparison.unmatched_previous_profiles||[]),...(comparison.unmatched_current_profiles||[])];
+ if(unmatched.length)box.append(el('p',tr('Unmatched profiles — ','未匹配工况 — ')+unmatched.join(', '),'warning'));
+ if(comparison.cross_sections?.length){
+  const sections=details(box,'Water-level changes at every matched section','全部匹配断面的水位变化');
+  table(sections,[tr('Profile','工况'),'RS',tr('Previous WSE (ft)','上次水位（ft）'),tr('Current WSE (ft)','本次水位（ft）'),'Δ ft'],
+   comparison.cross_sections.map(row=>[row.profile,row.station,format(row.previous),format(row.current),format(row.change)]));
+ }
+ const old= comparison.diagnostics?.previous,now=comparison.diagnostics?.current;
+ if(old?.status==='VERIFIED'&&now?.status==='VERIFIED'){
+  table(box,[tr('Diagnostic coverage','诊断覆盖'),tr('Previous','上次'),tr('Current','本次')],[
+   [tr('Native warning coverage','原生警告覆盖'),old.warning_coverage,now.warning_coverage],
+   [tr('Native messages','原生信息条数'),old.native_messages??'—',now.native_messages??'—'],
+   [tr('Combined diagnostic records','合并诊断记录'),old.issue_count,now.issue_count]]);
+  const codes=[...new Set([...Object.keys(old.counts),...Object.keys(now.counts)])].sort();
+  const counts=details(box,'Diagnostic changes by category','按类别查看诊断变化');
+  table(counts,[tr('Category','类别'),tr('Previous','上次'),tr('Current','本次')],codes.map(code=>[code,old.counts[code]||0,now.counts[code]||0]));
+ }else box.append(el('p',tr('Diagnostic comparison is incomplete. ','诊断对比尚不完整。')+[old?.error,now?.error].filter(Boolean).join(' '),'warning'));
+ box.append(el('p',tr('Matched section IDs use hash-verified native water levels. Review any changed section positions. The workflow flags changes above ','匹配断面编号采用已核验哈希的原生水位。请核对断面位置改动。工作流将超过 ')+
+  comparison.threshold_ft+tr(' ft for review. This threshold supports screening. Hydraulic convergence, source adequacy and engineering acceptance require separate assessment.',' ft 的变化标为待复核，此阈值用于筛查。水力收敛、资料充分性与工程验收仍需分别判断。')));
+}
+
 function renderResultTools(parent){
  if(!current.native_review)parent.append(button('Prepare QA revision suggestions','根据 QA 创建修订建议',prepareQaRevision));
  renderStudy(parent);

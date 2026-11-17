@@ -209,7 +209,10 @@ def sample_road(m):
     path=core.folder(m['id'])/'map_estimates'/unique_id()/'road.json';save(path,result);m['road_sample']=item(path)
 
 def rows(m, context=None):
-    sp,p,d,c,g=context or objects(m);extra=proposals(m,c,g);result=intake.fields(c,g,m['scenario']);intake._suggestions(c,p,result)
+    sp,p,d,c,g=context or objects(m)
+    from .bank_reach import refresh
+    refresh(g,d['answers'])
+    extra=proposals(m,c,g);result=intake.fields(c,g,m['scenario']);intake._suggestions(c,p,result)
     for f in result:
         answer=d['answers'].get(f['key'],{});f['answer']=answer
         missing=f['value'] in (None,'',[])
@@ -259,6 +262,8 @@ def reviewed_draft(m):
     """Prepare final bank decisions in memory; final confirmation is the only consent."""
     from .geometry_qa import section_fingerprint
     sp,p,d,c,g=objects(m)
+    from .bank_reach import refresh
+    refresh(g,d['answers'])
     for row in g['cross_sections']:
         row['terrain_review']=dict(decision='ACCEPT',reviewer=None,policy='local_computation_v1',
             basis='Bank positions and complete parameters presented at final calculation confirmation; not engineering acceptance.',fingerprint=section_fingerprint(row))

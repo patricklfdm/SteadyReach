@@ -6,6 +6,8 @@ For a reach without structures, choose **River reach (bridges excluded)** and fo
 
 ## The normal path
 
+For an independently revised model, **Comparison with previous calculation** shows river-specific metrics, every matching section's native WSE change, the largest absolute change and diagnostic counts for both editions. It verifies raw HDF/controller identity before comparing. Added or removed sections and unmatched profiles remain visible. Different discharges, model types, units or datums stop the comparison. A changed endpoint ID suppresses its endpoint delta. Matching RS labels still require checking any changed physical locations. The 0.1 ft flag is a workflow screening threshold. Native-message coverage and combined numerical/native records are listed separately.
+
 1. Finish **Model → Review all parameters → Confirm and run HEC-RAS**. Read the completed calculation and unresolved hydraulic checks on **Results**.
 2. Open the generated English/Chinese reports and Minimal/Complete folders. **Open QGIS review copy** launches the configured QGIS with its own environment and a disposable copy of Complete. This avoids broken system shortcuts and preserves the sealed package. Review-copy edits do not update the package automatically.
 3. If the automatic adapter has all needed outputs, no supplementary upload is required. If it lacks a group table or complete warning list, use the optional step below. No reviewer identity, reason form or screenshot upload is required.

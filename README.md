@@ -20,6 +20,7 @@ For a new model, import the available material and check the crossing and terrai
 
 - Supports draggable DEM maps, fine zoom and explicit batch section rotation → real DEM preview → apply, with intersection checks and preserved draft history.
 - Queries USGS DEMs for U.S. locations, prepares terrain, samples cross sections and proposes bank positions.
+- Ranks bank pairs across adjacent sections, preserves manual controls and flags interpolation or unstable choices. Revision results show verified water-level changes at every matching section and changes in warning coverage.
 - Imports a supported existing steady model, or builds a model from entered and terrain-derived inputs.
 - Labels suggested/estimated values and leaves unsupported mandatory inputs empty. All no-model numerical fields can be edited before one final confirmation.
 - Runs actual HEC-RAS, checks output identity, retains warnings and produces full English/Chinese DOCX and PDF reports plus an English summary.

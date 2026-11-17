@@ -408,7 +408,7 @@ def validate(session_path,draft=None,require_consent=True,*,direct_start=False):
     return dict(ready=not errors,errors=errors)
 
 
-def save_draft(session_path,payload):
+def save_draft(session_path,payload,*,refresh_banks=False):
     sp=safe_path(ROOT,session_path)
     with lock(sp.parent/'session.lock'):
         sp,s,p,d=_load(sp)
@@ -429,7 +429,14 @@ def save_draft(session_path,payload):
         if 'native_review' in payload:
             if not isinstance(payload['native_review'],dict):raise ValueError('Invalid native review draft')
             proposed['native_review']=payload['native_review']
-        _objects(p,proposed)  # Unknown field paths never reach a configuration.
+        _,geometry=_objects(p,proposed)  # Unknown field paths never reach a configuration.
+        if refresh_banks:
+            from .bank_reach import refresh
+            refresh(geometry,proposed['answers'])
+            if geometry.get('bank_reach_summary'):
+                proposed['geometry']['bank_reach_summary']=geometry['bank_reach_summary']
+                for target,row in zip(proposed['geometry']['cross_sections'],geometry['cross_sections']):
+                    target['bank_candidates']=row.get('bank_candidates')
         proposed['revision']+=1;proposed['saved_utc']=utc()
         save(sp.parent/'events'/(unique_id()+'.json'),dict(action='SAVE_DRAFT',draft=proposed))
         save(sp.parent/'draft.json',proposed)

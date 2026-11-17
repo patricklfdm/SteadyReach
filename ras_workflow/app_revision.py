@@ -1,7 +1,7 @@
 """New editable project revisions; solved projects and confirmations are immutable."""
 import copy
 import os
-from .common import ROOT, read, save, item, rel, safe_path, intact, unique_id, utc
+from .common import ROOT, read, save, item, rel, safe_path, intact, unique_id, utc, finite
 from . import app_core as core, intake
 
 
@@ -49,11 +49,70 @@ def compare(m,summary):
     parent=m.get('parent_revision')
     if not parent:return None
     if not intact([parent['summary']]):return dict(status='SOURCE_CHANGED',rows=[])
-    old=read(ROOT/parent['summary']['path']);a={p['profile_id']:p for p in (old.get('hydraulics') or {}).get('profiles',[])};rows=[]
-    for p in (summary.get('hydraulics') or {}).get('profiles',[]):
-        prior=a.get(p['profile_id']);
+    old=read(ROOT/parent['summary']['path'])
+    previous,current=old.get('hydraulics') or {},summary.get('hydraulics') or {}
+    if not previous or not current:
+        return dict(status='COMPARISON_UNAVAILABLE',rows=[],error='Both editions need computed hydraulics')
+    if any(previous.get(key)!=current.get(key) for key in ('datum','unit','model_type','case_kind')):
+        return dict(status='COMPARISON_INCOMPATIBLE',rows=[],error='Model type, datum, units or case kind differ')
+    from .qa import verified_profiles,THRESHOLDS
+    try:
+        old_water,new_water=verified_profiles(previous),verified_profiles(current)
+    except (ValueError,KeyError,OSError) as error:
+        return dict(status='COMPARISON_UNAVAILABLE',rows=[],error=str(error))
+    a={p['profile_id']:p for p in previous['profiles']};rows=[];sections=[];profiles=[]
+    metrics=('upstream_wse_ft','downstream_wse_ft','max_channel_velocity_fts','max_channel_froude') if current.get('model_type')=='river' else (
+        'headwater_wse_ft','tailwater_wse_ft','inlet_velocity_fts','roadway_flow_software_cfs')
+    for p in current['profiles']:
+        prior=a.get(p['profile_id'])
         if not prior:continue
-        for field in ('headwater_wse_ft','tailwater_wse_ft','inlet_velocity_fts','roadway_flow_software_cfs'):
+        if p['flow_cfs']!=prior['flow_cfs']:
+            return dict(status='COMPARISON_INCOMPATIBLE',rows=[],error='Matched profiles have different discharges')
+        for field in metrics:
             x=prior.get('metrics',{}).get(field);y=p.get('metrics',{}).get(field)
-            rows.append(dict(profile=p['profile_id'],metric=field,previous=x,current=y,change=None if x is None or y is None else y-x))
-    return dict(status='COMPARISON_NOT_ACCEPTANCE',parent=parent,rows=rows)
+            location_key={'upstream_wse_ft':'headwater_rs','headwater_wse_ft':'headwater_rs',
+                          'downstream_wse_ft':'tailwater_rs','tailwater_wse_ft':'tailwater_rs'}.get(field)
+            moved=bool(location_key and prior.get(location_key)!=p.get(location_key))
+            rows.append(dict(profile=p['profile_id'],metric=field,previous=x,current=y,
+                previous_station=prior.get(location_key),current_station=p.get(location_key),
+                location_changed=moved,change=y-x if finite(x) and finite(y) and not moved else None))
+        left,right=old_water[p['profile_id']],new_water[p['profile_id']]
+        matched=[]
+        for rs in left:
+            if rs not in right:continue
+            if not finite(left[rs]) or not finite(right[rs]):
+                return dict(status='COMPARISON_UNAVAILABLE',rows=[],error='Nonfinite native water-surface value')
+            matched.append(dict(profile=p['profile_id'],station=rs,previous=left[rs],current=right[rs],change=right[rs]-left[rs]))
+        sections+=matched
+        maximum=max(matched,key=lambda row:abs(row['change'])) if matched else None
+        profiles.append(dict(profile=p['profile_id'],matched_sections=len(matched),maximum=maximum,
+            added_stations=sorted(right.keys()-left.keys()),removed_stations=sorted(left.keys()-right.keys()),
+            exceeds_review_threshold=bool(maximum and abs(maximum['change'])>THRESHOLDS['sensitivity_hw_ft'])))
+    if not profiles:
+        return dict(status='COMPARISON_INCOMPATIBLE',rows=[],error='No matching profiles')
+    return dict(status='COMPARISON_NOT_ACCEPTANCE',parent=parent,rows=rows,cross_sections=sections,profiles=profiles,
+        threshold_ft=THRESHOLDS['sensitivity_hw_ft'],
+        unmatched_previous_profiles=sorted(a.keys()-new_water.keys()),
+        unmatched_current_profiles=sorted(new_water.keys()-a.keys()),
+        diagnostics=dict(previous=_diagnostic_summary(old),current=_diagnostic_summary(summary)),
+        sources=[previous['raw_hdf'],previous['raw_controller'],current['raw_hdf'],current['raw_controller']])
+
+
+def _diagnostic_summary(summary):
+    """Retain full native coverage and numerical issues as distinct evidence."""
+    hyd=summary['hydraulics']
+    entry=hyd.get('diagnostics')
+    if not entry or not intact([entry]):
+        return dict(status='UNAVAILABLE',error='Diagnostic evidence missing or changed')
+    try:
+        data=read(ROOT/entry['path'])
+        native_count=None
+        if summary.get('native_supplement'):
+            from .app_outputs import validate,diagnostics
+            supplement=validate(summary['native_supplement'])
+            data=diagnostics(hyd,supplement)
+            native_count=len((supplement.get('warnings') or {}).get('records',[]))
+        return dict(status='VERIFIED',counts=data['counts'],warning_coverage=data['warning_coverage'],
+                    native_messages=native_count,issue_count=len(data['issues']))
+    except (ValueError,KeyError,OSError) as error:
+        return dict(status='UNAVAILABLE',error=str(error))
