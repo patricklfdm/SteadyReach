@@ -46,6 +46,17 @@ class RefreshTests(unittest.TestCase):
         self.assertEqual(self.saved[-1]['previous_delivery'], self.model['latest_delivery'])
         self.assertTrue(self.saved[-1]['exports_need_refresh'])
         self.assertNotIn('latest_delivery', self.saved[-1])
+        self.assertTrue(app_core.current_refreshed_reports(self.saved[-1]))
+
+    def test_changed_result_or_study_hides_previous_reports(self):
+        self.run_refresh('report')
+        current=self.saved[-1]
+        self.assertTrue(app_core.current_refreshed_reports(current))
+        for key in ('summary','latest_study','latest_spacing','latest_coverage','latest_coverage_exports'):
+            changed=copy.deepcopy(current);changed[key]={'path':'new.json','sha256':'changed'}
+            self.assertFalse(app_core.current_refreshed_reports(changed),key)
+        old=copy.deepcopy(current);old.pop('latest_reports_binding')
+        self.assertFalse(app_core.current_refreshed_reports(old))
 
     def test_report_only_preserves_package_as_previous_edition(self):
         report, delivery, _ = self.run_refresh('report')

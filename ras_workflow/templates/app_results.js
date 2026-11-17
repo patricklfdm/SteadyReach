@@ -1,4 +1,10 @@
 'use strict';
+function renderDeliveryRecovery(parent,delivery){
+ if(!delivery?.error)return;
+ parent.append(el('p',tr('Calculation and reports are saved. Resolve the export error below, then retry delivery without solving. A temporary map-service failure may only need a retry.','计算和报告已保存。请处理下方导出错误，再单独重试交付包，无需重新求解。地图服务临时故障可先重试。'),'warning'),
+  el('p',delivery.error,'warning'),button('Retry delivery without solving','重试交付包（不重新求解）',async()=>{await api('delivery',{id:current.id});await open(current.id);}));
+}
+
 function renderRevisionComparison(parent,comparison){
  const box=details(parent,'Comparison with previous calculation','与上次计算对比',true);
  const format=value=>Number.isFinite(value)?value.toFixed(4):'—';
@@ -6,18 +12,34 @@ function renderRevisionComparison(parent,comparison){
   box.append(el('p',tr('Comparison needs attention. ','对比需要处理。')+(comparison.error||comparison.status),'warning'));
   return;
  }
+ const context=comparison.input_context;
+ if(context?.status==='VERIFIED'){
+  const geometry=context.geometry;
+  box.append(el('p',tr('Verified input snapshots · sections ','已核验输入快照 · 断面数 ')+geometry.previous_count+' → '+geometry.current_count+
+   tr(' · changed shapes/parameters ',' · 几何／参数改变 ')+geometry.changed_sections+tr(' · moved centers ',' · 中心移动 ')+geometry.moved_centers+
+   tr(' · moved bank pairs ',' · 岸站平面位置移动 ')+geometry.moved_bank_pairs));
+   if(context.interpretation==='MULTIPLE_INPUT_CHANGES')box.append(el('p',tr('Geometry and other model inputs changed together. Do not interpret this as an isolated section-spacing convergence test.','几何和其他模型输入同时改变，不能把本次对比作为仅改变断面间距的收敛检验。'),'warning'));
+  if(context.input_changes.length){const inputs=details(box,'Changed hydraulic inputs','水力输入变化',true);table(inputs,[tr('Input','输入'),tr('Previous','上次'),tr('Current','本次')],context.input_changes.map(r=>[r.field,JSON.stringify(r.previous),JSON.stringify(r.current)]));}
+  const location=details(box,'Section correspondence and bank movement','断面对应及岸站移动');
+  table(location,['RS',tr('Center shift ft','中心位移 ft'),tr('Rotation degrees','方向变化 °'),tr('Left/right bank shift ft','左右岸平面位移 ft'),tr('Changed fields','变化字段')],
+   geometry.sections.filter(r=>r.changed_fields.length||r.location_status!=='SAME_CENTER').map(r=>[r.station,format(r.center_shift_ft),format(r.rotation_degrees),(r.bank_plan_shifts_ft||[]).map(format).join(' / '),r.changed_fields.join(', ')]));
+  if(geometry.unverified_centers)box.append(el('p',geometry.unverified_centers+tr(' section centers lack verified geographic correspondence.',' 条断面中心缺少可核验的地理对应。'),'warning'));
+   if(geometry.unverified_bank_pairs)box.append(el('p',geometry.unverified_bank_pairs+tr(' bank pairs lack comparable map positions.',' 组岸站缺少可核验的平面位置对应。'),'warning'));
+ }else box.append(el('p',tr('Input/location correspondence is unavailable: ','输入／位置对应尚不可用：')+(context?.error||tr('No sealed geometry snapshots.','缺少封存几何快照。')),'warning'));
  const labels={upstream_wse_ft:tr('Upstream WSE (ft)','上游水位（ft）'),downstream_wse_ft:tr('Downstream WSE (ft)','下游水位（ft）'),
   max_channel_velocity_fts:tr('Maximum channel velocity (ft/s)','最大主槽流速（ft/s）'),max_channel_froude:tr('Maximum channel Froude number','最大主槽弗劳德数'),
   headwater_wse_ft:tr('Headwater WSE (ft)','进口上游水位（ft）'),tailwater_wse_ft:tr('Tailwater WSE (ft)','出口下游水位（ft）'),
   inlet_velocity_fts:tr('Inlet velocity (ft/s)','进口流速（ft/s）'),roadway_flow_software_cfs:tr('Roadway flow (cfs)','道路越流（cfs）')};
  table(box,[tr('Profile','工况'),tr('Metric','指标'),tr('Previous','上次'),tr('Current','本次'),tr('Change','变化')],
   comparison.rows.map(row=>[row.profile,labels[row.metric]||row.metric,format(row.previous),format(row.current),
-   row.location_changed?tr('Endpoint changed','端部断面已改变'):format(row.change)]));
+    row.location_changed?tr('Endpoint changed','端部断面已改变'):row.location_status==='UNVERIFIED'?tr('Location unverified','位置未核验'):format(row.change)]));
  for(const profile of comparison.profiles||[]){
   const maximum=profile.maximum;
   if(!maximum){box.append(el('p',profile.profile+tr(' has no matched section IDs.',' 没有匹配的断面编号。'),'warning'));continue;}
   box.append(el('p',profile.profile+' · '+profile.matched_sections+tr(' matched sections. Maximum absolute WSE change ',' 条匹配断面，最大绝对水位差 ')+
    format(Math.abs(maximum.change))+' ft · RS '+maximum.station,profile.exceeds_review_threshold?'warning':'status'));
+  const same=profile.maximum_at_verified_centers;
+  box.append(el('p',same?tr('At verified unchanged centers: ','经核验中心未移动的断面：')+profile.verified_center_count+tr(' sections · maximum |ΔWSE| ',' 条 · 最大绝对水位差 ')+format(Math.abs(same.change))+' ft · RS '+same.station:tr('No verified unchanged-center comparison.','没有可核验的同中心位置对比。'),same?'muted':'warning'));
   if(profile.added_stations.length||profile.removed_stations.length)box.append(el('p',tr('Added / removed section IDs — ','增加／移除断面编号 — ')+profile.added_stations.join(', ')+' / '+profile.removed_stations.join(', ')));
  }
  const unmatched=[...(comparison.unmatched_previous_profiles||[]),...(comparison.unmatched_current_profiles||[])];

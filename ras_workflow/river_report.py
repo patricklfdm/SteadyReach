@@ -93,6 +93,8 @@ def build(data, plots, folder, language='en', detail='full', details=None):
           '自动诊断可能与原生警告重复，条数不等于独立缺陷数；应保留并复核完整原生警告文本。')
     else:p('No issues were returned by the implemented checks. Calibration, boundary sensitivity and engineering interpretation remain separate requirements.',
            '已实施检查未返回问题；校准、边界敏感性及工程判断仍需分别完成。')
+    from .revision_report import compose as revision_compose
+    if not full:revision_compose(d,data,tr,full)
     d.add_heading(tr('Interpretation and next steps','解释与后续步骤'),1)
     p('Confirm channel survey and present bed conditions, discharge applicability, roughness, boundary influence and section-spacing sensitivity. A 1D steady model does not reproduce the time history of a flood or a two-dimensional floodplain velocity field.',
       '需确认河槽测量及现状河床、流量适用性、糙率、边界影响和断面间距敏感性。一维恒定流模型不能还原洪水随时间变化过程或二维漫滩流速场。')
@@ -154,7 +156,9 @@ def build(data, plots, folder, language='en', detail='full', details=None):
         if coverage_studies and not d.paragraphs[-1].text:
             spacer=d.paragraphs[-1]._p
             spacer.getparent().remove(spacer)
-        d.add_page_break();d.add_heading(tr('Inputs and model extent','输入与模型范围'),1)
+        d.add_page_break()
+        revision_compose(d,data,tr,full)
+        d.add_heading(tr('Inputs and model extent','输入与模型范围'),1)
         loc=c.get('location') or {}
         table(d,[tr('Input','输入'),tr('Adopted value','采用值')],[
             [tr('Site marker latitude longitude','位置标记纬度与经度'),str(loc.get('latitude'))+', '+str(loc.get('longitude'))],

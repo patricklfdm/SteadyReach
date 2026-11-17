@@ -121,6 +121,8 @@ def build(data, plots, folder, language='en', detail='full', details=None):
     if s.get('solver_reused'):p('The cited attempt reused verified existing solver output; report generation is not a new solve.','所引尝试复用了核验后的既有求解输出；生成报告不构成新求解。')
 
     from .report_context import compose
+    from .revision_report import compose as revision_compose
+    revision_compose(d,data,tr,full)
     if full:compose(d,data,tr,num,full=True)
 
     if full:

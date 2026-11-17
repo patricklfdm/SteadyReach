@@ -100,6 +100,16 @@ Choose a current candidate, or explicitly choose **Keep saved value as a conditi
 
 Click **Save these decisions and refresh review** once for the selected group. No choices are preselected. You may resolve some fields first; others continue to block computation. A stale page, changed evidence, or invalid selection rejects the whole group before saving. The page reports successful saves and refreshes the complete input review. Confirm the updated inputs separately before running HEC-RAS. No reviewer name or explanatory form is required.
 
+If map or package export fails after computation, the results page keeps the reports and shows **Retry delivery without solving** beside the error. Resolve a missing dependency, or retry a transient map-service failure. The action rebuilds reports/packages from the same calculation; it does not rerun HEC-RAS. The previous failed attempt remains recorded.
+
+## Automatic revision interpretation
+
+For a newly created editable revision, the parent calculation reference is carried into the confirmed configuration. After computing, **Comparison with previous calculation** reads both runs' sealed input snapshots and native water levels. It lists changed hydraulic inputs, added/removed sections, changed profiles, center displacement, direction changes and bank displacement in map coordinates. Extending a section can change bank station numbers while leaving their actual map positions unchanged; this is identified automatically.
+
+The results page distinguishes the maximum difference at matching station IDs from the maximum at verified unchanged centers. A moved or unverifiable center is excluded from the latter. The 0.01 ft coordinate-matching tolerance is a bookkeeping tolerance, not survey accuracy. Even an unchanged center can have a changed profile shape or hydraulic controls. When geometry and other inputs changed together, the page and reports explicitly state that the comparison is not an isolated section-spacing convergence test.
+
+Both technical reports and the English summary include the revision interpretation automatically; full values and source references remain in `report_data.json`. Complete includes the referenced parent-result and input-snapshot files through its report-source index. Missing or modified evidence is reported as unavailable. This comparison highlights consequences and review priorities; it does not automatically accept a revision or resolve engineering QA.
+
 ## Remaining human decisions
 
 Check source applicability, datum, physical opening identity, buried geometry, effective flow paths, uncertain banks, inlet/floor/obstruction assumptions and boundary validity. Review Mapper/QGIS alignment and final report pages. User-authored source notes are retained in their original language; if Chinese construction notes occur in an English report, the report flags language review. Supply suitable English wording before an English-only external delivery. No local translator is assumed to preserve engineering meaning.

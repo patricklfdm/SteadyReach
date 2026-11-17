@@ -36,6 +36,24 @@ def fetch_imagery(url, path, budget, failures):
             time.sleep(attempt)
 
 
+def export_pixels(export, params, get, budget, state):
+    """Use the documented image stream if the temporary output URL is broken.
+
+    Extent/CRS metadata must already be validated. Only f changes; the caller
+    still verifies PNG dimensions and full alpha coverage for the locked mosaic.
+    https://developers.arcgis.com/rest/services-reference/enterprise/export-image/
+    """
+    try:
+        path=get(export['href'],'image.png',budget)
+        state['image_transport']='EXPORTED_HREF'
+        return path
+    except HTTPError as error:
+        if error.code not in (400,404,410,429,500,502,503,504):raise
+        state.update(image_transport='DIRECT_STREAM_AFTER_HREF_FAILURE',href_failure_status=error.code)
+        print(f'Imagery output URL returned HTTP {error.code}; requesting the same locked mosaic as a direct image stream.',flush=True)
+        return get(SERVICE+'/exportImage?'+urlencode(dict(params,f='image')),'image_stream.png',budget)
+
+
 def acquire(crs, bounds, output, max_download_bytes=40_000_000, max_pixels=1600):
     """Download a small offline natural-color map in the reviewed model CRS.
 
@@ -96,16 +114,17 @@ def acquire(crs, bounds, output, max_download_bytes=40_000_000, max_pixels=1600)
         dx=bounds[2]-bounds[0];dy=bounds[3]-bounds[1]
         width=max(1,round(limit*dx/max(dx,dy)));height=max(1,round(limit*dy/max(dx,dy)))
         mosaic=dict(mosaicMethod='esriMosaicLockRaster',lockRasterIds=ids,mosaicOperation='MT_FIRST',ascending=True)
-        export=get_json('/exportImage',dict(f='json',bbox=','.join(map(str,bounds)),bboxSR=sr,imageSR=sr,
+        export_params=dict(f='json',bbox=','.join(map(str,bounds)),bboxSR=sr,imageSR=sr,
             size=f'{width},{height}',format='png32',pixelType='U8',adjustAspectRatio='false',
-            interpolation='RSP_BilinearInterpolation',mosaicRule=json.dumps(mosaic),renderingRule=json.dumps(dict(rasterFunction='NaturalColor'))),'export.json')
+            interpolation='RSP_BilinearInterpolation',mosaicRule=json.dumps(mosaic),renderingRule=json.dumps(dict(rasterFunction='NaturalColor')))
+        export=get_json('/exportImage',export_params,'export.json')
         extent=export['extent'];returned_crs=extent['spatialReference']
         returned_crs=CRS.from_user_input(returned_crs.get('wkt') or returned_crs.get('latestWkid') or returned_crs.get('wkid'))
         if not returned_crs.equals(crs,ignore_axis_order=True):raise ValueError('Export returned a different CRS')
         actual=[extent[k] for k in ['xmin','ymin','xmax','ymax']]
         if not all(math.isfinite(v) for v in actual) or any(abs(a-b)>max(dx,dy)*1e-8 for a,b in zip(actual,bounds)):
             raise ValueError('Export extent differs from requested map extent')
-        png=get(export['href'],'image.png',remaining)
+        png=export_pixels(export,export_params,get,remaining,state)
         with Image.open(png) as im:
             if im.format!='PNG' or im.size!=(width,height) or im.size!=(export['width'],export['height']):
                 raise ValueError('Export image format/dimensions differ from receipt')

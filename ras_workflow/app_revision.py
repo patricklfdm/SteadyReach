@@ -43,6 +43,8 @@ def create(key, body):
     for field in ('authorization','configuration_approval','intake_candidates','section_workflow'):
         c.pop(field,None)
     title=parent['title']+' / '+source['case_id'] if source else parent['title']
+    origin=source['summary'] if source else parent['summary']
+    c['revision_origin']=dict(project_id=parent['id'],summary=origin)
     c.update(project_id=key2,title=title+' · revision',geometry='geometry.json',model_proposal_pending=True)
     g.update(approved_for_model=False,status='EDITABLE_REVISION')
     save(folder/'geometry.json',g);save(folder/'initial.json',c)
@@ -90,6 +92,9 @@ def compare(m,summary):
         old_water,new_water=verified_profiles(previous),verified_profiles(current)
     except (ValueError,KeyError,OSError) as error:
         return dict(status='COMPARISON_UNAVAILABLE',rows=[],error=str(error))
+    from .revision_inputs import collect, station_key
+    input_context=collect(old,summary)
+    locations={r['station']:r for r in input_context.get('geometry',{}).get('sections',[])}
     a={p['profile_id']:p for p in previous['profiles']};rows=[];sections=[];profiles=[]
     metrics=('upstream_wse_ft','downstream_wse_ft','max_channel_velocity_fts','max_channel_froude') if current.get('model_type')=='river' else (
         'headwater_wse_ft','tailwater_wse_ft','inlet_velocity_fts','roadway_flow_software_cfs')
@@ -102,30 +107,41 @@ def compare(m,summary):
             x=prior.get('metrics',{}).get(field);y=p.get('metrics',{}).get(field)
             location_key={'upstream_wse_ft':'headwater_rs','headwater_wse_ft':'headwater_rs',
                           'downstream_wse_ft':'tailwater_rs','tailwater_wse_ft':'tailwater_rs'}.get(field)
-            moved=bool(location_key and prior.get(location_key)!=p.get(location_key))
+            old_rs,new_rs=prior.get(location_key),p.get(location_key)
+            location_status='NOT_LOCATION_SPECIFIC'
+            if location_key:
+                location_status='UNVERIFIED'
+                if old_rs is not None and new_rs is not None:
+                    location_status='MOVED' if station_key(old_rs)!=station_key(new_rs) else locations.get(station_key(new_rs),{}).get('location_status','UNVERIFIED')
+            moved=location_status=='MOVED'
             rows.append(dict(profile=p['profile_id'],metric=field,previous=x,current=y,
-                previous_station=prior.get(location_key),current_station=p.get(location_key),
-                location_changed=moved,change=y-x if finite(x) and finite(y) and not moved else None))
+                previous_station=old_rs,current_station=new_rs,location_status=location_status,
+                location_changed=moved,change=y-x if finite(x) and finite(y) and location_status in ('SAME_CENTER','NOT_LOCATION_SPECIFIC') else None))
         left,right=old_water[p['profile_id']],new_water[p['profile_id']]
         matched=[]
         for rs in left:
             if rs not in right:continue
             if not finite(left[rs]) or not finite(right[rs]):
                 return dict(status='COMPARISON_UNAVAILABLE',rows=[],error='Nonfinite native water-surface value')
-            matched.append(dict(profile=p['profile_id'],station=rs,previous=left[rs],current=right[rs],change=right[rs]-left[rs]))
+            location=locations.get(station_key(rs),{})
+            matched.append(dict(profile=p['profile_id'],station=rs,previous=left[rs],current=right[rs],change=right[rs]-left[rs],
+                location_status=location.get('location_status','UNVERIFIED'),center_shift_ft=location.get('center_shift_ft'),
+                changed_geometry_fields=location.get('changed_fields',[])))
         sections+=matched
         maximum=max(matched,key=lambda row:abs(row['change'])) if matched else None
+        coincident=[r for r in matched if r['location_status']=='SAME_CENTER']
         profiles.append(dict(profile=p['profile_id'],matched_sections=len(matched),maximum=maximum,
+            verified_center_count=len(coincident),maximum_at_verified_centers=max(coincident,key=lambda r:abs(r['change'])) if coincident else None,
             added_stations=sorted(right.keys()-left.keys()),removed_stations=sorted(left.keys()-right.keys()),
             exceeds_review_threshold=bool(maximum and abs(maximum['change'])>THRESHOLDS['sensitivity_hw_ft'])))
     if not profiles:
         return dict(status='COMPARISON_INCOMPATIBLE',rows=[],error='No matching profiles')
-    return dict(status='COMPARISON_NOT_ACCEPTANCE',parent=parent,rows=rows,cross_sections=sections,profiles=profiles,
+    return dict(status='COMPARISON_NOT_ACCEPTANCE',parent=parent,rows=rows,cross_sections=sections,profiles=profiles,input_context=input_context,
         threshold_ft=THRESHOLDS['sensitivity_hw_ft'],
         unmatched_previous_profiles=sorted(a.keys()-new_water.keys()),
         unmatched_current_profiles=sorted(new_water.keys()-a.keys()),
         diagnostics=dict(previous=_diagnostic_summary(old),current=_diagnostic_summary(summary)),
-        sources=[previous['raw_hdf'],previous['raw_controller'],current['raw_hdf'],current['raw_controller']])
+        sources=[parent['summary'],previous['raw_hdf'],previous['raw_controller'],current['raw_hdf'],current['raw_controller']]+input_context['sources'])
 
 
 def _diagnostic_summary(summary):

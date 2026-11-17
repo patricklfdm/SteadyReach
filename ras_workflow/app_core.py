@@ -384,6 +384,14 @@ def worker(record):
     job.update(finished_utc=utc(),elapsed_seconds=round(time.monotonic()-started,3));save(path,job)
     return 0 if job['status']=='FINISHED' else 1
 
+def report_refresh_binding(m):
+    return {key:m.get(key) for key in ('summary','latest_study','latest_spacing','latest_coverage','latest_coverage_exports')}
+
+
+def current_refreshed_reports(m):
+    return bool(m.get('latest_reports') and m.get('latest_reports_binding')==report_refresh_binding(m))
+
+
 def regenerate(key,action):
     if action not in ('report','delivery'):raise ValueError('Unknown report action')
     m=model(key)
@@ -393,6 +401,7 @@ def regenerate(key,action):
     # Recollect completed studies and native supplements for every explicit refresh.
     # Persist the report first so a later mapping failure is recoverable.
     report_generate(summary,out/'reports');m['latest_reports']=rel(out/'reports')
+    m['latest_reports_binding']=report_refresh_binding(m)
     previous=m.get('latest_delivery') or m.get('previous_delivery') or (read(ROOT/m['engine_state']).get('delivery') if m.get('engine_state') else None)
     m['previous_delivery']=previous
     m['exports_need_refresh']=True;m.pop('latest_delivery',None)
@@ -486,7 +495,11 @@ def view(key,detail=True):
             geometry=objects(m)[4]
         result['qa_locations']=locate(h,geometry)
         if m.get('exports_need_refresh'):
-            result['report_files']=[];result['delivery']=None
+            if not current_refreshed_reports(m):result['report_files']=[]
+            result['delivery']=None
+            task=result.get('job',{})
+            if task.get('action')=='delivery' and task.get('status')=='FAILED':
+                result['delivery']=dict(status='INCOMPLETE',error=task.get('error','Delivery export failed'))
 
     return result
 
