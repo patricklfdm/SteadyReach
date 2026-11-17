@@ -157,7 +157,7 @@ function renderBanks(parent,review){
    marker.onclick=()=>{if(side===null)return;const pair=picks.slice();pair[side]=i;selectBanks(pair);};
   });
   left.setAttribute('aria-pressed',String(side===0));right.setAttribute('aria-pressed',String(side===1));
-  info.textContent=tr('Uncertainty: ','不确定性：')+(row.bank_candidates?.reasons||[]).join('; ');
+  info.textContent=tr('Uncertainty: ','不确定性：')+(review.bank_review?.sections[sectionIndex]?.reasons||row.bank_candidates?.reasons||[]).map(bankReviewReason).join(' · ');
  }
  function numericEditor(){
   box.querySelector('[data-bank-numbers]')?.remove();

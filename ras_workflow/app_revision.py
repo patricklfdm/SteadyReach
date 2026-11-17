@@ -46,6 +46,8 @@ def create(key, body):
     origin=source['summary'] if source else parent['summary']
     c['revision_origin']=dict(project_id=parent['id'],summary=origin)
     c.update(project_id=key2,title=title+' · revision',geometry='geometry.json',model_proposal_pending=True)
+    from .bank_reach import refresh as refresh_retained_banks
+    refresh_retained_banks(g)
     g.update(approved_for_model=False,status='EDITABLE_REVISION')
     save(folder/'geometry.json',g);save(folder/'initial.json',c)
     session=intake.prepare(folder/'initial.json',parent['scenario'])

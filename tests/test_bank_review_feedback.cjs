@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const context=vm.createContext({tr:(en,zh)=>en});
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../ras_workflow/templates/app_automation.js'),'utf8'),context);
+assert.equal(context.bankVisible('attention',{needs_attention:true},false),true);
+assert.equal(context.bankVisible('inferred',{categories:['inferred']},false),true);
+assert.equal(context.bankVisible('missing',{categories:['inferred']},false),false);
+assert.equal(context.bankVisible('missing',{categories:['inferred']},true),true,'pending changes must never be hidden');
+assert.equal(context.bankVisible('all',undefined,false),true,'all sections remain available');
+assert.equal(context.bankReviewReason('INFERRED_SPACING_BANKS_REQUIRE_REVIEW'),'Banks inherited from adjacent sections');
+context.tr=(en,zh)=>zh;
+assert.equal(context.bankReviewReason('INFERRED_SPACING_BANKS_REQUIRE_REVIEW'),'岸站由相邻断面推定');
+assert.equal(context.bankReviewReason('FUTURE_REASON'),'FUTURE_REASON');
+console.log('Bank review filtering, retained pending edits and bilingual reason labels PASS');

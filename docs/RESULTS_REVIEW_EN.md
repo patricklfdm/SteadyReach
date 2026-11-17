@@ -89,6 +89,10 @@ Dry section ends establish the implemented coverage check. Spacing convergence, 
 
 ## Continue from a computed case
 
+For refined models, use the [focused bank gallery](AUTOMATION_EN.md#focused-bank-review-after-refinement) in the new editable revision. Bank-review categories use current station identities. Added sections whose banks came from neighboring fractions remain explicitly assumed, even when the source case had no confidence metadata. Retained bank coordinates are not changed by this bookkeeping refresh.
+
+The isolated Pagosa regression had 83 sections: 51 with inherited bank assumptions and 40 with terrain-interpretation flags, overlapping to give 80 distinct flagged sections. This is an unresolved interpretation inventory, not a new hydraulic warning count. Native `.prj`, `.g01`, `.p01` and `.f01` files were byte-identical before and after the metadata repair. The regression did not rerun HEC-RAS or establish engineering acceptance.
+
 1. After a wet-end repair batch, click **Continue from final repair with automatic QA preparation**. For a spacing trial, select a completed refinement and choose **Prepare editable QA revision from selected case**.
 2. The app verifies the selected calculation and source files, then opens a separate editable project. Its starting geometry, bank positions, flow, roughness and boundaries come from the chosen case. Section and profile identities carry the matching input provenance across changed section counts. The result comparison uses this selected calculation as the parent.
 3. Keep the launcher open while **automatic preparation** runs. The program uses the selected case's actual water levels to search for compatible DEM extensions and direction changes, proposes banks for changed profiles, and fills dependent draft values. Missing or conflicting information remains visible. Completed preparation returns to the model page.

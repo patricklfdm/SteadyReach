@@ -27,6 +27,16 @@ Road/structure estimates and section geometry require site interpretation. Hydra
 
 ## Detailed source and geometry tools
 
+### Focused bank review after refinement
+
+The **Bank-profile gallery / batch selection** evaluates the current sections, including sections added by spacing trials. Its default filter shows interpretation flags. Choose **Inferred from neighbors**, **Ambiguous terrain**, **Missing / invalid banks**, or **All sections** to focus the review. Counts update immediately; selected changes remain visible even when they do not match the filter. Profiles are drawn when expanded to keep large galleries responsive.
+
+New spacing sections record their neighboring-section bank fractions as low-confidence assumptions. Older spacing sections with the same derivation are also flagged when their original candidate metadata is absent. A saved number alone is not evidence of an independently identified bank. Current explicit profile selections are identified as user selections, without implying engineering acceptance; changed profiles invalidate that selection context. Check the reason beside each profile, then save any intended corrections together.
+
+Continuing a computed refinement refreshes the reach summary against current station identities and preserves saved bank positions. It does not reuse old section-array indices or rerank retained controls. The final parameter review also includes unresolved bank interpretations. Imagery, survey interpretation and effective floodplain connectivity still require judgment; this feature does not independently validate banks against aerial imagery.
+
+### Detailed steps
+
 1. **Acquire/import the site material.** The existing USGS DEM/catalog lookup and document extraction run first. Inspect the source count, survey CRS, elevation units/datum and failed attempts. Import a site folder if anonymous public downloading is unavailable. Automated acquisition is limited to supported providers and document formats.
 2. **Propose and check exterior flow paths.** Use [automatic DEM layout](DEM_AUTOMATION_EN.md) for anchors, positions/widths and bank candidates without first picking every point. Saved source associations take priority; coordinate-only alternatives can disagree on direction, so check the actual flow and road gap before adoption. Existing sections use QA suggestions; manually pick only when needed.
 3. **Associate openings together.** Open **Opening groups and survey-point associations**, then **Suggest all opening pairs**. With one usable survey and separable mouth clusters, recognized `LC` and `CROWN` codes suggest a rectangular opening and circular pipe pairs, ordered looking downstream. Point numbers are not hardcoded. Check inlet/outlet IDs, group and barrel numbers against the sketch/map. Ambiguous clusters remain unresolved. Other codes can be associated by entering IDs.

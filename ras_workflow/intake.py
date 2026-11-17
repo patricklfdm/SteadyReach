@@ -330,6 +330,8 @@ def view(session_path):
         issues=spatial_issues(g.get('cross_sections',[])),fingerprints=[section_fingerprint(r) for r in g.get('cross_sections',[])])
     from .physical_geometry import screen
     geometry_review['physical_screen']=screen(g)
+    from .bank_review import inventory
+    geometry_review['bank_review']=inventory(g,d['answers'])
     checkpoint=sp.parent/'geometry_checkpoint.json'
     from .geometry_editor import setup_view
     from .intake_native import preview as native_preview

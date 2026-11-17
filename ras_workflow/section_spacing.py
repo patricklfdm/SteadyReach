@@ -160,6 +160,14 @@ def refine(geometry, selected, sampler, reference_water=None):
             involved = {result['cross_sections'][i]['rs'] for issue in conflicts for i in issue['sections']}
             involved.update(issue['rs'] for issue in adjusted['unresolved'])
             raise RefinementConflict([change['bracket'] for change in changes if change['station'] in involved])
+    from .bank_review import spacing_metadata
+    by_station={r['rs']:r for r in result['cross_sections']}
+    for change in changes:
+        row=by_station[change['station']]
+        row['bank_candidates']=spacing_metadata(row,change['bracket'])
+    # Old global array indices no longer describe this refined reach.
+    from .bank_reach import refresh
+    if result.get('bank_reach_summary'):refresh(result)
     result['spacing_trial'] = dict(changes=changes, created_utc=utc(), engineering_acceptance='NOT_ASSESSED')
     return result, changes, next_intervals
 

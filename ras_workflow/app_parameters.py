@@ -212,6 +212,8 @@ def rows(m, context=None):
     sp,p,d,c,g=context or objects(m)
     from .bank_reach import refresh
     refresh(g,d['answers'])
+    from .bank_review import inventory
+    bank_inventory={r['field']:r for r in inventory(g,d['answers'])['sections']}
     extra=proposals(m,c,g);result=intake.fields(c,g,m['scenario']);intake._suggestions(c,p,result)
     for f in result:
         answer=d['answers'].get(f['key'],{});f['answer']=answer
@@ -221,6 +223,7 @@ def rows(m, context=None):
             cls='missing' if missing else 'terrain_derived' if f['key'].startswith('g.cross_sections.') and g.get('flowlines') else 'source_input_unverified'
         f['evidence_class']=cls;f['basis']=answer.get('basis','Original input / generated terrain; verify its applicability.')
         f['missing']=missing
+        if f['key'] in bank_inventory:f['bank_review']=bank_inventory[f['key']]
         f['parameter_candidates']=[dict(candidate=digest(s),**s) for s in f['suggestions']]+extra.get(f['key'],[])
     from .app_acquisition import enrich
     result=enrich(m,result)
@@ -338,12 +341,13 @@ def attention(m, fields, automatic=False):
     uncertain = []
     for field in fields:
         method = field.get('answer', {}).get('candidate_record', {}).get('bank_method')
-        if method and method.get('confidence') in ('LOW', 'UNRESOLVED'):
+        assessment = field.get('bank_review')
+        if (assessment.get('needs_attention') if assessment is not None else method and method.get('confidence') in ('LOW', 'UNRESOLVED')):
             uncertain.append(field)
     if uncertain:
         notices.append(dict(code='UNCERTAIN_BANK_INTERPRETATION',
-            en=f'{len(uncertain)} bank pairs have competing, scale-sensitive or continuity-based interpretations. Inspect their profiles and edit the bank positions as needed.',
-            zh=f'{len(uncertain)} 组岸站存在候选竞争、尺度敏感或连续性外推。请查看相应剖面并修改不适用的位置。',
+            en=f'{len(uncertain)} bank pairs need interpretation: neighboring-section inference, ambiguous terrain, missing method records or changed profiles. Inspect the reasons in the bank gallery and edit positions as needed.',
+            zh=f'{len(uncertain)} 组岸站需要判断：可能涉及相邻断面推定、地形歧义、缺少方法记录或剖面变化。请在岸站总览查看具体原因并修改不适用的位置。',
             fields=[field['key'] for field in uncertain]))
     documents = snapshot(m).get('documents', [])
     incomplete = [d for d in documents if d.get('status') != 'INSPECTED' or d.get('warnings')]

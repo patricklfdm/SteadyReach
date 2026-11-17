@@ -96,6 +96,7 @@ def propose_reach(geometry, locked=None):
     result = copy.deepcopy(local)
     options = [_options(row,p,index in fixed) for index,(row,p) in enumerate(zip(rows,local))]
     summary = dict(method='reach_bank_dynamic_programming_v1', settings=SETTINGS,
+                   section_count=len(rows), section_ids=[dict(index=i,reach_id=r.get('reach_id'),rs=r.get('rs')) for i,r in enumerate(rows)],
                    continuity_weight=1., tested_weights=[.5,1.,2.], locked_indices=sorted(fixed),
                    interpolated_indices=[], changed_local_choices=[], weight_sensitive_indices=[])
     try:
@@ -203,6 +204,16 @@ def refresh(geometry, answers=None):
     fixed = {i for i,row in enumerate(rows) if row.get('bank_stations_ft')
              and not answers.get(f'g.cross_sections.{i}.bank_stations_ft',{}).get('automatic_preparation')}
     if len(fixed)==len(rows):
+        # Continuation can change section count/order while retaining all chosen
+        # banks. Replace only the reach-level bookkeeping, never rerank controls.
+        fingerprint=signature(geometry,fixed)
+        previous=geometry.get('bank_reach_summary') or {}
+        if previous.get('input_hash')!=fingerprint or previous.get('section_count')!=len(rows):
+            geometry['bank_reach_summary']=dict(method='retained_bank_controls_v1',
+                status='SAVED_BANKS_NOT_RERANKED', input_hash=fingerprint,
+                section_count=len(rows), section_ids=[dict(index=i,reach_id=r.get('reach_id'),rs=r.get('rs')) for i,r in enumerate(rows)],
+                locked_indices=sorted(fixed), proposed_pairs=0, unresolved_indices=[],
+                previous_proposal=dict(method=previous.get('method'),input_hash=previous.get('input_hash')) if previous else None)
         return
     fingerprint = signature(geometry,fixed)
     old = geometry.get('bank_reach_summary',{})
