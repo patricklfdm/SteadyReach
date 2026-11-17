@@ -87,6 +87,20 @@ class BankReviewTests(unittest.TestCase):
         g=self.make();g['cross_sections'][0]['bank_stations_ft']=[20.25,79.75]
         self.assertTrue(bank_review.inventory(g)['sections'][0]['valid_pair'])
 
+    def test_final_confirmation_preserves_current_manual_bank_identity(self):
+        from ras_workflow import app_parameters
+        g=self.make();row=g['cross_sections'][0]
+        row['spacing_assumptions']={'bank_basis':'Mean adjacent bank fractions'}
+        row['terrain_review']={'identity':'LOCAL_SELECTION_NO_ENGINEERING_REVIEW','fingerprint':section_fingerprint(row)}
+        d={'answers':{}}
+        with patch.object(app_parameters,'objects',return_value=(None,{},d,{},g)):
+            _,reviewed=app_parameters.reviewed_draft({})
+        self.assertEqual(bank_review.inventory(reviewed['geometry'])['sections'][0]['confidence'],'USER_SELECTED')
+        row['elevation_ft'][50]-=1
+        with patch.object(app_parameters,'objects',return_value=(None,{},d,{},g)):
+            _,reviewed=app_parameters.reviewed_draft({})
+        self.assertNotIn('identity',reviewed['geometry']['cross_sections'][0]['terrain_review'])
+
     def test_current_explicit_bank_choice_is_not_relabelled_as_interpolation(self):
         g=self.make();row=g['cross_sections'][0]
         row['spacing_assumptions']={'bank_basis':'Mean adjacent bank fractions'}

@@ -268,8 +268,13 @@ def reviewed_draft(m):
     from .bank_reach import refresh
     refresh(g,d['answers'])
     for row in g['cross_sections']:
-        row['terrain_review']=dict(decision='ACCEPT',reviewer=None,policy='local_computation_v1',
-            basis='Bank positions and complete parameters presented at final calculation confirmation; not engineering acceptance.',fingerprint=section_fingerprint(row))
+        fingerprint=section_fingerprint(row)
+        previous=row.get('terrain_review') or {}
+        # Final calculation consent must not erase an unchanged explicit bank
+        # selection and make it look inherited again on the next revision.
+        retained=previous if previous.get('fingerprint')==fingerprint else {}
+        row['terrain_review']=dict(retained,decision='ACCEPT',reviewer=None,policy='local_computation_v1',
+            basis='Bank positions and complete parameters presented at final calculation confirmation; not engineering acceptance.',fingerprint=fingerprint)
     # The geometry is materialized to bind the exact displayed values.
     d['geometry']=g
     d.update(reviewer=None,basis='Complete displayed parameters, estimates and bank positions confirmed for a conditional local calculation; engineering acceptance is not asserted.')
@@ -332,6 +337,12 @@ def attention(m, fields, automatic=False):
     """Keep unresolved interpretations visible at the single run confirmation."""
     from .app_acquisition import snapshot
     notices = []
+    staged=[f for f in fields if f.get('answer',{}).get('automatic_bank_preparation')]
+    if staged:
+        notices.append(dict(code='AUTOMATIC_BANK_DRAFT',
+            en=f'{len(staged)} bank pairs were staged from stable terrain/continuity candidates. Check their saved/proposed positions in the automatic-preparation summary; edit any unsuitable values before confirming. These are inferred positions, not surveyed banks.',
+            zh=f'{len(staged)} 组岸站已按稳定的地形／连续性候选填入草稿。请在自动准备摘要对照原值与建议值，确认前修改不适用的位置；这些是推定值，不是实测岸站。',
+            fields=[f['key'] for f in staged]))
     if m.get('model_type')=='river':
         notices.append(dict(code='RIVER_SCOPE',en='Confirm the exact reach ends and bridge influence. Surface DEM does not measure submerged channel geometry. Normal-depth or known-stage values need an applicable basis.',zh='确认河段两端及桥梁影响。地表 DEM 不能实测水下河槽；正常水深或已知水位边界需有适用依据。'))
     if automatic or m.get('automatic_preparation'):

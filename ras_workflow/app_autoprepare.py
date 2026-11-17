@@ -125,6 +125,8 @@ def execute(key):
     analyze(key, network=False, reuse_failed=True)
     m = core.model(key)
     before = params.binding(m)
+    from . import bank_autoprepare
+    protected_banks = bank_autoprepare.protected(before['geometry'], before['answers'])
     results = [fill(m)]
     m = core.model(key)
     g = params.objects(m)[4]
@@ -146,10 +148,16 @@ def execute(key):
         # focused action instead of losing successful source extraction.
         proposal = dict(error=str(error), layouts=[])
     m = core.model(key)
+    progress(m, 'Preparing inherited bank candidates / 准备继承岸站候选')
+    bank_preparation = bank_autoprepare.stage(m, protected_banks)
+    m = core.model(key)
     progress(m, 'Filling dependent draft values / 填入关联草稿参数')
     results.append(fill(m))
     m = core.model(key)
+    refreshed = params.refresh_equivalent_candidates(m)
     record = dict(created_utc=utc(), input_signature=digest(before), stages=results,
+                  bank_preparation=bank_preparation,
+                  refreshed_equivalent_fields=[r['field'] for r in refreshed],
                   geometry_applied=geometry_applied, geometry_proposal=proposal,
                   solver_run=False, final_confirmation_required=True,
                   attention=params.attention(m, params.rows(m), automatic=True))

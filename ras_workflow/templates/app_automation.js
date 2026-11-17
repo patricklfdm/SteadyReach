@@ -12,11 +12,24 @@ function renderAutomation(parent){
  const automatic=el('div',undefined,'actions');card.append(automatic);
  automatic.append(button('Prepare an automatic draft','自动准备草稿（含标注的估计值）',async()=>{await saveAll();await api('automatic-prepare',{id:current.id,revision:current.revision});await open(current.id);},'primary'));
  card.append(el('p',tr('Extract materials, repair DEM geometry and fill dependent values together. All estimates stay editable in the final confirmation. Check crossing direction, construction assumptions and conflicting sources.','集中提取资料、修正 DEM 几何并填入关联参数；估计值可在最终确认前修改。重点核对流向、结构假设及资料冲突。'),'muted'));
- const prepared=current.preparation_result;if(prepared){const last=prepared.stages.at(-1);card.append(el('p',tr('Automatic draft saved · ','自动草稿已保存 · ')+prepared.stages.reduce((n,s)=>n+s.changed_fields.length,0)+tr(' field updates · ',' 次参数更新 · ')+last.missing_required.length+tr(' required items remaining · ',' 个必填项待补 · ')+last.conflicts.length+tr(' source differences',' 处来源差异'),'status'));renderPreparationAttention(card,prepared.attention);}
+ const prepared=current.preparation_result;if(prepared){const last=prepared.stages.at(-1);card.append(el('p',tr('Automatic draft saved · ','自动草稿已保存 · ')+prepared.stages.reduce((n,s)=>n+s.changed_fields.length,0)+tr(' field updates · ',' 次参数更新 · ')+last.missing_required.length+tr(' required items remaining · ',' 个必填项待补 · ')+last.conflicts.length+tr(' source differences',' 处来源差异'),'status'));renderPreparedBanks(card,prepared);renderPreparationAttention(card,prepared.attention);}
  if(current.model_type!=='river')renderOpeningAssociations(card,data);
  renderCandidateBatch(card);
  if(current.intake?.geometry_review?.sections?.length)renderBankBatch(card,current.intake.geometry_review);
  card.append(el('p',tr('Remaining judgment: same-barrel correspondence, interior versus exterior crown, net clear dimensions, floor/inlet condition and local blockage, hydraulic flow paths, boundaries and uncertain banks. Unknowns stay blank; estimates are labelled.','仍需判断：是否同一涵孔、内顶还是外顶、有效净尺寸、底板／入口及局部淤堵、过流路径、边界和不确定岸站。未知值留空，估计值明确标注。'),'muted'));
+}
+
+function renderPreparedBanks(parent,prepared){
+ const data=prepared.bank_preparation;if(!data)return;
+ parent.append(el('p',tr('Automatic bank draft: ','自动岸站草稿：')+data.staged_count+tr(' pairs staged · ',' 组已填入 · ')+data.deferred_count+tr(' candidates still need a choice.',' 组候选仍需判断。'),'status'));
+ const count=prepared.refreshed_equivalent_fields?.length||0;
+ if(count)parent.append(el('p',count+tr(' unchanged dependent values refreshed automatically.',' 项数值及依据未变的关联参数已自动更新。'),'muted'));
+ if(!data.rows.length)return;
+ const box=details(parent,'Banks staged during this preparation','本次自动准备填入的岸站');
+ box.append(el('p',tr('These are inferred, editable positions. The table records this preparation; the full parameter review shows the current saved values after any later edits. No calculation has started.','这些是可修改的推定位置。下表记录本次准备时的改动；之后若有编辑，以完整参数确认页的当前保存值为准。此处尚未启动计算。')));
+ const table=el('table'),head=el('tr');for(const label of ['RS',tr('Saved L / R (ft)','原左／右岸（ft）'),tr('Staged L / R (ft)','草稿左／右岸（ft）'),tr('Edit','修改')])head.append(el('th',label));table.append(head);
+ for(const row of data.rows){const line=el('tr');line.append(el('td',String(row.rs)),el('td',bankValuesText(row.before_ft)),el('td',bankValuesText(row.proposed_ft)));const action=el('td');action.append(button('Inspect / edit','查看／修改',async()=>revealParameter(`g.cross_sections.${row.index}.bank_stations_ft`)));line.append(action);table.append(line);}
+ box.append(table);
 }
 
 function renderPreparationAttention(parent,notices){
@@ -25,7 +38,8 @@ function renderPreparationAttention(parent,notices){
  for(const notice of notices){
   const row=el('p',tr(notice.en,notice.zh),'warning');box.append(row);
   if(notice.fields?.length){
-   const links=el('div',undefined,'actions');row.append(links);
+   const target=notice.fields.length>6?details(box,'Affected parameters ('+notice.fields.length+')','相关参数（'+notice.fields.length+'）'):row;
+   const links=el('div',undefined,'actions');target.append(links);
    for(const key of notice.fields){const f=(finalReview?.fields||current.intake?.fields||[]).find(v=>v.key===key);if(f)links.append(button(f.label.en,f.label.zh,async()=>revealParameter(key)));}
   }
  }

@@ -89,7 +89,7 @@ class StudyRevisionTests(unittest.TestCase):
                                  {'id':'q100','profiles':[{'id':'A'},{'id':'B'}]}]}
         config={'scenarios':[{'id':'q100','profiles':[{'id':'B'},{'id':'A'}]}]}
         old_geometry={'cross_sections':[{'rs':200,'reach_id':'river'},{'rs':100,'reach_id':'river'}]}
-        geometry={'cross_sections':[{'rs':200,'reach_id':'river'},{'rs':150,'reach_id':'river'},
+        geometry={'cross_sections':[{'rs':200,'reach_id':'river'},{'rs':150,'reach_id':'river','spacing_assumptions':{'bank_basis':'Adjacent fractions'}},
                                     {'rs':100,'reach_id':'river'}]}
         previous={
             'g.cross_sections.0.bank_stations_ft':dict(value=[10,30],evidence_class='assumed',basis='old banks',automatic_preparation=True,confirmed=True),
@@ -114,6 +114,8 @@ class StudyRevisionTests(unittest.TestCase):
         self.assertEqual(result['g.cross_sections.1.bank_stations_ft']['evidence_class'],'assumed')
         self.assertEqual(result['g.cross_sections.0.bank_stations_ft']['value'],[100,120])
         self.assertEqual(result['g.cross_sections.0.bank_stations_ft']['prior_input'],previous['g.cross_sections.0.bank_stations_ft'])
+        self.assertTrue(result['g.cross_sections.1.bank_stations_ft']['inherited_spacing_bank'])
+        self.assertNotIn('inherited_spacing_bank',result['g.cross_sections.2.bank_stations_ft'])
 
     def test_new_draft_has_no_consent_or_auto_owner_and_retains_sources(self):
         result,previous=self.answer_fixture()

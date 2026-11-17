@@ -22,7 +22,7 @@ def proposal_id(proposal):
     return digest({k:v for k,v in proposal.items() if k!='id'})
 
 
-def propose(geometry, answers, scope='inferred'):
+def propose(geometry, answers, scope='inferred', *, locked=None):
     if scope not in ('inferred','attention'):
         raise ValueError('Unknown bank proposal scope')
     from .bank_reach import propose_reach
@@ -34,7 +34,7 @@ def propose(geometry, answers, scope='inferred'):
     exclusions=[]
     for i in sorted(targets):
         row=geometry['cross_sections'][i]
-        reason=('GEOMETRY_CONFLICT' if i in blocked else 'EXPLICIT_ROUGHNESS_SUBDIVISIONS' if row.get('manning_segments')
+        reason=('SAVED_BANK_CONTROL' if i in (locked or set()) else 'GEOMETRY_CONFLICT' if i in blocked else 'EXPLICIT_ROUGHNESS_SUBDIVISIONS' if row.get('manning_segments')
                 else 'STRUCTURE_APPROACH_CONTROL' if row['rs'] in (faces.get('us_xs_rs'),faces.get('ds_xs_rs')) else None)
         if reason:exclusions.append(dict(index=i,rs=row['rs'],reason=reason))
     targets-={r['index'] for r in exclusions}
@@ -81,7 +81,7 @@ def saved_preview(sp,geometry,draft):
     return dict(status='CURRENT',**public(proposal))
 
 
-def adopt(geometry,draft,proposal,indices):
+def adopt(geometry,draft,proposal,indices,*,automatic=False):
     """Validate every selection before applying to copies; no original mutation."""
     if proposal.get('id')!=proposal_id(proposal) or proposal.get('input_hash')!=context(geometry,draft):
         raise ValueError('Bank proposal is stale; prepare it again / 岸站候选已过期，请重新生成')
@@ -101,13 +101,18 @@ def adopt(geometry,draft,proposal,indices):
         row['bank_stations_ft']=copy.deepcopy(candidate['proposed_ft'])
         row['bank_candidates']=dict(copy.deepcopy(candidate['method']),profile_context=profile_context(row),
             reassessment=dict(proposal_id=proposal['id'],banks_ft=copy.deepcopy(candidate['proposed_ft']),previous=previous))
-        row['terrain_review']=dict(decision='ACCEPT',reviewer=None,created_utc=utc(),
-            identity='BATCH_MORPHOLOGY_SELECTION_NO_ENGINEERING_REVIEW',fingerprint=section_fingerprint(row),
-            basis='User adopted displayed terrain/continuity bank candidates; interpretation flags remain. No engineering acceptance.')
+        if automatic:
+            row.pop('terrain_review',None)
+        else:
+            row['terrain_review']=dict(decision='ACCEPT',reviewer=None,created_utc=utc(),
+                identity='BATCH_MORPHOLOGY_SELECTION_NO_ENGINEERING_REVIEW',fingerprint=section_fingerprint(row),
+                basis='User adopted displayed terrain/continuity bank candidates; interpretation flags remain. No engineering acceptance.')
         d['answers'][field]=dict(value=copy.deepcopy(candidate['proposed_ft']),confirmed=False,
             evidence_class=candidate['method'].get('evidence_class','inferred'),
             basis=candidate['basis'] or 'Current-profile morphological bank candidate; conditional interpretation.',
             bank_reassessment=dict(proposal_id=proposal['id'],previous=previous))
+        if automatic:
+            d['answers'][field]['automatic_bank_preparation']=True
     from .bank_reach import refresh
     refresh(g)
     d.update(geometry=g,consent=False,revision=d['revision']+1)

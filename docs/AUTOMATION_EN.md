@@ -37,6 +37,12 @@ Continuing a computed refinement refreshes the reach summary against current sta
 
 ### Propose bank replacements in one batch
 
+**Automatic preparation now stages eligible stable replacements.** After continuing a computed spacing case as an independent editable revision, **Prepare an automatic draft** also evaluates inherited banks. Only candidates passing the existing multi-scale morphology and reach-continuity checks are staged. Saved manual controls, structure approach controls, explicit roughness subdivisions and spatial conflicts remain excluded; ambiguous candidates remain for review. Unchanged dependent candidates are rebound in the same preparation, without selecting them again.
+
+The preparation summary shows the number of staged and deferred pairs and a collapsed **Banks staged during this preparation** table with old/new left and right stations plus edit links. This is a preparation record; after further editing, the full parameter review is authoritative. Staged values retain an `inferred` origin and the complete proposal/previous-value evidence. They are not marked as operator-approved and cannot start a solve. The final parameter review explicitly lists automatically staged banks before the user confirms the calculation.
+
+Unchanged explicit bank selections now keep their identity through final parameter confirmation and subsequent revisions. A changed profile invalidates that identity. Manual value edits revoke automatic ownership. The optional preview below remains available for individual selection or a broader scope; it is no longer necessary to repeat all its actions for eligible stable inherited pairs.
+
 In **Bank-profile gallery / batch selection**, expand **Suggest bank replacements together**. This is useful after section refinement, when many new banks were inherited from adjacent sections.
 
 1. Keep **Inherited / missing banks** to retain the other saved banks as fixed controls. The optional **All banks with interpretation flags** scope also evaluates saved conditional bank choices. Structure approach controls, explicit roughness subdivisions and spatial conflicts are excluded.

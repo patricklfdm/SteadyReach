@@ -95,6 +95,11 @@ def answers(previous, old_config, old_geometry, config, geometry, scenario, sour
             if prior:
                 answer['prior_input'] = copy.deepcopy(prior)
         answer.update(confirmed=False, source_case=source['summary'])
+        # Only newly introduced spacing banks are replaceable by automatic
+        # morphology preparation. Retained choices and later manual edits stay fixed.
+        if (parts[:2] == ['g', 'cross_sections'] and parts[-1] == 'bank_stations_ft'
+                and index is None and row.get('spacing_assumptions')):
+            answer['inherited_spacing_bank'] = True
         # These are the chosen case inputs. Future edits may replace them through
         # the normal explicit or missing-value candidate paths.
         answer.pop('automatic_preparation', None)

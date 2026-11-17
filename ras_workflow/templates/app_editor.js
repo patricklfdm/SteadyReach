@@ -175,7 +175,7 @@ function renderRiverAutomation(card,data){
  const checks=data.checks;card.append(el('p',checks.blocking_count+tr(' geometry / dependency checks remain',' 项几何／关联检查待处理'),checks.blocking_count?'warning':'status'));
  for(const q of checks.issues||[])card.append(el('p',tr(q.message,q.zh),'warning'));
  card.append(button('Prepare an automatic draft','自动准备草稿（含标注的估计值）',async()=>{await saveAll();await api('automatic-prepare',{id:current.id,revision:current.revision});await open(current.id);},'primary'));
- if(current.preparation_result){const p=current.preparation_result;card.append(el('p',tr('Draft saved. Required values remaining: ','草稿已保存，剩余必填项：')+p.stages.at(-1).missing_required.length,'status'));if(p.geometry_proposal?.error)card.append(el('p',p.geometry_proposal.error,'warning'));renderPreparationAttention(card,p.attention);}
+ if(current.preparation_result){const p=current.preparation_result;card.append(el('p',tr('Draft saved. Required values remaining: ','草稿已保存，剩余必填项：')+p.stages.at(-1).missing_required.length,'status'));if(p.geometry_proposal?.error)card.append(el('p',p.geometry_proposal.error,'warning'));renderPreparedBanks(card,p);renderPreparationAttention(card,p.attention);}
  renderCandidateBatch(card);
  if(current.intake?.geometry_review?.sections?.length)renderBankBatch(card,current.intake.geometry_review);
 }
