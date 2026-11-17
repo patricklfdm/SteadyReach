@@ -13,7 +13,7 @@ const plan = {analysis_kind:'section_spacing', scope:'all',intervals:[], exclude
 const element = () => ({append(){},replaceChildren(){},addEventListener(){}});
 const context = vm.createContext({
   current:{id:'isolated',revision:3,model_type:'river',pending_study:{path:'old',sha256:'old'},pending_study_plan:plan},
-  tr:en=>en,el:element,details:element,field:()=>({...element(),value:'warnings'}),table(){},notify(){},
+  tr:en=>en,el:element,details:element,field:(box,id)=>({...element(),value:id==='spacing-limit'?'12':'automatic'}),table(){},notify(){},
   check(){const checkbox={checked:false};checks.push(checkbox);return checkbox;},
   button(en,zh,fn){buttons.set(en,fn);return element();},
   api:async(route,body)=>{calls.push({route,body});return {token:'new',entry:{path:'new-study',sha256:'new'},plan};},
@@ -24,6 +24,8 @@ const context = vm.createContext({
   vm.runInContext(spacing,context);
   context.renderSpacing(element());
   await buttons.get('Prepare nested spacing preview')();
+  assert.equal(calls[0].body.scope,'automatic');
+  assert.equal(calls[0].body.maximum_intervals,12);
   assert.equal(context.current.pending_study.sha256,'new');
   assert.equal(context.current.pending_study.path,'new-study');
   // Language switching rerenders from current state.
@@ -35,5 +37,8 @@ const context = vm.createContext({
   assert.equal(calls.at(-1).route,'study-start');
   assert.equal(calls.at(-1).body.token,'new');
   assert.equal(calls.at(-1).body.confirmed,true);
-  console.log('Spacing preview persistence and confirmation feedback PASS');
+  buttons.clear();plan.status='NO_ELIGIBLE_INTERVALS';plan.cases=[];plan.selection={unlocated_spacing_issues:[]};plan.excluded_intervals=[{upstream_rs:400,downstream_rs:300,reason_code:'BELOW_TWO_CELL_NESTED_SPACING'}];
+  context.renderSpacing(element());
+  assert.equal(buttons.has('Confirm and run three spacing cases'),false);
+  console.log('Spacing proposal persistence, automatic scope, limits and no-eligible calculation gate PASS');
 })().catch(error=>{console.error(error);process.exitCode=1;});

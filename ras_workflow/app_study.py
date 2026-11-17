@@ -61,10 +61,18 @@ def prepare(key,body):
 
 
 def start(key,body):
-    m=core.model(key);core.require_idle(m);entry=m.get('pending_study')
+    m=core.model(key);core.require_idle(m)
+    entry=m.get('active_study',{}).get('study') if body.get('retry') is True else m.get('pending_study')
+    if body.get('retry') is True:
+        active=m.get('active_study',{})
+        if not entry or not active.get('review') or not intact(list(active.values())):
+            raise ValueError('Previous batch confirmation is missing or changed')
+        if m.get('pending_study') and m['pending_study']!=entry:
+            raise ValueError('A different preview is pending; review that preview before retrying a previous batch')
     if body.get('revision')!=m['revision'] or body.get('confirmed') is not True or not entry or body.get('token')!=entry['sha256'] or not intact([entry]):raise ValueError('Review the current study and explicitly confirm its cases')
     path=ROOT/entry['path'];plan=read(path)
     if m['summary'] not in plan['evidence']:raise ValueError('Baseline edition changed; prepare the study again')
+    if plan.get('analysis_kind')=='section_spacing' and (plan.get('status')=='NO_ELIGIBLE_INTERVALS' or len(plan.get('cases',[]))!=3):raise ValueError('No complete nested spacing cases to confirm; review the excluded intervals')
     review=dict(study_sha256=sha(path),decision='APPROVE_CONDITIONAL_STUDY',policy=core.POLICY,confirmed=True,reviewer=None,
         basis='Displayed sensitivity cases confirmed for local computation; no named engineering approval.',approved_case_kind=plan['case_kind'],engineering_acceptance='NOT_ASSESSED',created_utc=utc())
     if plan.get('analysis_kind')=='coverage_repair':

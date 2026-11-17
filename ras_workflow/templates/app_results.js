@@ -171,19 +171,29 @@ function renderCoverage(parent){
 function renderSpacing(parent){
  if(current.native_review||current.model_type!=='river')return;
  const box=details(parent,'Section-spacing trial','断面加密试算',!!current.spacing_result);box.id='qa-tool-spacing';
- box.append(el('p',tr('Prepare two nested DEM refinements around spacing-related warnings or throughout the reach. Review the added sections and inferred banks once, then run the baseline and both refinements sequentially.','按加密相关警告定位区间，或选择全河段，准备两级嵌套 DEM 加密。集中核对新增断面和推定岸站后，依次计算基准及两级加密。')));
- const scope=field(box,'spacing-scope','Refinement extent','加密范围',current.pending_study_plan?.scope||'warnings','select',[
-  ['warnings','Intervals beside spacing-related warnings','加密相关警告相邻区间'],['all','Entire continuous reach','完整连续河段']]);
+ box.append(el('p',tr('Recommend intervals from native results, use spacing-related warnings, or select the entire reach for two nested DEM refinements. Review the added sections and inferred banks once, then run the baseline and both refinements sequentially.','按原生结果自动推荐、按加密相关警告定位区间，或选择全河段，准备两级嵌套 DEM 加密。集中核对新增断面和推定岸站后，依次计算基准及两级加密。')));
+ const scope=field(box,'spacing-scope','Refinement extent','加密范围',current.pending_study_plan?.scope||'automatic','select',[
+  ['automatic','Recommend from native results','根据原生结果自动推荐'],['warnings','Intervals beside spacing-related warnings','加密相关警告相邻区间'],['all','Entire continuous reach','完整连续河段']]);
+ const limit=field(box,'spacing-limit','Maximum recommended intervals','推荐区间数量上限',current.pending_study_plan?.selection?.maximum_intervals??12,'number');limit.min=1;limit.max=100;limit.step=1;limit.disabled=scope.value!=='automatic';
  const preview=el('div');let proposal=null;
  box.append(button('Prepare nested spacing preview','生成两级加密预览',async()=>{
-  proposal=await api('study-prepare',{id:current.id,revision:current.revision,kind:'spacing',scope:scope.value});
+  proposal=await api('study-prepare',{id:current.id,revision:current.revision,kind:'spacing',scope:scope.value,maximum_intervals:Number(limit.value)});
   current.pending_study=proposal.entry;current.pending_study_plan=proposal.plan;
   showProposal();notify(tr('Spacing preview saved. Review the proposed sections before confirming calculation.','加密预览已保存，请核对新增断面后确认计算。'));
  }),preview);
- scope.addEventListener('input',()=>{proposal=null;preview.replaceChildren();});
+ const resetPreview=()=>{proposal=null;preview.replaceChildren();limit.disabled=scope.value!=='automatic';};scope.addEventListener('input',resetPreview);limit.addEventListener('input',resetPreview);
  function showProposal(){
   preview.replaceChildren();const plan=proposal.plan;
-  if(plan.excluded_intervals?.length)preview.append(el('p',tr('Intervals excluded because new cutlines could not fit — ','新增断面无法适配而排除的区间 — ')+plan.excluded_intervals.map(v=>v.upstream_rs+' → '+v.downstream_rs).join(', ')+tr('. These locations remain for geometry review.','。这些位置仍需几何复核。'),'warning'));
+  const reasonLabels={SECTION_SPECIFIC_CONTROLS:tr('Section-specific roughness/ineffective areas','断面特定糙率／非有效流区'),BENT_CUTLINE:tr('Bent cutline requires interpretation','折线断面需判读'),BELOW_TWO_CELL_NESTED_SPACING:tr('Two refinement levels would be below DEM spacing limit','两级加密小于 DEM 间距限值'),NATIVE_STATION_PRECISION:tr('Native station precision limit','原生断面编号精度限制'),DEM_OR_LAYOUT_CONSTRAINT:tr('DEM coverage or cutline-layout constraint','DEM 覆盖或断面布置限制'),CONFIRMED_SEARCH_LIMIT:tr('Outside selected interval count','超过所选区间数量'),SECTION_COUNT_LIMIT:tr('500-section limit','500 条断面上限')};
+  if(plan.selection){
+   preview.append(el('p',tr('Native-result selection is a review proposal, not a diagnosis. Energy loss >1 ft or weighted velocity-head change >0.5 ft supports a spacing check; channel Froude values crossing below 0.9 and above 1.1 flag a transition for interpretation. Solver-difficulty warnings are considered first.','原生结果推荐用于复核，不作原因诊断。能量损失大于 1 ft 或加权流速水头变化大于 0.5 ft 提示间距检查；主槽弗劳德数跨越 0.9 以下和 1.1 以上提示流态判读。优先考虑求解困难警告。')));
+   if(plan.selection.unlocated_spacing_issues?.length)preview.append(el('p',plan.selection.unlocated_spacing_issues.length+tr(' spacing messages could not be located; review native evidence.',' 条加密相关信息无法定位，请复核原生证据。'),'warning'));
+  }
+  for(const [key,en,zh] of [['excluded_intervals','Excluded intervals: geometry/data decision needed','排除区间：需要几何／资料判断'],['deferred_intervals','Deferred by the search limit; not tested','因搜索上限暂缓：尚未测试']])if(plan[key]?.length){const list=details(preview,en,zh);table(list,['RS → RS',tr('Reason','原因')],plan[key].map(v=>[v.upstream_rs+' → '+v.downstream_rs,(reasonLabels[v.reason_code]||v.reason||tr('Geometry constraint','几何限制'))]));}
+  if(plan.excluded_intervals?.length||plan.deferred_intervals?.length)preview.append(el('p',tr('Some intervals remain outside this trial. A stable result will apply only to the selected changes.','部分区间不在本次试算内；结果稳定也仅适用于所选加密改动。'),'warning'));
+  if(plan.status==='NO_ELIGIBLE_INTERVALS'){
+   preview.append(el('p',tr('No complete two-level trial can be prepared within these constraints. Review the exclusions or prepare an editable geometry revision. No calculation was started.','在当前约束内无法准备完整的两级试算。请查看排除原因，或准备可编辑几何修订版。未启动计算。'),'warning'));return;
+  }
   table(preview,[tr('Case','工况'),tr('Sections','断面数'),tr('Added this level','本级新增')],plan.cases.map(c=>[c.id,c.section_count,c.added_sections.length]));
   if(plan.map_geometry){
    const map=details(preview,'Section plan view','断面平面位置');
@@ -199,6 +209,8 @@ function renderSpacing(parent){
   const intervals=details(preview,'Selected intervals and warning locations','所选区间及警告位置');
   table(intervals,['RS → RS',tr('Channel length (ft)','主槽长度（ft）'),tr('Selection basis','选择依据')],plan.intervals.map(v=>[
    v.upstream_rs+' → '+v.downstream_rs,v.channel_length_ft.toFixed(2),v.reasons.join(', ')||tr('Full-reach selection','已选择全河段')]));
+  const observed=plan.intervals.flatMap(v=>(v.observations||[]).map(o=>[v.upstream_rs+' → '+v.downstream_rs,o.profile,...[o.energy_loss_ft,o.velocity_head_change_ft,o.upstream_froude,o.downstream_froude].map(n=>Number.isFinite(n)?n.toFixed(4):'—')]));
+  if(observed.length){const values=details(preview,'Computed evidence for recommended intervals','推荐区间的计算依据');table(values,['RS → RS',tr('Profile','工况'),tr('Energy loss ft','能量损失 ft'),tr('Velocity-head change ft','流速水头变化 ft'),'Fr US','Fr DS'],observed);}
   for(const c of plan.cases.filter(c=>c.added_sections.length)){
    const area=details(preview,c.id+' · added sections',c.id+' · 新增断面');
    for(const row of c.added_sections){
@@ -227,6 +239,7 @@ function renderSpacing(parent){
  }
  if(current.spacing_result){
   const r=current.spacing_result,c=r.convergence;
+  if(r.deferred_intervals?.length)box.append(el('p',r.deferred_intervals.length+tr(' candidate intervals were deferred by the search limit and remain untested.',' 个候选区间因搜索上限暂缓，仍未测试。'),'warning'));
   if(r.excluded_intervals?.length)box.append(el('p',tr('Full-reach spacing coverage is incomplete. Excluded intervals — ','全河段加密覆盖尚不完整，排除区间 — ')+r.excluded_intervals.map(v=>v.upstream_rs+' → '+v.downstream_rs).join(', '),'warning'));
   box.append(el('p',r.status==='STABLE_AT_REVIEW_THRESHOLD'?tr('Both nested refinements meet the internal water-level threshold.','两次嵌套加密均达到内部水位变化阈值。'):tr('Spacing convergence remains open.','断面加密收敛仍待处理。'),r.status==='STABLE_AT_REVIEW_THRESHOLD'?'status':'warning'));
   if(c)table(box,[tr('Profile','工况'),tr('First refinement max |ΔWSE| ft','第一级最大 |Δ水位| ft'),tr('Second refinement max |ΔWSE| ft','第二级最大 |Δ水位| ft')],c.rows.map(v=>[v.profile,...v.last_two_max_xs_deltas_ft.map(x=>x.toFixed(6))]));
@@ -238,7 +251,11 @@ function renderSpacing(parent){
   }
   box.append(el('p',tr('The 0.10 ft threshold is a workflow screen. Results cover the selected intervals and compare every retained section. Hydraulic warnings, submerged-bed accuracy and engineering acceptance remain open. The baseline deliverables can be refreshed to include this comparison.','0.10 ft 为工作流筛查阈值。结论限于所选区间，并对比全部保留断面。水力警告、水下河床准确性与工程验收仍需判断。可更新基准报告及交付包以纳入本次对比。')),
    button('Open spacing trial files','打开加密试算文件',()=>api('open-folder',{id:current.id,path:current.latest_spacing.path.replace(/\/[^/]+$/,'')})));
-  if(r.failed_cases?.length)box.append(el('p',tr('Incomplete cases — ','未完成工况 — ')+r.failed_cases.join(', '),'warning'));
+  if(r.failed_cases?.length){
+   box.append(el('p',tr('Incomplete cases — ','未完成工况 — ')+r.failed_cases.join(', '),'warning'),
+    el('p',tr('Retry the previously confirmed batch after resolving its error. A report-only failure reuses intact native outputs; a failed calculation may need a solver retry.','处理错误后可重试此前确认的批次。仅报告失败时复用完整原生输出；计算失败时可能需要重新求解。')),
+    button('Retry incomplete spacing batch','重试未完成加密批次',async()=>{await api('study-start',{id:current.id,revision:current.revision,token:r.study.sha256,confirmed:true,retry:true});await open(current.id);}));
+  }
  }
 }
 

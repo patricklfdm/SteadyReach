@@ -120,11 +120,14 @@ def build(data, plots, folder, language='en', detail='full', details=None):
             if not convergence:continue
             d.add_heading(tr('Nested section-spacing assessment','嵌套断面加密评估')+' '+str(study_index),2)
             status=tr('Stable at the workflow threshold','达到工作流阈值') if convergence['status']=='STABLE_AT_REVIEW_THRESHOLD' else tr('Convergence remains open','收敛仍待处理')
+            if (study.get('selection') or {}).get('scope')=='automatic':
+                p('Intervals were recommended from verified native warnings, energy-head changes and channel Froude transitions. This orders review work; it does not establish the cause of a warning. Deferred candidate intervals: '+str(len(study.get('deferred_intervals',[])))+'. Their spacing response remains untested.',
+                  '区间按已核验原生警告、能量水头变化及主槽流态转换推荐，用于安排复核顺序，不能确定警告原因。因搜索上限暂缓的候选区间：'+str(len(study.get('deferred_intervals',[])))+'；其间距响应尚未测试。')
             excluded=study.get('excluded_intervals',[])
             if excluded:
                 locations=', '.join(str(v['upstream_rs'])+'–'+str(v['downstream_rs']) for v in excluded)
-                p('Unrefined intervals requiring direction review include RS '+locations+'. Full-reach spacing coverage remains incomplete.',
-                  '需复核方向且未加密的区间包括 RS '+locations+'，全河段加密覆盖尚未完整。')
+                p('Unrefined intervals requiring geometry/data review include RS '+locations+'. Full-reach spacing coverage remains incomplete.',
+                  '需复核几何／资料且未加密的区间包括 RS '+locations+'，全河段加密覆盖尚未完整。')
             p(status+'. Both consecutive refinements are checked at every retained section using native water levels.',
               status+'。连续两级加密均采用原生水位核对全部保留断面。')
             table(d,[tr('Profile','工况'),tr('First max |ΔWSE| ft','第一级最大 |Δ水位| ft'),tr('Second max |ΔWSE| ft','第二级最大 |Δ水位| ft')],

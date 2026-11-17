@@ -20,6 +20,12 @@ SPACING_CODES = {
 }
 
 
+class IntervalUnavailable(ValueError):
+    def __init__(self, a, b, reason):
+        self.brackets = [[a['rs'], b['rs']]]
+        super().__init__(reason)
+
+
 class RefinementConflict(ValueError):
     def __init__(self, brackets):
         self.brackets = brackets
@@ -76,18 +82,18 @@ def refine(geometry, selected, sampler, reference_water=None):
         if (a['rs'], b['rs']) not in pairs:
             continue
         if any(r.get(k) for r in (a, b) for k in ('manning_segments', 'ineffective_left', 'ineffective_right')):
-            raise ValueError(f'RS {a["rs"]}–{b["rs"]} has explicit roughness/ineffective controls requiring a section-specific decision')
+            raise IntervalUnavailable(a,b,'Explicit roughness/ineffective controls need a section-specific decision')
         left, right = np.asarray(a['cutline_xy'], float), np.asarray(b['cutline_xy'], float)
         if left.shape != (2, 2) or right.shape != (2, 2):
-            raise ValueError('Spacing proposals require straight two-point cutlines')
+            raise IntervalUnavailable(a,b,'Spacing proposals require straight two-point cutlines')
         cut = (left + right) / 2
         locations = [flow_crossing(c, line) for c in (left, cut, right)]
         if any(v is None for v in locations) or not locations[0] < locations[1] < locations[2]:
-            raise ValueError(f'RS {a["rs"]}–{b["rs"]} cannot be refined with one ordered flowline crossing')
+            raise IntervalUnavailable(a,b,'Added cutline cannot have one ordered flowline crossing')
         fraction = (locations[1] - locations[0]) / (locations[2] - locations[0])
         lengths = np.asarray(a['reach_lengths_ft'], float)
         if min(fraction, 1-fraction) * lengths[1] < 2*sampler.cell_ft:
-            raise ValueError(f'RS {a["rs"]}–{b["rs"]} refinement would be below two DEM cells in channel spacing')
+            raise IntervalUnavailable(a,b,'Refinement would be below two DEM cells in channel spacing')
         width = float(np.linalg.norm(cut[1] - cut[0]) * sampler.factor)
         bank_fractions = []
         for r in (a, b):
@@ -100,10 +106,10 @@ def refine(geometry, selected, sampler, reference_water=None):
         stations = np.unique(np.r_[np.linspace(0, width, count), banks])
         heights = sampler.sample(cut[0] + stations[:, None]/width * (cut[1]-cut[0]))
         if not np.isfinite(heights).all():
-            raise ValueError(f'RS {a["rs"]}–{b["rs"]} added section crosses DEM NoData')
+            raise IntervalUnavailable(a,b,'Added section crosses DEM NoData')
         rs = round((a['rs'] + b['rs']) / 2, 2)
         if not b['rs'] < rs < a['rs']:
-            raise ValueError('Native two-decimal station IDs cannot represent another refinement')
+            raise IntervalUnavailable(a,b,'Native two-decimal station IDs cannot represent another refinement')
         center = [float(np.interp(locations[1], chain, line[:, k])) for k in (0, 1)]
         retained['reach_lengths_ft'] = (lengths * fraction).tolist()
         new = dict(rs=rs, center_xy=center, cutline_xy=cut.tolist(),
@@ -195,6 +201,8 @@ def prepare(model, body):
     if check['status'] != 'READY_CONDITIONAL':
         raise ValueError('Baseline inputs need attention before a spacing trial')
     _, summary, hyd = load_summary(ROOT/model['summary']['path'])
+    if summary['configuration'] != config:
+        raise ValueError('Baseline configuration changed; compute the updated model before preparing spacing trials')
     diagnostic_entry = hyd.get('diagnostics')
     if not diagnostic_entry or not intact([diagnostic_entry]):
         raise ValueError('Verified baseline diagnostics required')
@@ -202,8 +210,21 @@ def prepare(model, body):
     if summary.get('native_supplement'):
         from .app_outputs import validate, diagnostics
         diagnostic = diagnostics(hyd, validate(summary['native_supplement']))
-    selected = intervals(geometry, diagnostic['issues'], body.get('scope', 'warnings'))
+    from .result_atlas import native_rows
+    from .spacing_selection import recommend, eligible, limit_candidates
+    if hyd.get('unit') != 'international ft':
+        raise ValueError('Spacing selection requires verified international-foot outputs')
+    ranked, selection = recommend(geometry, diagnostic['issues'], native_rows(hyd), SPACING_CODES)
+    scope = body.get('scope', 'automatic')
+    valid_issues = [v for v in diagnostic['issues'] if v not in selection['unlocated_spacing_issues']]
+    candidates = ranked if scope == 'automatic' else intervals(geometry, valid_issues, scope)
     sampler = Sampler(summary['terrain'], config['terrain']['vertical_unit'], geometry['vertical_datum'])
+    candidates, excluded = eligible(geometry, candidates, sampler.cell_ft)
+    selection.update(scope=scope, candidate_intervals=len(candidates)+len(excluded), maximum_intervals=body.get('maximum_intervals', 12))
+    if scope == 'automatic':
+        selected, deferred = limit_candidates(geometry, candidates, selection['maximum_intervals'])
+    else:
+        selected, deferred = candidates, []
     from .qa import verified_profiles
     profiles = verified_profiles(hyd)
     level_by_station = {float(rs): max(p[rs] for p in profiles.values())
@@ -214,7 +235,7 @@ def prepare(model, body):
     if (any(at is None for at, _ in reference_water)
             or any(a[0] >= b[0] for a, b in zip(reference_water, reference_water[1:]))):
         raise ValueError('Baseline flowline crossings must be unique and ordered for the water-level coverage screen')
-    excluded = []
+    variants = []
     while selected:
         variants = [('baseline', geometry, [])]
         current, targets = geometry, selected
@@ -227,19 +248,22 @@ def prepare(model, body):
                     raise ValueError('Spacing candidate invalid: ' + '; '.join(errors))
                 variants.append(('refinement_' + str(level), current, changes))
             break
-        except RefinementConflict as error:
+        except (RefinementConflict, IntervalUnavailable) as error:
             omitted = [v for v in selected
                        if any(v['upstream_rs'] >= a > b >= v['downstream_rs'] for a, b in error.brackets)]
             if not omitted:
                 raise
-            excluded.extend(dict(v, reason=str(error)) for v in omitted)
+            excluded.extend(dict(v, reason=str(error), reason_code='DEM_OR_LAYOUT_CONSTRAINT') for v in omitted)
             selected = [v for v in selected if v not in omitted]
+            if scope == 'automatic' and deferred:
+                refill = [{k:v for k,v in row.items() if k != 'reason_code'} for row in deferred]
+                selected, deferred = limit_candidates(geometry, selected + refill, selection['maximum_intervals'])
     if not selected:
-        raise ValueError('No complete two-level refinement fits the retained sections. Review section directions')
+        variants = []
     import os
     folder = core.folder(model['id'])/'studies'/unique_id()/'prepared'
     folder.mkdir(parents=True)
-    specification = dict(type='section_spacing', scope=body.get('scope', 'warnings'),
+    specification = dict(type='section_spacing', scope=scope, selection=selection, deferred_intervals=deferred,
                          intervals=selected, excluded_intervals=excluded,
                          purpose='Two nested real DEM refinements at fixed flow, boundary, roughness and retained profiles',
                          source=model['summary'], warning_coverage=diagnostic['warning_coverage'],
@@ -270,10 +294,10 @@ def prepare(model, body):
                           geometry=item(dest/'geometry.json')))
     plan = dict(schema_version='1.0', id='section_spacing', analysis_kind='section_spacing',
                 scope=specification['scope'],
-                status='DRAFT_REQUIRES_REVIEW', project_id=config['project_id'], case_kind=config['case_kind'],
+                status='DRAFT_REQUIRES_REVIEW' if selected else 'NO_ELIGIBLE_INTERVALS', project_id=config['project_id'], case_kind=config['case_kind'],
                 scenario_id=model['scenario'], created_utc=utc(), specification=item(folder/'specification.json'),
-                source_inputs=dependencies(path, config), evidence=[model['summary']],
-                intervals=selected, excluded_intervals=excluded, cases=cases,
+                source_inputs=dependencies(path, config), evidence=[model['summary'], diagnostic_entry, hyd['raw_hdf'], hyd['raw_controller']] + ([summary['native_supplement']] if summary.get('native_supplement') else []),
+                intervals=selected, excluded_intervals=excluded, deferred_intervals=deferred, selection=selection, cases=cases,
                 measurement_topics=[], engineering_acceptance='NOT_ASSESSED')
     plan['map_geometry'] = dict(flowline=line, retained=[dict(rs=r['rs'], cutline_xy=r['cutline_xy'])
                                                       for r in geometry['cross_sections']])

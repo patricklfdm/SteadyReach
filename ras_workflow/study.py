@@ -123,6 +123,33 @@ def reviewed(study_path, review_path):
     return study_path, study, review_path, review
 
 
+def report_retry_candidate(record):
+    errors=record.get('errors') or []
+    return bool(record.get('status')=='FAILED' and record.get('summary') and errors
+                and all(str(e).startswith('Report:') for e in errors))
+
+
+def recover_case_reports(record, project, config):
+    """Retry only a failed report, binding intact native outputs to unchanged case inputs."""
+    from .qa_review import load_summary
+    from . import report
+    if not intact([record['summary']]):raise ValueError('Completed case summary changed')
+    path,summary,hyd=load_summary(ROOT/record['summary']['path'])
+    if summary['configuration']!=config or summary.get('errors'):
+        raise ValueError('Completed case configuration or solver checkpoint differs')
+    manifest=read((ROOT/hyd['raw_hdf']['path']).parent.parent/'manifest.json')
+    if manifest['source_inputs']!=dependencies(project,config) or not intact(
+            manifest['source_inputs']+manifest['input_snapshots']+manifest['outputs']):
+        raise ValueError('Completed case inputs or native evidence changed')
+    folder=path.parent/('reports_retry_'+unique_id())
+    result=report.generate(path,folder)
+    receipt=dict(status='REPORTS_REGENERATED',summary=record['summary'],reports=item(folder/'report_manifest.json'),
+        prior_failure=record,solver_started=False,run_id=hyd['run_id'],created_utc=utc(),
+        visual_review=result.get('visual_review','PENDING_HUMAN_PAGE_REVIEW'))
+    save(folder/'recovery.json',receipt)
+    return item(folder/'recovery.json')
+
+
 def run_case(sp, study, rp, review, case, journal, journal_path, timeout):
     """Execute one source-bound case and persist its progress through normal CLI entry."""
     from .cli import execute
@@ -143,13 +170,20 @@ def run_case(sp, study, rp, review, case, journal, journal_path, timeout):
         p = dest/name
         if p.exists() and read(p) != content: raise ValueError('Approved study configuration changed: ' + rel(p))
         if not p.exists(): save(p, content)
+    previous=next((r for r in journal['cases'] if r['id']==case['id']),{})
+    retry_report=report_retry_candidate(previous)
     record = dict(id=case['id'], status='IN_PROGRESS', started_utc=utc())
+    if retry_report:record.update(summary=previous['summary'],errors=previous['errors'])
     journal['cases'] = [r for r in journal['cases'] if r['id'] != case['id']] + [record]; save(journal_path, journal)
     try:
-        code = execute(str(dest/'project.json'), study['scenario_id'], timeout=timeout)
-        state = read(dest/'state.json')
-        record.update(exit_code=code, status='COMPUTED' if code == 0 else 'BLOCKED' if code == 2 else 'FAILED',
-                      summary=state['latest_summary'], errors=state.get('errors', []))
+        if retry_report:
+            recovery=recover_case_reports(previous,dest/'project.json',c)
+            record.update(exit_code=0,status='COMPUTED',errors=[],report_recovery=recovery,solver_started=False)
+        else:
+            code = execute(str(dest/'project.json'), study['scenario_id'], timeout=timeout)
+            state = read(dest/'state.json')
+            record.update(exit_code=code, status='COMPUTED' if code == 0 else 'BLOCKED' if code == 2 else 'FAILED',
+                          summary=state['latest_summary'], errors=state.get('errors', []))
     except Exception as e:
         record.update(exit_code=1, status='FAILED', error=str(e))
     record['finished_utc'] = utc(); save(journal_path, journal)
@@ -228,7 +262,8 @@ def analyze(study_path, review_path):
     if study.get('analysis_kind')=='section_spacing':
         from .convergence import series
         result.update(analysis_kind='section_spacing',scope=read(ROOT/study['specification']['path'])['scope'],
-                      excluded_intervals=study.get('excluded_intervals',[]),
+                      excluded_intervals=study.get('excluded_intervals',[]), deferred_intervals=study.get('deferred_intervals',[]),
+                      selection=study.get('selection'), intervals=study.get('intervals',[]),
                       cases=[dict(records.get(c['id'],{}),id=c['id'],section_count=c['section_count']) for c in study['cases']])
         from .app_revision import _diagnostic_summary
         from .qa_locator import collect as locate

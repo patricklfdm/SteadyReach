@@ -10,7 +10,7 @@ METHOD = 'bank_reassessment_1.0'
 
 def selection_sources(geometry):
     sources=[entry for entry in geometry.get('provenance',[]) if entry.get('role')=='bank_reassessment']
-    if not intact(sources):raise ValueError('Bank-selection evidence changed; restore the bound source record')
+    if sources and not intact(sources):raise ValueError('Bank-selection evidence changed; restore the bound source record')
     return sources
 
 

@@ -95,7 +95,8 @@ def collect(summary_path, summary):
                 raise ValueError('Spacing convergence assessment changed')
             entries+=convergence['sources']+convergence['comparisons']
         studies.append(dict(analysis=item(path), cases=cases, comparisons=comparisons,convergence=convergence,
-                            excluded_intervals=plan.get('excluded_intervals',[]),
+                            excluded_intervals=plan.get('excluded_intervals',[]), deferred_intervals=plan.get('deferred_intervals',[]),
+                            selection=plan.get('selection'), intervals=plan.get('intervals',[]),
                             hydraulic_qa='REVIEW_REQUIRED', engineering_acceptance='NOT_ASSESSED'))
         sources += [item(path)] + entries + plan['evidence'] + [plan['specification']] + plan['source_inputs']
     unique = {v['path']: v for v in sources}
