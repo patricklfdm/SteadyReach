@@ -158,6 +158,12 @@ def suggest(key, body):
     from . import app_core as core
     model = core.model(key)
     core.require_idle(model)
+    return suggest_model(model, body)
+
+
+def suggest_model(model, body):
+    from . import app_core as core
+    key = model['id']
     if body.get('revision') != model['revision'] or model.get('native_review') or not model.get('active_project'):
         raise ValueError('Reload a completed workflow-built model before suggesting ranges')
     config, geometry, answers, fields, sources, notes = load_context(model)

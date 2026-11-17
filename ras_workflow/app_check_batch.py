@@ -49,7 +49,12 @@ def validate(model, entry):
 
 
 def prepare(key, body):
-    model = core.model(key); core.require_idle(model); eligible(model)
+    model = core.model(key); core.require_idle(model)
+    return prepare_model(model, body)
+
+
+def prepare_model(model, body):
+    key = model['id']; eligible(model)
     if body.get('revision') != model['revision']:
         raise ValueError('Project changed; reload before preparing checks')
     sensitivity = body.get('sensitivity', True)
@@ -61,12 +66,12 @@ def prepare(key, body):
         raise ValueError('Choose zero to three added-section coverage rounds')
     steps = []; sources = [model['summary'], item(ROOT/model['active_project'])]; deferred = []
     if sensitivity:
-        from .sensitivity_ranges import suggest
-        packet = suggest(key, dict(revision=model['revision']))
+        from .sensitivity_ranges import suggest_model
+        packet = suggest_model(model, dict(revision=model['revision']))
         choices, deferred = adopted_choices(packet)
         sources += packet['sources']
         if choices:
-            prepared = app_study.prepare(key, dict(revision=model['revision'], range_token=packet['token'], parameters=choices))
+            prepared = app_study.prepare_model(core.model(key), dict(revision=model['revision'], range_token=packet['token'], parameters=choices))
             steps.append(dict(id='sensitivity', status='READY', study=prepared['entry'],
                 parameters=choices, maximum_calculations=len(prepared['plan']['cases'])))
         else:
@@ -79,7 +84,7 @@ def prepare(key, body):
                            maximum_intervals=body.get('maximum_intervals', 12))
             if rounds:
                 options['coverage_policy'] = dict(maximum_rounds=rounds, maximum_width_ft=body.get('maximum_width_ft', 2000))
-            prepared = app_study.prepare(key, options)
+            prepared = app_study.prepare_model(core.model(key), options)
             available = prepared['plan']['status'] != 'NO_ELIGIBLE_INTERVALS'
             steps.append(dict(id='spacing', status='READY' if available else 'UNAVAILABLE', study=prepared['entry'],
                 reason=None if available else 'NO_ELIGIBLE_INTERVALS',

@@ -6,6 +6,11 @@ from .river import is_river
 
 def prepare(key,body):
     m=core.model(key);core.require_idle(m)
+    return prepare_model(m,body)
+
+
+def prepare_model(m,body):
+    key=m['id']
     if body.get('revision')!=m['revision']:raise ValueError('Project changed; reload')
     if not m.get('active_project') or not m.get('summary') or not intact([m['summary']]):raise ValueError('Compute a baseline before preparing a sensitivity batch')
     if m.get('native_review'):raise ValueError('This batch editor currently supports workflow-built geometry only')

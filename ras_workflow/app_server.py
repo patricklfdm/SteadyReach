@@ -97,6 +97,9 @@ def create():
                     elif route=='qgis-preview':
                         from .app_desktop import qgis
                         result=qgis(key,body)
+                    elif route=='next-review':
+                        from .app_next_review import queue
+                        result=queue(key,body)
                     elif route in ('checks-prepare','checks-start'):
                         from . import app_check_batch
                         result=(app_check_batch.prepare if route=='checks-prepare' else app_check_batch.start)(key,body)

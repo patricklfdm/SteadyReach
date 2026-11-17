@@ -13,6 +13,18 @@ For an independently revised model, **Comparison with previous calculation** sho
 3. If the automatic adapter has all needed outputs, no supplementary upload is required. If it lacks a group table or complete warning list, use the optional step below. No reviewer identity, reason form or screenshot upload is required.
 4. If assumptions or geometry need changing, create a separate editable revision. Confirm its inputs before a new solve. Old calculations remain available in the project list.
 
+## Automatic next review
+
+After a new successful main calculation, **Suggested next review** automatically prepares the applicable next step. It does not start additional calculations or replace the saved baseline.
+
+- When authenticated water levels exceed section ends, continuous river models receive a fixed-direction DEM extension preview. Suggested bounds are at most 3 repair calculations and 2,000 ft total section width. The preview lists changed sections and unresolved locations; inspect exterior floodplain connectivity and roughness suitability before confirming. Original interior elevations, bank positions in plan and hydraulic controls remain protected.
+- When no positive wet-end exceedance is found, the app prepares the existing combined sensitivity/spacing review using adopted source ranges and feasible intervals. This condition only addresses section-end coverage; it is not a hydraulic QA pass. The existing limits and separate batch confirmation still apply.
+- If no compatible extension exists, or a structure model needs geometry interpretation, the app keeps that decision visible. It does not skip straight to checks and imply that coverage is resolved.
+
+Click **Inspect the prepared review**, inspect the relevant profiles and assumptions, then confirm in that panel when appropriate. Adjusting limits requires a new preview. Existing manually selected previews are retained. A completed coverage-repair result is not automatically repeated against its earlier baseline; continue from its final case when a new model edition is needed.
+
+For older computed projects, **Prepare next review automatically** performs the same preparation through the task queue. Imported native geometry is excluded. A preparation error leaves completed calculations, reports and packages available; retry preparation or use the individual review tools. Preparation is bound to the exact baseline and source hashes. It never supplies engineering acceptance or reuses calculation consent.
+
 ## Checks and delivery with one confirmation
 
 For a completed workflow-built model, expand **Prepare checks and delivery together**. Leave the desired checks selected, set the limits and click **Prepare checks and delivery preview**. Preparation does not start HEC-RAS.

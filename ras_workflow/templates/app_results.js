@@ -65,6 +65,7 @@ function renderRevisionComparison(parent,comparison){
 }
 
 function renderResultTools(parent){
+ renderNextReview(parent);
  renderCheckBatch(parent);
  renderResultAtlas(parent);
  if(!current.native_review)parent.append(button('Prepare QA revision suggestions','根据 QA 创建修订建议',prepareQaRevision));
@@ -302,4 +303,29 @@ function renderStudy(parent){
  for(const input of [path,low,high])input.addEventListener('input',()=>{proposal=null;preview.replaceChildren();});
  manual.append(button('Prepare and review batch','准备并核对批量工况',async()=>{if(!low.value.trim()||!high.value.trim())throw Error(tr('Enter both bounds.','请填写两个范围端值。'));proposal=await api('study-prepare',{id:current.id,revision:current.revision,parameters:[{path:path.value,low:Number(low.value),high:Number(high.value)}]});current.pending_study=proposal.entry;current.pending_study_plan=proposal.plan;preview.replaceChildren();table(preview,['Case','Changes'],proposal.plan.cases.map(c=>[c.id,c.changes.map(v=>v.path+': '+JSON.stringify(v.before)+' → '+JSON.stringify(v.after)).join('; ')]));preview.append(el('p',tr('Only these cases will be calculated. Reports are generated for each case; GIS packages are kept with the original baseline to avoid repeated map exports.','只计算显示的这些工况；每个工况生成报告，GIS 交付包保留原基准，避免重复出图。')),button('Confirm displayed cases and calculate','确认显示工况并计算',async()=>{if(!proposal)throw Error('Prepare the current range again');await api('study-start',{id:current.id,revision:current.revision,token:proposal.token,confirmed:true});await open(current.id);},'primary'));}));
  if(current.study_result&&current.study_result.analysis_kind!=='section_spacing'){const r=current.study_result;box.append(el('p',r.status==='COMPARISON_REQUIRES_REVIEW'?tr('Conditional comparison — review required','条件性比较，仍需复核'):r.status,'status'));table(box,[tr('Parameter','参数'),tr('Tested response','测试响应'),current.model_type==='river'?tr('Max |Δ upstream WSE| ft','最大上游水位差 ft'):tr('Max |ΔHW| ft','最大涵前水位差 ft'),tr('Max |ΔXS WSE| ft','最大断面水位差 ft')],r.measurement_priorities.map(p=>[sensitivityParameterLabel(p.parameter_path)||p.id,p.priority==='SENSITIVE_IN_TESTED_RANGE'?tr('Sensitive within tested range','所测试范围内较敏感'):p.priority==='SMALL_RESPONSE_IN_TESTED_RANGE'?tr('Small response within tested range','所测试范围内响应较小'):p.priority,p.max_abs_hw_change_ft,p.max_abs_matched_xs_change_ft]));if(r.failed_cases.length)box.append(el('p',tr('Failed/incomplete cases: ','失败／未完成工况：')+r.failed_cases.join(', '),'warning'));box.append(button('Open study results','打开敏感性结果',()=>api('open-folder',{id:current.id,path:current.latest_study.path.replace(/\/[^/]+$/,'')})));}
+}
+
+
+function renderNextReview(parent){
+ if(current.native_review)return;
+ const record=current.next_review;
+ const box=details(parent,'Suggested next review','下一项复核建议',true);box.id='qa-tool-next-review';
+ const reasons={
+  WET_SECTION_ENDS:tr('Actual water levels exceed section ends. A bounded DEM extension preview is ready below.','实际水位超出断面端点，下方已准备限定范围的 DEM 延伸预览。'),
+  NO_WET_SECTION_ENDS:tr('No positive wet-end exceedance was found in the verified outputs. Applicable sensitivity and spacing previews are ready below; other hydraulic warnings remain for review.','已核验输出未检出端点被水位超出的情况。下方已准备适用的敏感性和加密预览，其他水力警告仍需复核。'),
+  NO_COMPATIBLE_EXTENSION:tr('Wet ends remain, but no compatible fixed-direction extension is available. Review the geometry or additional terrain.','仍有湿端，但没有可用的固定方向延伸方案，请复核几何或补充地形。'),
+  STRUCTURE_GEOMETRY_REVIEW:tr('Wet ends in a structure model require an editable geometry review.','结构模型的湿端需要在可编辑修订版中复核几何。'),
+  EXISTING_PREVIEW:tr('Your existing preview is retained. Continue in its review panel below.','已保留现有预览，请在下方对应面板继续。'),
+  EXISTING_COVERAGE_RESULT:tr('A repair result already exists. Continue from its final case below to avoid repeating the earlier baseline.','已有修订结果，请从下方最终工况继续，避免重复处理旧基准。')};
+ if(record){
+  if(record.status==='CONFIRMED_SEPARATELY')box.append(el('p',tr('The suggested batch was confirmed separately. Its progress and results appear below.','建议批次已经单独确认，进度和结果见下方。'),'status'));
+  else{
+   box.append(el('p',reasons[record.reason]||tr('Automatic review preparation needs attention.','自动复核准备需要处理。'),record.status==='PREVIEW_READY'?'status':'warning'));
+   if(record.error)box.append(el('p',record.error,'warning'));
+   if(record.action==='coverage'&&record.options)box.append(el('p',tr('Proposed first-round extensions: ','首轮建议延伸：')+record.changes+tr(' · at most ',' 条 · 最多 ')+record.options.maximum_rounds+tr(' calculations · total section width limit ',' 轮计算 · 总断面宽度上限 ')+record.options.maximum_width_ft+' ft'));
+   box.append(el('p',tr('Preparation starts no additional solver run. Inspect the preview and its assumptions, then use its confirmation control. Existing results and packages remain available.','准备过程不启动追加求解。请查看预览及假设，再使用对应的确认按钮。已有结果与交付包仍可使用。'),'muted'));
+   if(record.preview)box.append(button('Inspect the prepared review','查看已准备的复核',()=>{const target=document.getElementById(record.action==='coverage'?'qa-tool-coverage':'qa-tool-check-batch');if(target){const panel=target.closest('details');if(panel)panel.open=true;target.scrollIntoView({block:'start'});}}));
+  }
+ }else box.append(el('p',tr('Prepare the applicable next review from this saved calculation. No additional solver run starts.','根据已保存计算准备适用的下一项复核，不启动追加求解。')));
+ if(!record||['PREPARATION_FAILED','UNAVAILABLE'].includes(record.status))box.append(button('Prepare next review automatically','自动准备下一项复核',async()=>{await api('next-review',{id:current.id,revision:current.revision});await open(current.id);}));
 }

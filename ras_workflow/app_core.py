@@ -326,9 +326,16 @@ def run(key):
     m['errors']=state.get('errors',[]);m['phase']='DONE';m['exit_code']=code
     if (state.get('delivery') or {}).get('status')=='INCOMPLETE':m['status']='RESULTS_READY_MAP_PENDING'
     persist(m,'FINISHED',dict(calculation=state.get('calculation_status'),exit_code=code,summary=m.get('summary')))
+    if state.get('calculation_status')=='COMPUTED':
+        # Preview only. Additional native computation keeps its separate consent.
+        try:
+            from .app_next_review import execute
+            execute(key)
+        except Exception:
+            traceback.print_exc()  # Preserve the completed solver/export outcome.
 
 def launch(key,action):
-    if action not in ('prepare','run','report','delivery','acquire','analyze','study','catalog','native-export','automatic-prepare','check-batch'):raise ValueError('Unknown task')
+    if action not in ('prepare','run','report','delivery','acquire','analyze','study','catalog','native-export','automatic-prepare','check-batch','next-review'):raise ValueError('Unknown task')
     global_state=ROOT/'status/app/active.json'
     with lock(ROOT/'status/app/launch.lock'):
         m=model(key);require_idle(m)
@@ -374,6 +381,9 @@ def worker(record):
                 execute(key)
             elif job['action']=='automatic-prepare':
                 from .app_autoprepare import execute
+                execute(key)
+            elif job['action']=='next-review':
+                from .app_next_review import execute
                 execute(key)
             elif job['action']=='run':run(key)
             elif job['action']=='native-export':
@@ -466,6 +476,9 @@ def view(key,detail=True):
     if m.get('latest_coverage_exports') and intact([m['latest_coverage_exports']]):
         exports=read(ROOT/m['latest_coverage_exports']['path'])
         if exports['analysis']==m.get('latest_coverage'):result['coverage_exports']=exports
+    if m.get('automatic_next_review'):
+        from .app_next_review import current as next_review
+        result['next_review']=next_review(m)
     if m.get('pending_check_batch'):
         from .app_check_batch import preview
         result['check_batch_preview']=preview(m['pending_check_batch'])
