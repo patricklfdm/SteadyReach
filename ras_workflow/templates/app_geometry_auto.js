@@ -11,9 +11,29 @@ function renderAutoGeometry(parent){
  const note=el('p','', 'status'),out=el('div');box.append(note,out);let proposal=null,layout=null;
  async function request(action,body={}){if(current.id!==project)throw Error('Project changed');if(action!=='status')await saveAll();return api('geometry/auto-'+action,{id:project,revision:current.revision,...body});}
  const clear=()=>{proposal=null;out.replaceChildren();note.textContent=tr('Search bounds changed; generate a fresh proposal.','搜索范围已修改，请重新生成提案。');};length.oninput=clear;width.oninput=clear;
+ let referenceEnabled=null,referencePairs=null,referenceSource=null,referenceDatum=null;
+ if(!isInitial&&current.model_type==='river'){
+  const reference=details(box,'Check extent against reference water levels','按参考水位检查断面范围');
+  box.insertBefore(reference.parentElement,note);
+  reference.append(el('p',tr('Associate imported reference levels with current section IDs. Levels are interpolated along section-center distances, with the nearest control held beyond either end. This screens DEM coverage and requires review of source date, section correspondence and datum.','将已导入资料中的参考水位关联到当前断面编号。程序按断面中心之间的距离插值，控制点以外沿用最近控制值，用于筛查 DEM 覆盖；需核对资料年代、断面对应位置和高程基准。')));
+  referenceEnabled=check(reference,'Use reference water levels for this preview','本次预览使用参考水位',false,clear);
+  const sourceOptions=(current.attachments||[]).map(s=>[s.path,s.original_name||s.path,s.original_name||s.path]);
+  referenceSource=field(reference,'reference-source','Imported reference source','已导入的参考资料',sourceOptions[0]?.[0]||'','select',sourceOptions,clear);
+  referenceDatum=field(reference,'reference-datum','Reference vertical datum','参考水位高程基准',current.intake.fields.find(f=>f.key==='g.vertical_datum')?.value||current.metadata?.dem_vertical_datum||'','text',null,clear);
+  referencePairs=field(reference,'reference-water-pairs','Current RS, reference water elevation (ft), one pair per line','当前断面 RS, 参考水位（ft），每行一组','','textarea',null,clear);
+  referencePairs.rows=7;
+ }
  box.insertBefore(button(isInitial?'Propose anchors and sections':'Suggest QA corrections',isInitial?'自动提出锚点与断面':'根据 QA 提出集中修正',async()=>{
   note.textContent=tr('Reading real DEM and checking candidate geometry…','正在读取真实 DEM 并检查候选几何…');out.replaceChildren();
-  try{proposal=await request('prepare',{mode:isInitial?'initial':'qa',reach_length_ft:Number(length.value),maximum_width_ft:Number(width.value)});show();}
+  try{
+   const body={mode:isInitial?'initial':'qa',reach_length_ft:Number(length.value),maximum_width_ft:Number(width.value)};
+   if(referenceEnabled?.checked){
+    const lines=referencePairs.value.trim().split(/\r?\n/).filter(v=>v.trim());
+    const points=lines.map(line=>{const pair=line.trim().split(/[,，\s]+/).map(Number);if(pair.length!==2||!pair.every(Number.isFinite))throw Error(tr('Each line needs an RS and a water elevation in ft.','每行填写断面 RS 和参考水位（ft）两个数值。'));return {rs:pair[0],water_ft:pair[1]};});
+    body.reference_screen={points,source_path:referenceSource.value,vertical_datum:referenceDatum.value.trim()};
+   }
+   proposal=await request('prepare',body);show();
+  }
   catch(e){note.textContent=tr('Proposal not completed. Saved geometry is unchanged. ','提案未完成，已保存几何不变。')+e.message;throw e;}
  },'primary'),note);
  function show(){
@@ -23,9 +43,11 @@ function renderAutoGeometry(parent){
  }
  function renderLayout(v,detail){
   layout=v;detail.replaceChildren();const changed=new Set(v.changed_sections),selected=new Set(v.changed_sections),rows=v.geometry.cross_sections;
-  const symbols={VERIFY_BRIDGE_BOUNDARY_EFFECTS:'核对边界断面及桥梁壅水影响',VERIFY_SUBMERGED_CHANNEL_GEOMETRY:'核对水下河槽测量／地表 DEM 假设',DIRECTION_AND_CROSSING_UNCONFIRMED:'流向／设施位置仍需确认',BOUNDARY_REACH_EXTENT_NOT_HYDRAULICALLY_VERIFIED:'外部边界距离尚未经过水力验证',PRIOR_WSE_IS_A_SCREEN_NOT_NEW_HYDRAULICS:'前次水位仅作筛查，需新计算验证'};
+  const symbols={VERIFY_BRIDGE_BOUNDARY_EFFECTS:'核对边界断面及桥梁壅水影响',VERIFY_SUBMERGED_CHANNEL_GEOMETRY:'核对水下河槽测量／地表 DEM 假设',DIRECTION_AND_CROSSING_UNCONFIRMED:'流向／设施位置仍需确认',BOUNDARY_REACH_EXTENT_NOT_HYDRAULICALLY_VERIFIED:'外部边界距离尚未经过水力验证',PRIOR_WSE_IS_A_SCREEN_NOT_NEW_HYDRAULICS:'前次水位仅作筛查，需新计算验证',REFERENCE_WSE_COVERAGE_SCREEN:'参考水位用于断面范围筛查；请核对断面对应位置、基准和漫滩过流路径。本站水位待真实计算。'};
   detail.append(el('p',tr('Basis: ','依据：')+(v.seed?.basis||'QA / DEM')));
-  for(const w of v.warnings||[])detail.append(el('p',tr(w,symbols[w]||w),'warning'));
+  for(const w of v.warnings||[])detail.append(el('p',tr(w==='REFERENCE_WSE_COVERAGE_SCREEN'?'Reference water levels screen coverage. Review section correspondence, datum and floodplain flow paths; site water levels require computation.':w,symbols[w]||w),'warning'));
+  detail.append(el('p',v.changed_sections.length+tr(' proposed section changes',' 条断面改动提案')+' · '+(v.unresolved?.length||0)+tr(' unresolved items',' 项仍需处理')));
+  if(v.reference_screen){const ref=v.reference_screen;detail.append(el('p',tr('Reference source: ','参考资料：')+(ref.source.original_name||ref.source.path)+' · '+ref.vertical_datum));table(detail,['RS',tr('Reference elevation (ft)','参考水位（ft）')],ref.points.map(p=>[p.rs,p.water_ft]));}
   if(v.seed&&!v.seed.direction_known)detail.append(el('p',tr('The arrow is inferred from surface elevations around the pin. Verify the facility, road gap and flow direction. If wrong, use the manual map tools; buried openings are not inferred.','箭头仅由坐标周围地表高程推测。请核对设施、道路间隔及上下游；不正确时使用手动地图工具，不推测埋藏涵孔。'),'warning'));
   const canvas=el('div');detail.append(canvas);const anchorsPreview=Object.fromEntries((v.anchors||[]).map(r=>[r.id,r.anchors_xy]));
   const map=terrainMap(canvas,{getAnchors:()=>anchorsPreview,getMode:()=>null,onPoint:()=>{},detached:true,viewKey:project+'|auto-preview'});map.setPreview(rows);
@@ -38,14 +60,14 @@ function renderAutoGeometry(parent){
    const left=field(grid,'auto-bank-left-'+i,'Left bank station (ft)','左岸站距（ft）',candidate?.[0]??'','number'),right=field(grid,'auto-bank-right-'+i,'Right bank station (ft)','右岸站距（ft）',candidate?.[1]??'','number');pairs.set(i,[left,right]);
    const chart=document.createElementNS('http://www.w3.org/2000/svg','svg');chart.setAttribute('viewBox','0 0 700 230');chart.classList.add('chart');chart.setAttribute('aria-label','RS '+r.rs+' profile');p.append(chart);
    const info=el('p',(r.bank_candidates?.reasons||[]).join('; '),'muted');p.append(info);
-   const draw=()=>{chart.replaceChildren();const x=r.station_ft,z=r.elevation_ft,before=v.before_sections?.[i],change=v.changes?.find(c=>c.rs===r.rs),water=change?.threshold_prior_wse_ft,levels=[...z,...(before?.elevation_ft||[]),...(Number.isFinite(water)?[water]:[])],lo=Math.min(...levels),hi=Math.max(...levels),pt=(a,b)=>[40+(a-x[0])/(x.at(-1)-x[0])*630,190-(b-lo)/Math.max(1,hi-lo)*160];
+   const draw=()=>{chart.replaceChildren();const x=r.station_ft,z=r.elevation_ft,before=v.before_sections?.[i],change=v.changes?.filter(c=>c.rs===r.rs).at(-1),water=change?.threshold_reference_wse_ft??change?.threshold_prior_wse_ft,levels=[...z,...(before?.elevation_ft||[]),...(Number.isFinite(water)?[water]:[])],lo=Math.min(...levels),hi=Math.max(...levels),pt=(a,b)=>[40+(a-x[0])/(x.at(-1)-x[0])*630,190-(b-lo)/Math.max(1,hi-lo)*160];
     profileGrid(chart,x,lo,hi,[40,670,30,190]);
     svgEl(chart,'polyline',{points:x.map((a,j)=>pt(a,z[j]).join(',')).join(' '),fill:'none',stroke:'#795438','stroke-width':2});
     if(before)svgEl(chart,'polyline',{points:before.station_ft.map((a,j)=>pt(a+(change?.station_label_shift_ft||0),before.elevation_ft[j]).join(',')).join(' '),fill:'none',stroke:'#6b7280','stroke-width':2,'stroke-dasharray':'5 4'});
     if(Number.isFinite(water)){const y=pt(x[0],water)[1];svgEl(chart,'line',{x1:40,x2:670,y1:y,y2:y,stroke:'#bd312b','stroke-dasharray':'6 4'});}
     for(const input of [left,right]){if(input.value==='')continue;const j=x.indexOf(Number(input.value));if(j>=0){const[cx,cy]=pt(x[j],z[j]);svgEl(chart,'circle',{cx,cy,r:5,fill:'#007641'});}}
    };
-   if(proposal.mode==='qa')p.append(el('small',tr('Brown: proposed ground; grey dashed: original ground; red dashed (when present): prior WSE, not a new result. Green: banks.','棕色：提案地形；灰虚线：原地形；红虚线（如有）：前次水位，并非新结果；绿色：岸站。')));
+   if(proposal.mode==='qa')p.append(el('small',v.reference_screen?tr('Brown: proposed ground; grey dashed: original ground; red dashed: reference coverage level; green: banks.','棕色：提案地形；灰虚线：原地形；红虚线：参考范围筛查高程；绿色：岸站。'):tr('Brown: proposed ground; grey dashed: original ground; red dashed (when present): prior WSE, not a new result. Green: banks.','棕色：提案地形；灰虚线：原地形；红虚线（如有）：前次水位，并非新结果；绿色：岸站。')));
    for(const input of [left,right])input.onchange=()=>{if(input.value!==''){const value=Number(input.value);if(!Number.isFinite(value))return;input.value=r.station_ft.reduce((a,b)=>Math.abs(a-value)<Math.abs(b-value)?a:b);notify(tr('Bank snapped to displayed DEM sample; verify before confirming.','岸站已对齐显示的采样点，请在确认前核对。'));}draw();};draw();
   }
   if(v.issues?.length){const checks=details(detail,'Remaining geometry checks','剩余几何检查',true);table(checks,['Code','Sections'],v.issues.map(q=>[q.code,(q.sections||[]).map(i=>rows[i]?.rs).join(', ')]));}
@@ -59,12 +81,15 @@ function renderAutoGeometry(parent){
    await open(project);notify(tr('Geometry saved in this draft. Check the full inputs before computing.','几何已保存到此草稿，请在计算前核对完整参数。'));await showFinalReview();
   },'primary');apply.disabled=true;detail.append(apply);
  }
- request('status').then(r=>{if(box.isConnected&&r.pending){proposal=r.pending;length.value=proposal.bounds.reach_length_ft;width.value=proposal.bounds.maximum_width_ft;show();}}).catch(e=>{note.textContent=e.message;note.className='warning';});
+ request('status').then(r=>{if(box.isConnected&&r.pending){proposal=r.pending;length.value=proposal.bounds.reach_length_ft;width.value=proposal.bounds.maximum_width_ft;if(referenceEnabled&&proposal.reference_screen){const ref=proposal.reference_screen;referenceEnabled.checked=true;referenceSource.value=ref.source.path;referenceDatum.value=ref.vertical_datum;referencePairs.value=ref.points.map(p=>p.rs+', '+p.water_ft).join('\n');}show();}}).catch(e=>{note.textContent=e.message;note.className='warning';});
 }
 
 async function prepareQaRevision(){
  const next=await api('revision',{id:current.id,revision:current.revision,confirmed:true});
  await open(next.id);
  notify(tr('Original preserved. Preparing suggestions in the independent revision…','原项目保留，正在独立修订版中生成建议…'));
- await api('geometry/auto-prepare',{id:next.id,revision:next.revision,mode:'qa'});await open(next.id);
+ const proposal=await api('geometry/auto-prepare',{id:next.id,revision:next.revision,mode:'qa'});
+ await open(next.id);
+ const changes=Math.max(0,...proposal.layouts.map(layout=>layout.changed_sections.length));
+ notify(tr('QA preview saved. ','QA 预览已保存。')+changes+tr(' proposed section changes. Open DEM layout and QA suggestions to review and adopt.',' 条断面改动提案。请展开 DEM 自动布置与 QA 修正，查看并选择采用。'));
 }

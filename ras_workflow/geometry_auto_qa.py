@@ -73,7 +73,7 @@ def prior_results(m,g):
     return water,messages,sources,old
 
 
-def propose(m,g,s,maximum=1200.):
+def propose(m,g,s,maximum=1200.,reference_screen=None):
     from .app_section_repair import suggest
     from .geometry_editor import transform_section
     from .app_automation import preflight
@@ -91,19 +91,28 @@ def propose(m,g,s,maximum=1200.):
         row.pop('terrain_review',None)
         s.stamp(row);changes.append(dict(rs=row['rs'],action='ROTATE_FROM_SPATIAL_QA',parameters=p,banks_need_confirmation=True))
     water,messages,sources,old=prior_results(m,g)
+    if reference_screen:
+        water={row['rs']:row['water_ft'] for row in reference_screen['sections']}
+        sources.append(reference_screen['source'])
     for i,row in enumerate(rows):
         rs=float(row['rs'])
         if rs not in water:continue
-        before=g['cross_sections'][i];prior=old.get(rs)
+        before=rows[i] if reference_screen else g['cross_sections'][i]
+        prior=old.get(rs)
         keys=('cutline_xy','center_xy','station_ft','elevation_ft')
-        if i in protected or not terrain_owned(before,s) or not prior or any(before.get(k)!=prior.get(k) for k in keys) or any(c['rs']==rs for c in changes):
+        prior_invalid=not reference_screen and (not prior or any(before.get(k)!=prior.get(k) for k in keys) or any(c['rs']==rs for c in changes))
+        if i in protected or not terrain_owned(before,s) or prior_invalid:
             unresolved.append(dict(rs=rs,code='PRIOR_WSE_GEOMETRY_CHANGED_OR_PROTECTED',action='Confirm current geometry and compute before using prior WSE'));continue
         after,record=extend(before,s,water[rs],maximum)
-        if after is None:unresolved.append(dict(rs=rs,**record));continue
+        if after is None:
+            if reference_screen and record['status']=='ENDS_ALREADY_ABOVE_PRIOR_WSE':continue
+            unresolved.append(dict(rs=rs,**record));continue
         trial=copy.deepcopy(rows);trial[i]=after
         blockers=[q for q in spatial_issues(trial) if i in q['sections']]
         if blockers:unresolved.append(dict(rs=rs,code='EXTENSION_SPATIAL_CONFLICT',issues=blockers));continue
-        rows[i]=after;changes.append(dict(rs=rs,action='EXTEND_WET_ENDS',**record))
+        if reference_screen:
+            record['threshold_reference_wse_ft']=record.pop('threshold_prior_wse_ft')
+        rows[i]=after;changes.append(dict(rs=rs,action='EXTEND_REFERENCE_COVERAGE' if reference_screen else 'EXTEND_WET_ENDS',**record))
     # Route other warnings to explicit review; do not fabricate a geometric cure.
     for issue in messages:
         if issue['code'] not in ('WET_SECTION_EDGE','NATIVE_WET_SECTION_EDGE'):
@@ -115,6 +124,7 @@ def propose(m,g,s,maximum=1200.):
     issues=preflight(m,candidate)['issues']
     return dict(layouts=[dict(id='qa_changes',geometry=candidate,anchors=[],changes=changes,changed_sections=[i for i,r in enumerate(rows) if r['rs'] in changed],
         before_sections={str(i):copy.deepcopy(r) for i,r in enumerate(g['cross_sections']) if r['rs'] in changed},
-        issues=issues,warnings=['PRIOR_WSE_IS_A_SCREEN_NOT_NEW_HYDRAULICS'],unresolved=unresolved,
+        issues=issues,warnings=['REFERENCE_WSE_COVERAGE_SCREEN'] if reference_screen else ['PRIOR_WSE_IS_A_SCREEN_NOT_NEW_HYDRAULICS'],unresolved=unresolved,
+        reference_screen=reference_screen,
         can_apply=bool(changes) and not any(q.get('blocking') and q['code']!='DERIVED_INPUT_CHANGED' for q in issues),basis='QA-driven bounded repair; preserved interior samples on extension; dependent values require refresh before final calculation confirmation.')],
-        sources=[s.source]+sources,solver_run=False)
+        reference_screen=reference_screen,sources=[s.source]+sources,solver_run=False)

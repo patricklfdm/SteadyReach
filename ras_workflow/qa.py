@@ -202,5 +202,5 @@ def compare(baseline_path, candidate_path, output_path):
                   unmatched_baseline_profiles=sorted(set(p['profile_id'] for p in a['profiles']) - set(right)),
                   unmatched_candidate_profiles=sorted(set(right) - set(p['profile_id'] for p in a['profiles'])),
                   threshold_ft=THRESHOLDS['sensitivity_hw_ft'], engineering_acceptance='NOT_ASSESSED')
-    save(safe_path(ROOT, output_path), result)
+    if output_path is not None: save(safe_path(ROOT, output_path), result)
     return result

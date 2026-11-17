@@ -6,6 +6,9 @@ def perform(key,action,body):
     m=core.model(key);core.require_idle(m)
     if not m.get('session') or m.get('native_review'):raise ValueError('These operations edit a DEM-derived draft only')
     sp=ROOT/m['session'];d=read(sp.parent/'draft.json')
+    if action=='expand-terrain':
+        from .app_terrain_extent import expand
+        return expand(key,body)
     if action.startswith('auto-'):
         from .app_geometry_auto import perform as automatic
         return automatic(m,action[5:],body)

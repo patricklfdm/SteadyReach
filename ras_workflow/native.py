@@ -94,7 +94,7 @@ def build(folder,c,s,g):
     if not intact(provenance['files']):raise ValueError('Native templates changed')
     river_only=is_river(g)
     xs=g['cross_sections'];struct=g.get('structure',{});road=struct.get('road',{})
-    from .section_hydraulics import manning,ineffective,cards,road_profiles
+    from .section_hydraulics import manning,ineffective,cards,road_profiles,manning_cards
     if river_only:
         issues=boundary_errors(g,len(s['profiles']))
         if issues:raise ValueError('; '.join(issues))
@@ -122,7 +122,7 @@ def build(folder,c,s,g):
         text+=f"#Sta/Elev= {len(r['station_ft'])}\n"+fixed(np.column_stack([r['station_ft'],r['elevation_ft']]).ravel())
         left,right=r['bank_stations_ft']
         rough=manning(r,s)
-        text+='#Mann= '+str(len(rough))+' , 0 , 0\n'+fixed([v for sta,n in rough for v in [sta,n,0]],8,9)
+        text+='#Mann= '+str(len(rough))+' , 0 , 0\n'+manning_cards(rough,fixed)
         text+=cards(r,fixed)
         text+=f'Bank Sta={left:.3f},{right:.3f}\nXS Rating Curve= 0 ,0\nExp/Cntr='+','.join(str(v) for v in r['expansion_contraction'])+'\n\n'
         if i==ui:

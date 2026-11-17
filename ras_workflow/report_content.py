@@ -37,14 +37,18 @@ def native_input_tables(d,n,tr,num):
     rows=[]
     for section in n['sections']:
         rough=section['manning']
-        rows.append([section['rs'],'; '.join(num(v[0],2)+': '+num(v[1],3) for v in rough),
+        rows.append([section['rs'],'; '.join(num(v[0],2)+': '+format(v[1], '.7g') for v in rough),
             ' / '.join(num(v) for v in section['banks']),tr('Present','已保留') if section['ineffective_areas'] else tr('Absent','无记录')])
     table(d,['RS',tr('Manning n by starting station','起点站距：Manning n'),tr('Left / right bank ft','左 / 右岸站 ft'),tr('Ineffective areas','非有效流区')],rows,[.65,2.65,1.6,1.8])
-    def bc(v):return tr('Not used by this plan','本计划未使用') if v['type']==0 else tr('Normal depth, slope ','正常水深，坡降 ')+num(v['slope'],5)
+    def bc(v):
+        if v['type']==0:return tr('Not used by this plan','本计划未使用')
+        if v['type']==1:return tr('Known WSE ','已知水位 ')+num(v['stage_ft'],3)+' ft'
+        return tr('Normal depth, slope ','正常水深，坡降 ')+num(v['slope'],8)+' ft/ft'
     boundaries={}
     for v in n['boundaries']:boundaries.setdefault((bc(v['upstream']),bc(v['downstream'])),[]).append(n['profiles'][v['profile_number']-1]['id'])
     table(d,[tr('Profiles','工况'),tr('Upstream boundary','上游边界'),tr('Downstream boundary','下游边界')],
         [[tr('All profiles','全部工况') if len(names)==len(n['profiles']) else ', '.join(names),*key] for key,names in boundaries.items()],[1.2,2.75,2.75])
+    if n.get('model_type')=='river':return
     groups=n['expected_native']['groups']
     table(d,[tr('Group / cells','孔组 / 孔数'),tr('Span × rise ft','净宽 × 高 ft'),tr('Length ft','涵长 ft'),tr('Inlet / outlet invert ft','进 / 出口涵底 ft'),tr('Top / bottom n','顶部 / 底部 n')],
         [[b['name']+' / '+str(b['count']),num(b['span_ft'])+' × '+num(b['rise_ft']),num(b['length_ft']),num(b['us_invert_ft'],3)+' / '+num(b['ds_invert_ft'],3),num(b['culvert_n'],3)+' / '+num(b.get('bottom_n'),3)] for b in groups],[1.2,1.25,.8,2.05,1.4])
@@ -318,7 +322,9 @@ def generate(summary_path,folder,culvert_details=None,comparisons=(),context=Non
     data=collect(summary_path,comparisons);folder.mkdir(parents=True,exist_ok=True)
     from .report_context import attach
     attach(data,summary_path,context)
-    plots=figures(data,folder/'figures');save(folder/'report_data.json',data);save(folder/'figure_manifest.json',plots)
+    plots=figures(data,folder/'figures')
+    plots['zh-CN']=figures(data,folder/'figures'/'zh-CN','zh-CN')
+    save(folder/'report_data.json',data);save(folder/'figure_manifest.json',plots)
     details=None
     if culvert_details:
         from .culvert_details import validate
@@ -332,9 +338,9 @@ def generate(summary_path,folder,culvert_details=None,comparisons=(),context=Non
         builder=build
         if data['summary']['hydraulics'].get('model_type')=='river':
             from .river_report import build as builder
-        path=folder/(name+'.docx');builder(data,plots,folder,language,detail,details).save(path)
+        path=folder/(name+'.docx');builder(data,plots.get(language,plots),folder,language,detail,details).save(path)
         pdf,n,pages=render(path)
         manifest['reports'].append(dict(language=language,detail=detail,docx=item(path),pdf=item(pdf),pages=n,rendered_pages=[item(p) for p in pages],render_evidence=item(path.parent/'qa'/path.stem/'render_manifest.json')))
-    manifest['figure_files']=[item(p) for p in sorted((folder/'figures').glob('*.png'))]
+    manifest['figure_files']=[item(p) for p in sorted((folder/'figures').rglob('*.png'))]
     save(folder/'report_manifest.json',manifest)
     return manifest

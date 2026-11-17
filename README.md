@@ -43,3 +43,5 @@ Application code and original documentation: [MIT License](LICENSE). Bundled pub
 ## Results and follow-up changes
 
 Save selected candidates, associations and banks together. Results supports independent revisions, native-table cross-checks, synchronized reports/packages, wet-edge plots, optional sensitivity batches and launching a QGIS review copy. See [result operations](docs/RESULTS_REVIEW_EN.md). Local flow paths, structural interpretation and engineering acceptance still require judgment.
+
+River reports now include native-input readback and completed baseline-bound sensitivity studies. Use **Update reports and both packages** once after a study. Complete packages retain portable sensitivity evidence and imagery acquisition records. See [River-reach guide](docs/RIVER_REACH_EN.md).

@@ -385,26 +385,20 @@ def worker(record):
     return 0 if job['status']=='FINISHED' else 1
 
 def regenerate(key,action):
+    if action not in ('report','delivery'):raise ValueError('Unknown report action')
     m=model(key)
     if not m.get('summary') or not intact([m['summary']]):raise ValueError('No intact calculation summary available')
     out=folder(key)/'exports'/unique_id();summary=ROOT/m['summary']['path']
-    if action=='report':
-        from .report import generate
-        generate(summary,out/'reports');m['latest_reports']=rel(out/'reports')
-        m['previous_delivery']=m.get('latest_delivery') or m.get('previous_delivery') or (read(ROOT/m['engine_state']).get('delivery') if m.get('engine_state') else None)
-        m['exports_need_refresh']=True;m.pop('latest_delivery',None)
-    else:
+    from .report import generate as report_generate
+    # Recollect completed studies and native supplements for every explicit refresh.
+    # Persist the report first so a later mapping failure is recoverable.
+    report_generate(summary,out/'reports');m['latest_reports']=rel(out/'reports')
+    previous=m.get('latest_delivery') or m.get('previous_delivery') or (read(ROOT/m['engine_state']).get('delivery') if m.get('engine_state') else None)
+    m['previous_delivery']=previous
+    m['exports_need_refresh']=True;m.pop('latest_delivery',None)
+    persist(m,'REPORT_REFRESHED')
+    if action=='delivery':
         from .site_delivery import generate
-        if m.get('exports_need_refresh'):
-            from .report_catalog import inspect as report_editions
-            catalogue=report_editions(summary)
-            if catalogue['issues']:raise ValueError('Report evidence changed: '+str(catalogue['issues']))
-            if catalogue['latest']:
-                m['latest_reports']=rel((ROOT/catalogue['latest']['manifest']['path']).parent)
-            else:
-                from .report import generate as report_generate
-                report_generate(summary,out/'reports');m['latest_reports']=rel(out/'reports')
-        previous=m.get('latest_delivery') or m.get('previous_delivery') or (read(ROOT/m['engine_state']).get('delivery') if m.get('engine_state') else None)
         reuse=(previous or {}).get('complete',{}).get('path') if (previous or {}).get('mapped') else None
         result=generate(summary,out/'delivery',reuse_package=reuse);m['latest_delivery']=result
         if result.get('status') in ('READY_FOR_REVIEW','READY_NATIVE_ONLY','READY'):m['exports_need_refresh']=False

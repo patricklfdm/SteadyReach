@@ -135,7 +135,7 @@ function renderRiverManual(screen){
  screen.append(el('h2',tr('River reach between bridges','桥间纯河道')),
  el('p',tr('Place the upstream end below the upstream bridge and the downstream end above the downstream bridge. Bridge backwater can still affect the boundary. Select a defensible flow and boundary condition before solving.','上端设在上游桥下游侧，下端设在下游桥上游侧。桥梁壅水仍可能影响边界；计算前需选定有依据的流量与边界条件。')));
  renderSources(screen);
- const map=details(screen,'Reach extent and DEM','河段范围与 DEM',!intake.section_count);metadata(map,false);renderRiverMap(map);
+ const map=details(screen,'Reach extent and DEM','河段范围与 DEM',!intake.section_count);metadata(map,false);renderTerrainExtent(map);renderRiverMap(map);
  renderAutomation(screen);renderAutoGeometry(screen);renderParameterNavigator(screen,intake.fields);
  if(intake.section_count){const sections=details(screen,'Section and bank adjustments','断面和岸站调整');renderSectionRepair(sections);if(intake.geometry_review?.sections?.length)renderBanks(sections,intake.geometry_review);}
  const cats={flow:details(screen,'Flow and roughness','流量与糙率'),boundary:details(screen,'Channel bed and boundaries','河槽与边界'),sections:details(screen,'All section data','全部断面数据')},xs={};
@@ -144,14 +144,49 @@ function renderRiverManual(screen){
   if(target===cats.sections){const i=f.key.split('.')[2];target=xs[i]||(xs[i]=details(target,'Cross section '+(Number(i)+1),'断面 '+(Number(i)+1)));}parameterInput(target,f);
  }
 }
+function renderTerrainExtent(parent){
+ if(!current.terrain?.products?.length)return;
+ const box=details(parent,'Expand DEM coverage','扩展 DEM 覆盖范围');
+ box.append(el('p',tr('Set the acquisition radius around the project coordinate. Expansion reuses downloaded USGS originals, retains saved parameters and existing DEM cells, and checks full coverage. Hydraulic endpoints are selected separately on the map.','设置项目坐标周围的地形范围半径。扩展会复用已下载的 USGS 原始地形、保留已存参数和原有 DEM 像元，并检查完整覆盖；水力边界位置另行在地图上确认。')));
+ const radius=field(box,'terrain-radius','Coverage radius (m)','范围半径（m）',current.terrain.buffer_m||300,'number');
+ radius.min=50;radius.max=5000;radius.step=50;
+ box.append(button('Expand from downloaded DEM','从已下载地形扩展',async()=>{
+  const buffer=Number(radius.value);
+  if(!Number.isFinite(buffer)||buffer<50||buffer>5000)throw new Error(tr('Use a radius of 50–5000 m.','半径须为 50–5000 米。'));
+  await saveAll();
+  notify(tr('Expanding DEM and checking coverage…','正在扩展 DEM 并检查覆盖范围…'));
+  await api('geometry/expand-terrain',{id:current.id,revision:current.revision,buffer_m:buffer});
+  await open(current.id);
+  notify(tr('DEM coverage expanded. Use Fit DEM to inspect the full extent.','DEM 覆盖范围已扩展。点击“显示全部 DEM”检查完整范围。'));
+ }));
+}
 function renderRiverMap(parent){
- let points=structuredClone(current.map_picks?.river||[]),selecting=false,timer=null,promise=null;
+ let points=structuredClone(current.map_picks?.river||[]),selecting=false,timer=null,promise=null,coordinateText=null;
  const actions=el('div',undefined,'actions'),state=el('p','', 'status'),canvas=el('div');parent.append(el('p',tr('Pick the river upstream → downstream. Begin below the upstream bridge, add points at bends, and finish above the downstream bridge. Points save automatically.','沿河从上游向下游点选：从上游桥下游侧开始，弯道处加点，在下游桥上游侧结束。点位自动保存。')),actions,state,canvas);
- async function commit(){clearTimeout(timer);if(promise)await promise;await save();promise=api('geometry/picks',{id:current.id,revision:current.revision,picks:{river:points},parameters:{}});try{current=await promise;pendingMapSave=null;mapDirty=false;state.textContent=points.length+tr(' reach anchors saved',' 个河段锚点已保存');}finally{promise=null;}}
+ async function commit(){clearTimeout(timer);if(promise)await promise;await save();promise=api('geometry/picks',{id:current.id,revision:current.revision,picks:{river:points},parameters:{}});try{current=await promise;pendingMapSave=null;mapDirty=false;if(coordinateText&&!pendingChanges.has('river-coordinates'))coordinateText.value=points.map(p=>p.join(', ')).join('\n');state.textContent=points.length+tr(' reach anchors saved',' 个河段锚点已保存');}finally{promise=null;}}
  function queued(){pendingMapSave=commit;mapDirty=true;state.textContent=tr('Saving reach anchors…','正在保存河段锚点…');clearTimeout(timer);timer=setTimeout(()=>{if(!busy)task(commit,tr('Save river anchors','保存河段锚点'));else queued();},700);}
- const pick=button('Pick river upstream → downstream','沿流向点选河段',async()=>{selecting=!selecting;pick.setAttribute('aria-pressed',String(selecting));notify(selecting?tr('Click the DEM to add reach anchors. Dragging only pans.','点击 DEM 添加河段锚点，拖动只平移地图。'):tr('Point selection ended.','已退出点选。'));});actions.append(pick);
- const map=terrainMap(canvas,{getAnchors:()=>({river:points}),getMode:()=>selecting?'river':null,onPoint:p=>{points.push(p);map.draw();queued();}});
- actions.append(button('Undo last anchor','撤销最后一个点',async()=>{points.pop();await commit();map.draw();}),button('Zoom in','放大',()=>map.zoom(1/1.2)),button('Zoom out','缩小',()=>map.zoom(1.2)),button('Fit DEM','显示全部 DEM',()=>map.fit('terrain')),button('Fit sections','显示全部断面',()=>map.fit('sections')));
+ const pick=button('Pick river upstream → downstream','沿流向点选河段',async()=>{await saveAll();selecting=!selecting;pick.setAttribute('aria-pressed',String(selecting));notify(selecting?tr('Click the DEM to add reach anchors. Dragging only pans.','点击 DEM 添加河段锚点，拖动只平移地图。'):tr('Point selection ended.','已退出点选。'));});actions.append(pick);
+ const map=terrainMap(canvas,{getAnchors:()=>({river:points}),getMode:()=>selecting?'river':null,onPoint:p=>{if(pendingChanges.has('river-coordinates')){notify(tr('Save the coordinate edits first.','请先保存坐标输入。'),true);return;}points.push(p);map.draw();queued();}});
+ actions.append(button('Undo last anchor','撤销最后一个点',async()=>{await saveAll();points.pop();await commit();map.draw();}),button('Zoom in','放大',()=>map.zoom(1/1.2)),button('Zoom out','缩小',()=>map.zoom(1.2)),button('Fit DEM','显示全部 DEM',()=>map.fit('terrain')),button('Fit sections','显示全部断面',()=>map.fit('sections')));
+ const numeric=details(parent,'Enter or paste reach coordinates','输入或粘贴河段坐标');
+ numeric.append(el('p',tr('One easting, northing pair per line, ordered upstream to downstream. Use the DEM coordinate system and horizontal units shown on the map. Review the saved line on the map.','每行填写东坐标、北坐标，按上游到下游排列。采用地图显示的 DEM 坐标系及平面单位，保存后核对地图上的连线。')));
+ async function saveCoordinates(){
+  const lines=coordinateText.value.trim().split(/\r?\n/).filter(line=>line.trim());
+  const parsed=lines.map(line=>line.trim().split(/[,\s]+/).map(Number));
+  if(parsed.length<2||parsed.length>100||parsed.some(p=>p.length!==2||p.some(v=>!Number.isFinite(v))))throw new Error(tr('Enter 2–100 coordinate pairs, one pair per line.','请输入 2–100 对坐标，每行一对。'));
+  const bounds=current.intake?.terrain_setup?.bounds;
+  if(!bounds)throw new Error(tr('Load the DEM before entering coordinates.','请先载入 DEM 再输入坐标。'));
+  if(parsed.some(p=>p[0]<bounds[0]||p[0]>bounds[2]||p[1]<bounds[1]||p[1]>bounds[3]))throw new Error(tr('A coordinate is outside the DEM. Check CRS, units and coverage.','有坐标位于 DEM 范围外，请核对坐标系、单位和覆盖范围。'));
+  if(new Set(parsed.map(p=>p.join(','))).size!==parsed.length)throw new Error(tr('Remove repeated coordinates.','请修正重复坐标。'));
+  clearTimeout(timer);if(promise)await promise;
+  const previous=points;points=parsed;
+  try{await commit();}catch(error){points=previous;throw error;}
+  coordinateText.value=points.map(p=>p.join(', ')).join('\n');stageChange('river-coordinates','',0,null);map.draw();
+  notify(points.length+tr(' reach anchors saved. Review their direction and position on the map.',' 个河段锚点已保存，请核对地图上的流向与位置。'));
+ }
+ coordinateText=field(numeric,'river-coordinate-pairs','Easting, northing','东坐标, 北坐标',points.map(p=>p.join(', ')).join('\n'),'textarea',null,()=>stageChange('river-coordinates',tr('Reach coordinates','河段坐标'),1,saveCoordinates));
+ coordinateText.rows=8;
+ numeric.append(button('Save coordinates and show on map','保存坐标并显示到地图',saveCoordinates));
  state.textContent=points.length+tr(' saved anchors',' 个已保存锚点');
 }
 home().catch(e=>notify(e.message,true));

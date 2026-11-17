@@ -10,7 +10,10 @@ import zipfile
 from importlib.metadata import PackageNotFoundError, version
 import xml.etree.ElementTree as ET
 
-EXTRACTOR_VERSION = 2
+EXTRACTOR_VERSION = 3
+PDF_PAGE_LIMIT = 200
+PDF_OCR_PAGE_LIMIT = 40
+PDF_TEXT_LIMIT = 600_000
 from pathlib import Path
 from .common import ROOT, finite
 
@@ -111,11 +114,19 @@ def document_text(path, scratch, ocr=True):
         warnings = []
         methods = []
         pdf = None
+        ocr_pages = 0
+        characters = 0
+        incomplete = False
         try:
-            for i, page in enumerate(reader.pages[:40]):
-                raw = page.extract_text() or ''
+            for i, page in enumerate(reader.pages[:PDF_PAGE_LIMIT]):
+                try:
+                    raw = page.extract_text() or ''
+                except Exception as error:
+                    raw = ''
+                    warnings.append(f'Page {i+1} text extraction failed: {error}')
                 method = 'PDF text'
-                if len(raw.strip()) < 80 and ocr:
+                if len(raw.strip()) < 80 and ocr and ocr_pages < PDF_OCR_PAGE_LIMIT:
+                    ocr_pages += 1
                     try:
                         import pypdfium2 as pdfium
                         if pdf is None:
@@ -126,25 +137,40 @@ def document_text(path, scratch, ocr=True):
                         try:
                             target = scratch / f'page_{i+1}.png'
                             image.save(target)
-                            raw = image_text(target, scratch)
-                            method = 'Windows OCR unverified'
+                            recognized = image_text(target, scratch)
+                            if len(recognized.strip()) > len(raw.strip()):
+                                raw = recognized
+                                method = 'Windows OCR unverified'
                         finally:
                             image.close()
                             bitmap.close()
                             rendered.close()
                     except Exception as error:
                         warnings.append(f'Page {i+1} OCR failed: {error}')
-                elif len(raw.strip()) < 80:
-                    warnings.append(f'Page {i+1} has little extractable text; OCR disabled')
-                parts.append(f'[Page {i+1}; {method}]\n{raw}')
+                if len(raw.strip()) < 80:
+                    incomplete = True
+                    warnings.append(f'Page {i+1} has little extractable text; inspect the original page')
+                text = f'[Page {i+1}; {method}]\n{raw}'
+                remaining = PDF_TEXT_LIMIT - characters
+                parts.append(text[:remaining])
+                characters += len(parts[-1]) + 1
                 methods.append(method)
+                if len(text) > remaining or characters >= PDF_TEXT_LIMIT:
+                    incomplete = True
+                    warnings.append(f'PDF text reached the {PDF_TEXT_LIMIT:,}-character extraction limit')
+                    break
         finally:
             if pdf is not None:
                 pdf.close()
-        if len(reader.pages) > 40:
-            warnings.append('Only the first 40 PDF pages were inspected')
-        return dict(text='\n'.join(parts)[:300_000], method='PDF text + OCR' if any('OCR' in m for m in methods) else 'PDF text',
-                    page_methods=methods, warnings=warnings)
+        if len(methods) < len(reader.pages):
+            incomplete = True
+            warnings.append(f'Inspected {len(methods)} of {len(reader.pages)} PDF pages; remaining pages require review')
+        if ocr_pages >= PDF_OCR_PAGE_LIMIT:
+            warnings.append(f'Automatic OCR is limited to {PDF_OCR_PAGE_LIMIT} pages per PDF')
+        return dict(text='\n'.join(parts), method='PDF text + OCR' if any('OCR' in m for m in methods) else 'PDF text',
+                    page_methods=methods, warnings=warnings,
+                    coverage=dict(total_pages=len(reader.pages), inspected_pages=len(methods), ocr_pages=ocr_pages,
+                                  status='PARTIAL' if incomplete else 'COMPLETE_TEXT_PASS'))
     if suffix in ('.jpg', '.jpeg', '.png', '.tif', '.tiff'):
         return dict(text=image_text(path, scratch) if ocr else '', method='Windows OCR',
                     warnings=['Photo / handwriting recognition is unverified; feature identity requires review'])

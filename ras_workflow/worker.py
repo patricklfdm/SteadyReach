@@ -57,10 +57,13 @@ def verify_native(hdf, expected, profiles):
             if len(info)!=len(expected['manning_by_section']):raise ValueError('Manning section count mismatch')
             for (start,count),wanted in zip(info,expected['manning_by_section']):
                 actual=values[start:start+count]
-                if actual.shape!=np.asarray(wanted).shape or not np.allclose(actual,wanted,rtol=0,atol=.00051):raise ValueError('Manning subdivision readback mismatch')
+                wanted=np.asarray(wanted)
+                if actual.shape!=wanted.shape:raise ValueError('Manning subdivision readback shape mismatch')
+                if not np.allclose(actual[:,0],wanted[:,0],rtol=0,atol=.00051):raise ValueError('Manning station readback mismatch')
+                if not np.allclose(actual[:,1],wanted[:,1],rtol=0,atol=1e-7):raise ValueError('Manning coefficient readback mismatch')
         elif 'channel_n' in expected:
             rough=h["Geometry/Cross Sections/Manning's n Values"][:,1]
-            if not np.allclose(rough.reshape(-1,3),[expected['overbank_n'],expected['channel_n'],expected['overbank_n']],rtol=0,atol=1e-6):raise ValueError('Roughness readback mismatch')
+            if not np.allclose(rough.reshape(-1,3),[expected['overbank_n'],expected['channel_n'],expected['overbank_n']],rtol=0,atol=1e-7):raise ValueError('Roughness readback mismatch')
         if 'ineffective_by_section' in expected:
             wanted=expected['ineffective_by_section']
             if any(wanted):

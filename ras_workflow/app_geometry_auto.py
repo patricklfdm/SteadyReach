@@ -31,6 +31,8 @@ def prepare(m,body):
         raise ValueError('Use a maximum width of 120–2000 ft and exterior reach search length of 100–1000 ft')
     before=signature(m)
     if mode=='initial':
+        if body.get('reference_screen') is not None:
+            raise ValueError('Generate initial sections before adding reference coverage controls')
         if g['cross_sections']:raise ValueError('Initial automatic layout applies to an empty draft; existing sections use QA suggestions')
         if g.get('model_type')=='river':
             from .river_layout import initial
@@ -42,7 +44,11 @@ def prepare(m,body):
         if g.get('vertical_datum')!=datum or not s.crs.equals(CRS.from_user_input(g['horizontal_crs'])):
             raise ValueError('Geometry and DEM datum/CRS must match before QA resampling')
         from .geometry_auto_qa import propose
-        proposal=propose(m,g,s,maximum)
+        reference=None
+        if body.get('reference_screen') is not None:
+            from .section_reference import prepare as prepare_reference
+            reference=prepare_reference(m,g,body['reference_screen'])
+        proposal=propose(m,g,s,maximum,reference_screen=reference)
     else:raise ValueError('Unknown geometry proposal mode')
     proposal.update(id=unique_id(),mode=mode,signature=before,created_utc=utc(),revision=m['revision'],draft_revision=d['revision'],
         bounds=dict(reach_length_ft=length,maximum_width_ft=maximum),terrain=dict(unit=unit,datum=datum,raster=terrain['raster']),engineering_acceptance='NOT_ASSESSED')
@@ -82,6 +88,10 @@ def apply(m,body):
     g.update(approved_for_model=False,status='EDITABLE_AUTOMATIC_PROPOSAL')
     g.setdefault('provenance',[]).extend(v['sources']+[entry])
     invalid=set()
+    # Explicitly chosen banks belong to the adopted geometry. Drop any older
+    # automatic answer, including an unchanged station after one-sided extension,
+    # so the final-review refresh cannot replace that choice with a new candidate.
+    invalid.update(f'g.cross_sections.{key}.bank_stations_ft' for key in banks)
     if v['mode']=='initial':
         if g.get('model_type')!='river':
             for key in ('rs','us_xs_rs','ds_xs_rs'):g['structure'][key]=None;invalid.add('g.structure.'+key)

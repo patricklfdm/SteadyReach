@@ -95,11 +95,13 @@ function renderBankBatch(parent,review){
  const box=details(parent,'Bank-profile gallery / batch selection','岸站剖面总览／集中选择');
  box.append(el('p',tr('Saved banks are retained by default. Check uncertain profiles together; select only the changes you want to save. Clicking a dot changes the chosen left/right bank. This is a terrain interpretation, not engineering acceptance.','默认保留已存岸站。集中查看不确定剖面，只勾选需要保存的更改；选左／右岸后点击采样点。此处是地形解释，不是工程验收。')));
  const picks=new Map(),selected=new Set(),feedback=el('p','', 'status');box.append(feedback);
- const count=()=>{feedback.textContent=selected.size+tr(' sections selected; existing banks on other sections will be retained.',' 条断面待保存，其余断面的已存岸站会保留。');stageChange('banks',tr('Bank positions','岸站'),selected.size,commitBanks);};
+ const count=()=>{const incomplete=[...selected].filter(i=>!bankPairReady(review.sections[i],picks.get(i))).map(i=>'RS '+review.sections[i].rs);feedback.textContent=selected.size+tr(' sections selected; existing banks on other sections will be retained.',' 条断面待保存，其余断面的已存岸站会保留。')+(incomplete.length?tr(' Check both bank positions before saving: ',' 保存前请补齐或修正左右岸：')+incomplete.join(', '):'');feedback.className=incomplete.length?'warning':'status';stageChange('banks',tr('Bank positions','岸站'),selected.size,commitBanks);};
  for(const [i,row] of review.sections.entries()){
-  const saved=row.bank_stations_ft?.length===2,x=row.station_ft,z=row.elevation_ft,bank=saved?row.bank_stations_ft.map(v=>x.indexOf(v)):row.bank_candidates?.selected_indices?.slice();
-  if(!bank)continue;picks.set(i,bank);
-  const d=details(box,'RS '+row.rs+' · '+(saved?'saved':'missing')+' · '+row.bank_candidates?.confidence,'RS '+row.rs+' · '+(saved?'已保存':'缺失')+' · '+row.bank_candidates?.confidence,false);
+  const saved=row.bank_stations_ft?.length===2,x=row.station_ft,z=row.elevation_ft,bank=saved?row.bank_stations_ft.map(v=>x.indexOf(v)):(row.bank_candidates?.selected_indices?.slice()||[null,null]);
+  picks.set(i,bank);
+  const confidence=row.bank_candidates?.confidence||'UNRESOLVED';
+  const d=details(box,'RS '+row.rs+' · '+(saved?'saved':'missing')+' · '+confidence,'RS '+row.rs+' · '+(saved?'已保存':'缺失')+' · '+confidence,false);
+  if(!saved&&!bankPairReady(row,bank))d.append(el('p',tr('No reliable automatic bank pair is available. Both stations remain blank. Inspect the profile and select both banks using the dots or numeric inputs before saving.','未找到可靠的自动岸站组合，左右岸保持空白。请查看剖面，通过点选或数字输入补齐两岸后保存。'),'warning'));
   const use=check(d,'Save this section in the batch','集中保存此断面',false,v=>{if(v)selected.add(i);else selected.delete(i);count();});
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 700 220');svg.classList.add('repair-profile');d.append(svg);let side=null;
   const actions=el('div',undefined,'actions');d.append(actions);const left=button('Pick left bank','选择左岸',async()=>{side=side===0?null:0;draw();}),right=button('Pick right bank','选择右岸',async()=>{side=side===1?null:1;draw();});actions.append(left,right);
@@ -109,6 +111,7 @@ function renderBankBatch(parent,review){
   }draw();
  }
  async function commitBanks(){
+  for(const i of selected)bankSelection(review,i,picks.get(i));
   await save();
   const sections=[...selected].map(i=>bankSelection(review,i,picks.get(i)));
   if(!sections.length)return;
@@ -133,7 +136,13 @@ function profileGrid(svg, x, lo, hi, bounds) {
  svgEl(svg,'text',{x:left,y:bottom+30,'font-size':10}).textContent=tr('Station (ft)','横距（ft）');
 }
 
+function bankPairReady(row,indices){
+ return Array.isArray(indices)&&indices.length===2&&indices.every(i=>Number.isInteger(i)&&i>0&&i<row.station_ft.length-1&&Number.isFinite(row.station_ft[i])&&Number.isFinite(row.elevation_ft[i]))&&indices[0]<indices[1];
+}
+
 function bankSelection(review,index,bank_indices){
+ const row=review.sections[index];
+ if(!row||!bankPairReady(row,bank_indices))throw Error('RS '+(row?.rs??index)+tr(': select both banks at valid interior samples, with left before right, or deselect this section. No bank changes were saved.','：请补齐有效内部样点上的左右岸，并确保左岸在右岸之前；也可取消勾选此断面。本批岸站更改尚未保存。'));
  const latest=current.intake.geometry_review;
  const keys=['rs','station_ft','elevation_ft','cutline_xy','center_xy','bank_stations_ft'];
  if(keys.some(key=>JSON.stringify(review.sections[index]?.[key])!==JSON.stringify(latest.sections[index]?.[key]))){

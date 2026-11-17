@@ -19,6 +19,18 @@ For a reach between two excluded bridges, place the upstream limit downstream of
 5. Resolve highlighted geometry issues. Use the existing map pan/zoom, section rotation/resampling, profile grids and numeric bank editing. Check direction and flow connectivity yourself; the lowest DEM corridor can follow a wrong branch or a flattened water surface.
 6. Review the collapsed parameter groups. River mode removes barrel, invert, roadway and inlet fields. Save the channel/overbank roughness, bed representation and active boundary parameters. Suggested values remain labelled assumptions until reviewed; a reference FEMA water level is not a bed elevation.
 
+You can also open **Enter or paste reach coordinates** to enter 2–100 easting/northing pairs, one pair per line in upstream-to-downstream order. Use the DEM CRS and horizontal units shown on the map. **Save coordinates and show on map** checks the format and coverage and displays the saved line for review.
+
+## DEM coverage
+
+If either end of the reach is outside the downloaded map, open **Reach extent and DEM → Expand DEM coverage**, enter the coverage radius in metres, and click **Expand from downloaded DEM**. This radius describes acquisition around the project coordinate. Select the hydraulic endpoints separately. The action verifies the cached original USGS files and full cell coverage, retains saved inputs and all existing DEM cells, and refreshes the map after completion. Use **Fit DEM** to see the expanded extent. A coverage failure retains the current map and inputs. Reduce the radius or obtain adjoining tiles if the cached originals are insufficient.
+
+## Screening section coverage with an existing water-level reference
+
+After creating a draft, expand **Automatic DEM layout / QA repair → Check extent against reference water levels**. Select an imported source, enter its matching vertical datum, and paste current section IDs and associated water elevations in feet, one pair per line. Check **Use reference water levels for this preview** and request QA suggestions. The search width cap is under **Optional search bounds**.
+
+The program interpolates between controls using section-center distances and holds the nearest control beyond either end. Review the association of reference and current sections, especially where their positions or survey dates differ. Proposed extensions retain existing DEM samples and saved bank positions. The preview records the source hash and reference controls. Conflicting extensions remain listed for further work. Review the map, profiles and remaining issues before adoption. Reference screening does not set hydraulic boundary conditions. Calculation and boundary sensitivity follow the full input confirmation.
+
 ## Boundary inputs
 
 | Choice | Required entry | Meaning |
@@ -49,3 +61,26 @@ Compare the maximum change at matched cross sections and the response in the int
 ## What has been checked
 
 The river route has been exercised locally with actual HEC-RAS 7.0.1: synthetic prismatic normal-depth cases at 100/200 cfs, known-stage cases, a three-case boundary sensitivity batch, native warning export, bilingual reports and mapped dual packages. A browser acceptance run checked continuous-reach layout, conditional fields, invalid stage count and explicit confirmation. These are software verification cases, not results for Pagosa or any other real site. Existing multi-group culvert computation and native table exports were also regressed. Other machines and site hydraulic adequacy need separate review.
+
+Manning coefficients retain up to seven decimal places in the native eight-character field. Result readback checks coefficient differences within 0.0000001, separately from station coordinates. River report input tables retain values such as 0.0425. A coefficient that rounds to zero or one at native precision is rejected before solving.
+
+
+## Refreshing reports after sensitivity tests
+
+After the batch finishes, click **Update reports and both packages** once on the Results page. The workflow collects the current completed studies, regenerates reports and builds both packages. **Regenerate reports** also remains available for a report-only update. Earlier editions remain saved. If mapping fails, the new reports remain available and package generation can be retried.
+
+River reports read section roughness, banks and boundary cards from the hashed native inputs. Completed sensitivity studies are included only when bound to the exact report baseline. The report checks the case inputs/results, reproduces the baseline water levels and recomputes comparison values from native outputs. Studies from earlier geometry revisions are excluded; altered evidence stops report generation. Tested ranges remain conditional and do not close hydraulic QA or engineering acceptance.
+
+Chinese diagnostic guidance is localized and repeated warnings are grouped with affected stations. Counts can overlap between native warnings and automated diagnostics; they are not counts of independent defects.
+
+
+The Complete package retains the hashed sources behind report sensitivity tables, including case inputs, native results and diagnostic records. `Evidence/ReportSources/index.json` maps historical workspace paths to files inside the package; identical content may share one copy. Imagery acquisition records are preserved even when the offline mosaic is reused. The Minimal package remains intended for opening the model, Mapper and English exhibit; use Complete for source and sensitivity review.
+
+
+## Feedback and source coverage
+
+QA revision previews show a saved confirmation and the proposed section count when complete. Expand the DEM layout and QA panel to review changes before adopting them. Background progress reconnects automatically after a temporary connection failure.
+
+Local PDF extraction attempts up to 200 pages and 600,000 characters, with OCR on up to 40 low-text pages. The source panel displays inspected and total page counts. Partial extraction and low-text pages remain marked for original-page review. Run **Reanalyze saved material** again to update documents parsed by an older extractor. Extracted text and figures require a site, unit and datum check before values are adopted.
+
+English and Chinese reports use matching-language plot labels. Dense overview maps label a subset of sections while drawing every cutline. The section tables and profile panels retain all section identifiers.

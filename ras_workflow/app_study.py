@@ -67,4 +67,5 @@ def execute(key):
     result=study.run(active['study']['path'],active['review']['path'])
     path=(ROOT/active['study']['path']).parent/'analysis.json'
     m.update(latest_study=item(path),status='RESULTS_READY',phase='STUDY_FINISHED',errors=[])
+    m['exports_need_refresh']=True
     core.persist(m,'SENSITIVITY_FINISHED',dict(status=result['status'],analysis=m['latest_study']))

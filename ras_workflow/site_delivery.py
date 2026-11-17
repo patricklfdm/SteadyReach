@@ -214,8 +214,8 @@ def generate(summary_path,output,reuse_package=None):
             if rm.get(key):copy_file(ROOT/rm[key]['path'],full/'Reports'/Path(rm[key]['path']).name)
         figure_dir=report_manifest.parent/'figures'
         if figure_dir.exists():
-            for p in figure_dir.iterdir():
-                if p.is_file():copy_file(p,full/'Reports/figures'/p.name)
+            for p in figure_dir.rglob('*'):
+                if p.is_file():copy_file(p,full/'Reports/figures'/p.relative_to(figure_dir))
         copy_file(report_manifest,full/'Evidence/report_manifest.original.json')
         copy_file(summary_path,full/'Evidence/summary.original.json')
         if summary.get('native_supplement'):
@@ -230,7 +230,7 @@ def generate(summary_path,output,reuse_package=None):
         save(full/'Evidence/delivery_settings.json',settings)
         from . import __version__
         save(full/'Evidence/delivery_generator.json',dict(version=__version__,created_utc=utc(),
-            code=[item(Path(__file__).parent/name) for name in ['site_delivery.py','delivery_spatial.py','qgis_runtime.py','qgis_delivery_worker.py','map_raster.py','imagery.py']]))
+            code=[item(Path(__file__).parent/name) for name in ['site_delivery.py','delivery_evidence.py','delivery_spatial.py','qgis_runtime.py','qgis_delivery_worker.py','map_raster.py','imagery.py']]))
         copy_file(run/'manifest.json',full/'Evidence/run_manifest.original.json')
         # Preserve exact input snapshots; original paths in logs are historical locators.
         total=0;limit=int(settings.get('max_complete_bytes',1_500_000_000))
@@ -249,6 +249,7 @@ def generate(summary_path,output,reuse_package=None):
             total+=source.stat().st_size
             if total>limit:raise ValueError('Complete-package source budget exceeded')
             copy_file(source,full/'Sources'/source.relative_to(ROOT))
+        from .delivery_evidence import archive_report_sources, preserve_imagery_records
         mapped=False;terrain_config=c.get('terrain',{})
         if terrain_config.get('mode')=='not_applicable' or settings.get('mapping_enabled',True) is False:
             result['issues'].append('Mapping not requested or no reviewed georeferenced terrain; native-only packages, no Mapper/GIS exhibit claimed.')
@@ -276,6 +277,7 @@ def generate(summary_path,output,reuse_package=None):
             if image_settings.get('mode')=='usgs_naip':
                 if reuse_package:
                     acquired=cached_imagery(reuse_package,crs,bounds)
+                    preserve_imagery_records(acquired,full)
                 else:
                     from .imagery import acquire as acquire_imagery
                     acquired=acquire_imagery(crs,bounds,full/'Evidence/Imagery',
@@ -323,7 +325,7 @@ def generate(summary_path,output,reuse_package=None):
             +'Keep all subfolders together. The complete package additionally contains editable GIS_Project.qgz (when mapped), English/Chinese reports, inputs and evidence.\n'
             +f"Input adequacy: {result['input_adequacy']}. Hydraulic QA: {result['hydraulic_qa']}. Engineering acceptance: NOT_ASSESSED.\n"
             +'For recomputation, copy the folder first. Open the saved plan in Steady Flow Analysis and Compute; review warnings. Recalculation creates additional files.\n'
-            +'Evidence records retain original workspace paths as historical provenance; copied inputs are under Inputs with their original relative structure.\n\n'
+            +'Evidence records retain original workspace paths as historical provenance; copied inputs are under Inputs with their original relative structure. In Complete, Evidence/ReportSources/index.json maps report and sensitivity source paths to their exact packaged files. Reused imagery acquisition records remain under Evidence/Imagery.\n\n'
             +'简体中文\n用 HEC-RAS 7.0.1 打开 HEC_RAS 下的工程；有地图时进入 RAS Mapper。Graph 为展示 PDF；完整包另含可编辑 GIS、详细报告、输入及证据。\n'
             +'保持目录完整。重新计算前先复制文件夹，再打开恒定流方案计算并复核警告。结构参数仍为条件性资料，水力 QA 待复核，不能据此认定设计合格。\n'
             +'两个包来自同一个运行。地图是地形和模型位置展示，不是已验证的洪泛范围。\n')
@@ -333,6 +335,9 @@ def generate(summary_path,output,reuse_package=None):
             '最小包用于打开模型、Mapper 和查看英文展示图；完整包额外用于详细技术复核、核查输入依据及编辑制图。\n'
             'The receiving engineer can compare both packages and request any additional supporting files.\n')
         (output/'PACKAGE_COMPARISON.txt').write_text(comparison,encoding='utf-8-sig')
+        # Terrain association mutates the copied geometry HDF. Deduplicate only
+        # after all native/GIS generation, so the source index targets final bytes.
+        archive_report_sources(full,rm.get('supplementary_sources',[]),limit)
         for folder in [full,minimal]:spatial.check_references(folder)
         result.update(status='READY_FOR_REVIEW' if mapped else 'READY_NATIVE_ONLY',mapped=mapped,
             complete=seal(full),minimal=seal(minimal),validation_scope='Verified bytes, native terrain association, QGIS save/reopen and exports; desktop/visual review separate')

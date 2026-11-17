@@ -9,6 +9,19 @@ def manning(section,scenario):
     return section.get('manning_segments') or [[section['station_ft'][0],scenario['overbank_n']],
         [section['bank_stations_ft'][0],scenario['channel_n']],[section['bank_stations_ft'][1],scenario['overbank_n']]]
 
+def manning_cards(roughness, fixed):
+    """Write station and n at their respective fixed-width precision."""
+    rows = []
+    for station, coefficient in roughness:
+        if not finite(coefficient) or not 0 < coefficient < 1:
+            raise ValueError('Manning n must be finite and between zero and one')
+        number = f'{coefficient:.7f}'.lstrip('0')
+        if len(number) > 8 or not 0 < float(number) < 1:
+            raise ValueError('Manning n cannot be represented in the native eight-character field')
+        rows.append(fixed([station]).rstrip('\n') + number.rjust(8) + fixed([0]).rstrip('\n'))
+    return '\n'.join(''.join(rows[i:i+3]) for i in range(0, len(rows), 3)) + '\n'
+
+
 def ineffective(section):
     rows=[]
     for side in ['left','right']:
