@@ -11,7 +11,7 @@ import re
 from html.parser import HTMLParser
 from pathlib import PurePosixPath
 
-ALLOWED = ('usgs.gov', 'sciencebase.gov', 'amazonaws.com')
+ALLOWED = ('usgs.gov', 'sciencebase.gov', 'amazonaws.com', 'fema.gov')
 
 def public_url(url):
     p = urllib.parse.urlsplit(url)
@@ -19,7 +19,7 @@ def public_url(url):
         raise ValueError('Only public HTTPS sources are supported')
     host = (p.hostname or '').lower()
     if not any(host == a or host.endswith('.'+a) for a in ALLOWED):
-        raise ValueError('Source host is not in the public USGS download allowlist')
+        raise ValueError('Source host is not in the supported public-source allowlist')
     addresses = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
     if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):
         raise ValueError('Private/local source address is not allowed')

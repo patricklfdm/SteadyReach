@@ -18,6 +18,19 @@ Multi-group preparation is integrated: [associate openings, derive parameters, c
 6. Adopt an applicable candidate or edit the current value. Existing input is never overwritten by discovery. Only one consistent Q100 inventory value from a single supported site within 25 m can fill an empty flow field automatically; it remains a source-reported regional estimate requiring final review. The automatic-draft button can fill compatible source dimensions, text matches and labelled assumptions for one final review. Individual candidate selection remains available. A different source value is displayed as a conflict, not silently reconciled.
 7. Check map/sections and remaining engineering inputs. Open **Review all parameters**. Missing-input errors, assumptions and the full editable list are grouped/collapsed. Expand the relevant groups, then make the one final confirmation before HEC-RAS runs. New source interpretation or modified files invalidate earlier confirmation.
 
+## FEMA reports and grouped Q100 selection
+
+Public lookup locates the FEMA community from the project coordinates, reads its current FIS product listing and downloads eligible PDF reports. It retains the catalog responses, retrieval time and source hashes. Limits are four overlapping communities, six reports, 15 MB per report and the shared 80 MB acquisition budget. Network and catalog-format failures appear in the attempt log while available local documents continue through extraction.
+
+For supported text-layout tables, the parser reads the ordinary **1% Annual Chance** discharge column in **cfs**, keeping it distinct from an adjacent **1% Plus** column. Each candidate carries the river, hydrologic location, table number and PDF page. Channel and overbank roughness ranges produce explicitly assumed midpoint candidates with the reported ranges retained. Unrecognized headers, units and ambiguous columns require source-page inspection.
+
+1. After acquisition, open **FIS river and Q100 location** in the source panel.
+2. Choose the river, then the hydrologic location applicable to the modeled reach. Compare the original PDF page and relevant map revisions. Several rows can describe the same river.
+3. Review the proposed roughness and origin labels. Missing roughness fields are checked for adoption. Existing roughness values require an explicit check before replacement.
+4. Click **Apply this flow and checked roughness**. The selected values and flow-source citation save together. Complete the usual full-model confirmation before calculation.
+
+The Pagosa source regression downloads the current catalog-listed report and reproduces its North Pagosa Springs Q100 row and San Juan roughness ranges. This validates acquisition and table interpretation for that source. Other FIS layouts can require manual interpretation. Flood-study publication dates, survey dates and hydrology dates can differ. Check applicable Letters of Map Revision (LOMRs) through the linked FEMA product listing. Selecting a county report alone leaves reach applicability unresolved.
+
 ## Current automatic routes and limits
 
 | Information | Implemented route | Remaining decision |
@@ -25,7 +38,7 @@ Multi-group preparation is integrated: [associate openings, derive parameters, c
 | US terrain and metadata | Existing USGS DEM query/download, CRS and vertical metadata candidates | Site extent, vertical interpretation and terrain suitability |
 | Public site information | Bounded ScienceBase search; coordinate match against the USGS Massachusetts 30-crossing inventory (release DOI 10.5066/P14HJGZI) | Confirm the same crossing/event; coverage is not nationwide parameter extraction |
 | Survey documents | Selective ZIP reads for the matched site when the official endpoint supports public range access | The public catalog form is used, not the authenticated File Manager URL; a CAPTCHA pauses automatic download and leaves local import available |
-| Q100 | Supported inventory PK1AEP; explicitly labelled Q100 + cfs or m³/s in text/PDF/OCR | Applicable hydrology and event; no discharge estimated from DEM |
+| Q100 | Supported inventory PK1AEP, labelled text/PDF/OCR and supported FEMA discharge-table columns | Applicable hydrology and event; no discharge estimated from DEM |
 | Other parameters | Explicit field/value CSV for every current field; labelled channel/bank roughness, barrel length and road width in text | Verify site/group and units; arbitrary prose is not a reliable structured model |
 | Survey XYZ | CSV column inference or user column mapping; projected-coordinate transform into the DEM map | CRS/units/datum; descriptions such as CROWN, CH or ABUT require feature interpretation |
 | Survey control | Two matching OPUS NAD83(2011), Massachusetts Mainland, NAVD88 control rows can propose EPSG:6492 and US survey feet after a 0.03 m consistency check | This specific recognizer is not a general CRS solver; other surveys need explicit metadata |

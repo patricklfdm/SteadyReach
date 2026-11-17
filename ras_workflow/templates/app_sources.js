@@ -1,5 +1,5 @@
 'use strict';
-const sourceStatus=s=>({NOT_ATTEMPTED:tr('Not attempted yet','尚未尝试'),NO_EXTRACTED_VALUE:tr('Attempted · no unambiguous value','已尝试 · 无明确可用值'),CANDIDATE:tr('Candidate available','已有候选'),CONFLICT:tr('Values differ','数值冲突'),SOURCE_CHANGED:tr('Source changed · import again','来源已改变 · 请重新导入'),INSPECTED:tr('Inspected','已解析'),EXTRACTION_FAILED:tr('Extraction unavailable','暂无法提取'),NETWORK_FAILED:tr('Network request failed','网络请求失败'),PUBLIC_DOWNLOAD_ACTION_REQUIRED:tr('Public download needs a browser step (no manager account)','公开下载需浏览器操作（无需管理账号）'),DOWNLOAD_FAILED:tr('Download failed · saved material retained','下载失败 · 已存资料保留'),FOUND_RECORDS:tr('Catalog records found','已找到目录记录'),NO_CATALOG_MATCH:tr('No catalog match','目录未匹配'),MATCH_CANDIDATE:tr('Nearby site candidate','邻近站点候选'),NO_MATCH_WITHIN_150_M:tr('No supported site within 150 m','150 米内未匹配支持站点'),OUTSIDE_PROVIDER_COVERAGE:tr('Outside this provider coverage','不在此资料源覆盖范围'),DOWNLOADED:tr('Downloaded','已下载'),CRS_AND_UNITS_REQUIRED:tr('Confirm survey CRS / units','需确认测量坐标系／单位'),COLUMN_MAPPING_REQUIRED:tr('Map column names','需匹配列名'),PARSED:tr('Survey points read','已读取测点')}[s]||s);
+const sourceStatus=s=>({NOT_ATTEMPTED:tr('Not attempted yet','尚未尝试'),NO_EXTRACTED_VALUE:tr('Attempted · no unambiguous value','已尝试 · 无明确可用值'),CANDIDATE:tr('Candidate available','已有候选'),CONFLICT:tr('Values differ','数值冲突'),SOURCE_CHANGED:tr('Source changed · import again','来源已改变 · 请重新导入'),INSPECTED:tr('Inspected','已解析'),EXTRACTION_FAILED:tr('Extraction unavailable','暂无法提取'),NETWORK_FAILED:tr('Network request failed','网络请求失败'),SOURCE_LOOKUP_FAILED:tr('Source lookup needs review','资料查询需核查'),DOWNLOAD_LIMIT_REACHED:tr('Automatic download limit reached','已达到自动下载上限'),PUBLIC_DOWNLOAD_ACTION_REQUIRED:tr('Public download needs a browser step (no manager account)','公开下载需浏览器操作（无需管理账号）'),DOWNLOAD_FAILED:tr('Download failed · saved material retained','下载失败 · 已存资料保留'),FOUND_RECORDS:tr('Catalog records found','已找到目录记录'),NO_CATALOG_MATCH:tr('No catalog match','目录未匹配'),MATCH_CANDIDATE:tr('Nearby site candidate','邻近站点候选'),NO_MATCH_WITHIN_150_M:tr('No supported site within 150 m','150 米内未匹配支持站点'),OUTSIDE_PROVIDER_COVERAGE:tr('Outside this provider coverage','不在此资料源覆盖范围'),DOWNLOADED:tr('Downloaded','已下载'),CRS_AND_UNITS_REQUIRED:tr('Confirm survey CRS / units','需确认测量坐标系／单位'),COLUMN_MAPPING_REQUIRED:tr('Map column names','需匹配列名'),PARSED:tr('Survey points read','已读取测点')}[s]||s);
 function focusParameter(key){const input=document.getElementById('input-'+key);if(!input){notify(tr('Open the editable parameter list for this field.','请打开此字段的可编辑参数清单。'),true);return;}let p=input.parentElement;while(p){if(p.tagName==='DETAILS')p.open=true;p=p.parentElement;}input.scrollIntoView({block:'center',behavior:'smooth'});input.focus({preventScroll:true});}
 function renderParameterNavigator(parent,fields){
  const box=el('section',undefined,'card parameter-nav');parent.append(box);
@@ -17,6 +17,92 @@ function downloadParameterTemplate(){
  const csv=['field,value,unit,datum,evidence_class,source',...fields.map(f=>[f.key,'',f.unit||'','','reported',''].map(quote).join(','))].join('\r\n');
  const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));const a=el('a');a.href=url;a.download='parameter_import.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify(tr('Template downloaded. Empty rows are ignored; existing project values will not be overwritten.','模板已下载。空行会忽略，导入后不会自动覆盖已有参数。'));
 }
+function renderFisSelection(parent, acquisition) {
+ const fields = current.intake?.fields || [];
+ const flows = acquisition.candidates.filter(candidate => candidate.source_locus
+  && candidate.hydrologic_context?.aep_percent === 1
+  && fields.some(field => field.key === candidate.field));
+ if (!flows.length) return;
+ const box = details(parent, 'FIS river and Q100 location', 'FIS 河流与 Q100 适用地点', true);
+ box.append(el('p', tr(
+  'Choose the river and hydrologic location that applies to your reach. The report can contain several locations on the same river. Check relevant map revisions and the source pages.',
+  '选择适用于本河段的河流及水文位置。同一条河可能有多行流量，需对照来源页及相关地图修订确认。')));
+ const streams = [...new Set(flows.map(candidate => candidate.hydrologic_context.stream))].sort();
+ const adopted = fields.map(field => field.answer?.candidate_record).find(candidate => candidate?.hydrologic_context?.aep_percent === 1);
+ const titleMatches = streams.filter(stream => current.title.toLowerCase().includes(stream.toLowerCase()));
+ const initial = adopted?.hydrologic_context.stream || (titleMatches.length === 1 ? titleMatches[0] : '');
+ const river = field(box, 'fis-river', 'River', '河流', initial, 'select',
+  [['', 'Choose a river', '选择河流'], ...streams.map(stream => [stream, stream, stream])]);
+ const location = field(box, 'fis-location', 'Hydrologic location and source', '水文位置与来源', '', 'select', []);
+ const preview = el('div');
+ box.append(preview);
+ let selected = null;
+ let roughnessSelections = [];
+ const apply = button('Apply this flow and checked roughness', '采用此流量与勾选的糙率', async () => {
+  if (!selected) throw Error(tr('Choose a hydrologic location first.', '请先选择适用水文位置。'));
+  const chosen = [selected, ...roughnessSelections.filter(row => row.input.checked).map(row => row.candidate)];
+  await saveAll();
+  const selections = chosen.map(candidate => {
+   const fresh = current.intake.fields.find(field => field.key === candidate.field)
+    ?.parameter_candidates.find(value => value.candidate === candidate.candidate);
+   if (!fresh) throw Error(tr('Source candidates changed. Reopen this selection.', '来源候选已变化，请重新打开此选择。'));
+   return {field: candidate.field, candidate: fresh.candidate};
+  });
+  await api('candidate', {id: current.id, revision: current.revision, selections});
+  await open(current.id);
+  notify(tr('Source choices saved with page references. Review the full model before calculating.', '已保存来源选择及页码。运算前请核对完整模型。'));
+ }, 'primary');
+ box.append(apply);
+ function show() {
+  preview.replaceChildren();
+  roughnessSelections = [];
+  selected = flows.find(candidate => candidate.candidate === location.value) || null;
+  apply.disabled = !selected;
+  if (!selected) return;
+  preview.append(el('p', 'Q100 '+selected.value+' cfs · '+selected.basis));
+  const original = el('a', tr('Open discharge source page ↗', '打开流量来源页 ↗'));
+  original.href = 'file/'+selected.source.path+'#page='+selected.source_locus.pdf_page;
+  original.target = '_blank';
+  preview.append(original);
+  const prefix = selected.field.split('.').slice(0, 3).join('.')+'.';
+  for (const name of ['channel_n', 'overbank_n']) {
+   const choices = acquisition.candidates.filter(candidate => candidate.field === prefix+name
+    && candidate.source.sha256 === selected.source.sha256
+    && candidate.hydrologic_context?.stream === selected.hydrologic_context.stream);
+   const meanings = new Set(choices.map(candidate => JSON.stringify([candidate.value,candidate.range,candidate.evidence_class])));
+   if (meanings.size !== 1) continue;
+   const candidate = choices[0], saved = fields.find(field => field.key === candidate.field);
+   const label = el('label'), input = el('input');
+   input.type = 'checkbox';
+   input.checked = !!saved?.missing;
+   label.append(input, document.createTextNode(' '+tr(name === 'channel_n' ? 'Channel n' : 'Overbank n', name === 'channel_n' ? '主槽 n' : '漫滩 n')
+    +' = '+candidate.value+' · '+originName(candidate.evidence_class)));
+   preview.append(label, el('p', candidate.basis), el('small', tr('Saved value: ', '已保存值：')+(saved?.value ?? '—')));
+   roughnessSelections.push({input, candidate});
+  }
+ }
+ function populate() {
+  location.replaceChildren();
+  for (const value of [{candidate:'', label:tr('Choose a location', '选择位置')},
+   ...flows.filter(candidate => candidate.hydrologic_context.stream === river.value).map(candidate => ({
+    candidate:candidate.candidate, label:candidate.hydrologic_context.location+' · '+candidate.value+' cfs · '
+     +(candidate.source.original_name || candidate.source.path.split('/').at(-1))+' · p'+candidate.source_locus.pdf_page}))]) {
+   const option = el('option', value.label);option.value = value.candidate;location.append(option);
+  }
+  if (adopted && flows.some(candidate => candidate.candidate === adopted.candidate && candidate.hydrologic_context.stream === river.value)) location.value = adopted.candidate;
+  show();
+ }
+ river.onchange = () => {
+  populate();
+  notify(tr('River preview updated. Choose a location and apply to save.', '河流预览已更新，选择适用位置后点击采用即可保存。'));
+ };
+ location.onchange = () => {
+  show();
+  notify(tr('Candidate preview updated. Apply to save these source choices.', '候选预览已更新，点击采用后保存本次来源选择。'));
+ };
+ populate();
+}
+
 function renderSources(parent){
  const a=current.acquisition,card=el('section',undefined,'card source-hub');parent.append(card);
  card.append(el('h2',tr('Find, import and inspect source material','查找、导入与核查资料')),el('p',tr('Local search and extraction retain the original files and identify parameter candidates. Automatic draft preparation fills supported values and labels estimates for the final review. Conflicting sources remain available for your choice.','在本机查询和提取资料，保留原件并识别参数候选。自动准备草稿会填入有依据的数值，并标注估计项供最终核对；来源冲突集中保留供选择。')));
@@ -30,8 +116,9 @@ function renderSources(parent){
  if(a){
   card.append(el('p',`${a.documents.length} `+tr('documents attempted','份资料已尝试解析')+` · ${a.documents.filter(d=>d.status==='EXTRACTION_FAILED').length} `+tr('failed (originals retained)','份提取失败（原件保留）')+` · ${a.candidates.length} `+tr('source candidates','项来源候选')+` · ${a.surveys.reduce((n,s)=>n+s.points.length,0)} `+tr('survey points','个测点'),'status'));
   if(a.auto_filled?.length)card.append(el('p',tr('Filled missing source-reported values: ','已填入空白资料值：')+a.auto_filled.join(', '),'status'));
+  renderFisSelection(card,a);
   const attempts=details(card,'Public search coverage and attempts','公开查询范围与尝试记录',false);
-  attempts.append(el('p',tr('USGS catalog search plus the supported Massachusetts 30-crossing inventory. This is not an exhaustive Internet search. A missing match does not mean that no data exists.','查询 USGS 目录及已支持的 Massachusetts 30 处过水设施资料表，并非搜索整个互联网。未匹配不代表网上不存在资料。')));
+  attempts.append(el('p',tr('Searches the USGS catalog, the supported Massachusetts crossing inventory, and effective FEMA FIS reports for the coordinate-matched community. Review source coverage, river location and applicable map revisions.','查询 USGS 目录、已支持的 Massachusetts 过水设施资料表，以及坐标所在社区的有效 FEMA FIS 报告。请核查来源覆盖范围、河流位置和相关地图修订。')));
   for(const r of a.attempts){const row=el('p',r.route+' · '+sourceStatus(r.status));if(r.error)row.append(el('small',' · '+r.error));if(r.url){const link=el('a',tr(' Open source ↗',' 查看来源 ↗'));link.href=r.url;link.target='_blank';link.rel='noreferrer';row.append(link);}attempts.append(row);}
   for(const r of a.links){const link=el('a',r.title);link.href=r.url;link.target='_blank';link.rel='noreferrer';const row=el('p');row.append(link);attempts.append(row);}
   const candidates=details(card,'Review source candidates ('+a.candidates.length+')','核查资料候选（'+a.candidates.length+'）',false);

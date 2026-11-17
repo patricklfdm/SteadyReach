@@ -18,6 +18,8 @@ def select_candidate(field, g, estimates):
     choices = field.get('parameter_candidates', [])
     sources = [c for c in choices if c.get('source')]
     if sources:
+        if any(c.get('requires_applicability_review') for c in sources):
+            return None
         values = {digest(c['value']) for c in sources}
         if len(values) != 1:
             return None

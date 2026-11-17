@@ -10,7 +10,7 @@ import zipfile
 from importlib.metadata import PackageNotFoundError, version
 import xml.etree.ElementTree as ET
 
-EXTRACTOR_VERSION = 3
+EXTRACTOR_VERSION = 4
 PDF_PAGE_LIMIT = 200
 PDF_OCR_PAGE_LIMIT = 40
 PDF_TEXT_LIMIT = 600_000
@@ -113,6 +113,7 @@ def document_text(path, scratch, ocr=True):
         parts = []
         warnings = []
         methods = []
+        tables = []
         pdf = None
         ocr_pages = 0
         characters = 0
@@ -125,6 +126,15 @@ def document_text(path, scratch, ocr=True):
                     raw = ''
                     warnings.append(f'Page {i+1} text extraction failed: {error}')
                 method = 'PDF text'
+                if re.search(r'Summary of Discharges|Roughness Coefficients', ' '.join(raw.split()), re.I):
+                    try:
+                        from .source_tables import parse
+                        parsed = parse(page.extract_text(extraction_mode='layout') or '', i+1)
+                        tables.extend(parsed)
+                        for table in parsed:
+                            warnings.extend(f'Page {i+1} table extraction: '+warning for warning in table['warnings'])
+                    except Exception as error:
+                        warnings.append(f'Page {i+1} table extraction failed: {error}')
                 if len(raw.strip()) < 80 and ocr and ocr_pages < PDF_OCR_PAGE_LIMIT:
                     ocr_pages += 1
                     try:
@@ -168,7 +178,7 @@ def document_text(path, scratch, ocr=True):
         if ocr_pages >= PDF_OCR_PAGE_LIMIT:
             warnings.append(f'Automatic OCR is limited to {PDF_OCR_PAGE_LIMIT} pages per PDF')
         return dict(text='\n'.join(parts), method='PDF text + OCR' if any('OCR' in m for m in methods) else 'PDF text',
-                    page_methods=methods, warnings=warnings,
+                    page_methods=methods, tables=tables, warnings=warnings,
                     coverage=dict(total_pages=len(reader.pages), inspected_pages=len(methods), ocr_pages=ocr_pages,
                                   status='PARTIAL' if incomplete else 'COMPLETE_TEXT_PASS'))
     if suffix in ('.jpg', '.jpeg', '.png', '.tif', '.tiff'):

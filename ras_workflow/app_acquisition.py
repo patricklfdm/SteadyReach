@@ -57,6 +57,9 @@ def discover(m,out):
         links=[dict(title=r.get('title','USGS record'),url=CATALOG+r['id']) for r in result.get('items',[]) if re.fullmatch('[0-9a-f]{24}',r.get('id',''))]
         attempts.append(dict(route='public_catalog',status='FOUND_RECORDS' if links else 'NO_CATALOG_MATCH',url=url,count=len(links),source=item(out/'search.json'),note='Catalog footprints may cover large regions; links are not a verified site match.'))
     except Exception as e:attempts.append(dict(route='public_catalog',status='NETWORK_FAILED',url=url,error=str(e)))
+    from .source_fema import discover as discover_fema
+    fema_attempts,fema_links=discover_fema(m,loc,out,download)
+    attempts+=fema_attempts;links+=fema_links
     # A verified tabular provider. Other catalog records are not coerced into its schema.
     if not (41<=loc['latitude']<=43 and -74<loc['longitude']<-69):
         attempts.append(dict(route='MA_30_crossing_inventory',status='OUTSIDE_PROVIDER_COVERAGE'));return attempts,links
@@ -95,6 +98,10 @@ def analyze(key,network=False,reuse_failed=False):
     # Persist successful downloads before parsing; a bad document cannot erase them.
     core.persist(m)
     sp,p,d,c,g=objects(m);allowed={f['key']:f for f in intake.fields(c,g,m['scenario'])}
+    scenario_index=next(i for i,scenario in enumerate(c['scenarios']) if scenario['id']==m['scenario'])
+    profile_index=next((i for i,profile in enumerate(c['scenarios'][scenario_index]['profiles'])
+                        if profile['id'].lower()=='q100'),None)
+    flow_field=f'c.scenarios.{scenario_index}.profiles.{profile_index}.flow_cfs' if profile_index is not None else None
     candidates=[];documents=[];surveys=[];matches=[];cache={x['source']['sha256']:x for x in old.get('documents',[])}
     runtime=extract.runtime_signature()
     for candidate0 in old.get('candidates',[]):
@@ -124,7 +131,7 @@ def analyze(key,network=False,reuse_failed=False):
                     found=extract.site_rows(rows,c.get('location'));matches+=found;doc.update(method='USGS site inventory',matches=found)
                     if len(found)==1:
                         match=found[0];r=match['row'];basis=f'USGS site inventory row {match["row_number"]}, MODEL_ID {r["MODEL_ID"]}, {match["distance_m"]} m from selected location. Confirm crossing and applicability. Source survey/assessment dates may differ.'
-                        candidate('c.scenarios.0.profiles.0.flow_cfs',extract.numeric(r.get('PK1AEP')),basis+' PK1AEP is regional-regression 1% AEP flow in cfs, not an observed discharge.',entry,auto=match['distance_m']<=25)
+                        candidate(flow_field,extract.numeric(r.get('PK1AEP')),basis+' PK1AEP is regional-regression 1% AEP flow in cfs, not an observed discharge.',entry,auto=match['distance_m']<=25)
                         for name,col in [('span_ft','INLET_SPAN'),('rise_ft','INLET_HEIGHT'),('length_ft','CULVERT_LENGTH')]:
                             candidate('g.structure.groups.0.'+name,extract.numeric(r.get(col)),basis+' Inventory main opening only; does not describe every auxiliary pipe.',entry)
                         shape={'box':'box','pipe':'circular','circular':'circular'}.get(str(r.get('EXIST_STRUCTURE','')).lower())
@@ -143,8 +150,12 @@ def analyze(key,network=False,reuse_failed=False):
                     doc.update(extraction_runtime=runtime)
                     doc.update(extract.document_text(path,out/('extract_'+str(i))))
                 doc['extractor_version']=extract.EXTRACTOR_VERSION
+                from .source_tables import candidates as table_candidates
+                for value in table_candidates(doc.get('tables',[]),scenario_index,profile_index):
+                    candidate(value['field'],value['value'],value['basis'],entry,value['evidence_class'],
+                              **{key:record for key,record in value.items() if key not in ('field','value','basis','evidence_class')})
                 for flow in extract.text_flows(doc.get('text','')):
-                    candidate('c.scenarios.0.profiles.0.flow_cfs',flow['value'],'Unverified document match: '+flow['excerpt']+'. Confirm the location, event and text against the original.',entry,'inferred' if 'OCR' in doc.get('method','') else 'reported')
+                    candidate(flow_field,flow['value'],'Unverified document match: '+flow['excerpt']+'. Confirm the location, event and text against the original.',entry,'inferred' if 'OCR' in doc.get('method','') else 'reported')
                 for v in extract.text_parameters(doc.get('text',''),allowed):
                     origin='assumed' if v.get('evidence_class')=='assumed' else 'inferred' if 'OCR' in doc.get('method','') else 'reported'
                     candidate(v['field'],v['value'],'Unverified labelled text: '+v['excerpt']+'. Confirm site, group and units against the original.',entry,origin,datum=v.get('datum'))
@@ -170,8 +181,13 @@ def analyze(key,network=False,reuse_failed=False):
             if field.endswith('.flow_cfs'):d['answers'][field[:-8]+'source']=dict(value=choice['basis'],evidence_class='reported',basis=choice['source']['path'],confirmed=False)
             filled.append(field)
     if filled:intake.save_draft(sp,d)
+    source_records=list(m['attachments'])
+    for attempt in attempts:
+        source_records+=attempt.get('sources',[])
+        if attempt.get('source'):source_records.append(attempt['source'])
     result=dict(schema='source_acquisition_1',created_utc=utc(),attempts=attempts,links=links,documents=documents,surveys=surveys,candidates=candidates,matches=matches,auto_filled=filled,
-        scope='Public USGS catalog and MA 30-crossing inventory; local field/value CSV, survey CSV, PDF text, Windows OCR. Not an exhaustive Internet search.',sources=m['attachments'])
+        scope='Public USGS catalog, MA crossing inventory and coordinate-based effective FEMA FIS discovery. Local parameter/survey CSV, PDF text/layout tables and Windows OCR. Site applicability remains reviewable.',
+        sources=list({source['path']:source for source in source_records}.values()))
     save(out/'analysis.json',result)
     m.update(source_analysis=item(out/'analysis.json','source_extraction'),revision=m['revision']+1,status='INPUTS_READY',phase='REVIEW_SOURCE_CANDIDATES',errors=[])
     core.persist(m,'SOURCE_ANALYSIS',dict(analysis=m['source_analysis'],auto_filled=filled))
@@ -193,7 +209,7 @@ def configure_survey(key,body):
 
 def route_for(field):
     key=field['key']
-    if '.flow_cfs' in key:return ('USGS site inventory → Q100 PDF/text → explicit parameter CSV','USGS 站点表 → Q100 文本提取 → 参数 CSV','Confirm drainage location and 1% AEP applicability; flow is not derived from DEM.','核对汇水地点及 1% AEP 适用性；DEM 不能确定设计流量。')
+    if '.flow_cfs' in key:return ('USGS inventory / effective FEMA FIS → location-labelled Q100 table or text → parameter CSV','USGS 站点表／有效 FEMA FIS → 带地点的 Q100 表格或文本 → 参数 CSV','Confirm drainage location and 1% AEP applicability; flow is not derived from DEM.','核对汇水地点及 1% AEP 适用性；DEM 不能确定设计流量。')
     if 'invert' in key:return ('Survey XYZ + datum → identify invert points → labelled parameter CSV → conditional map estimate','测量 XYZ＋基准 → 指认涵底测点 → 明确参数表 → 条件性地图估计','Crown/bed codes alone do not prove a buried invert. Select the actual point or retain an explicit assumption.','仅有管顶／河床代码不能证明埋藏涵底。需指认真实点或采用明确假设。')
     if any(s in key for s in ('_n','.mann','bottom_n_depth')):return ('Parameter CSV / source text → official roughness references','参数表／原文 → 官方糙率参考','Match material, vegetation and depth; photographs alone do not uniquely determine n.','匹配材质、植被和水深；照片不能唯一确定糙率。')
     if key.startswith('g.cross_sections.') or 'boundary_slopes' in key:return ('Survey points / DEM → section, bank and slope candidates → parameter CSV','测点／DEM → 断面、左右岸及坡度候选 → 参数表','Select exterior flow direction first, then generate terrain candidates and inspect uncertainty.','先确认外部流向，再生成地形候选并检查不确定项。')

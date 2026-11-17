@@ -12,10 +12,10 @@ function terrainMap(canvas,options){
   return [x-span/2,y-span/2,x+span/2,y+span/2];
  }
  async function load(bounds){
-  clearTimeout(timer);const number=++serial;requested=bounds?clamp(bounds):null;viewport.setAttribute('aria-busy','true');message.textContent=tr('Loading DEM…','正在载入 DEM…');
+  clearTimeout(timer);const number=++serial;requested=bounds?clamp(bounds):null;viewport.setAttribute('aria-busy','true');message.removeAttribute('role');message.textContent=tr('Loading DEM…','正在载入 DEM…');
   try{const r=await api('geometry/map',{id:project,bounds:requested});if(number!==serial||!canvas.isConnected)return;
    data=r;if(!options.detached)mapData=r;requested=r.bounds;terrainViews.set(viewKey,r.bounds);draw();
-  }catch(e){if(number===serial){message.textContent=tr('Map load failed: ','地图载入失败：')+e.message;notify(message.textContent,true);}}
+  }catch(e){if(number===serial&&canvas.isConnected){message.textContent=tr('Map load failed: ','地图载入失败：')+e.message;message.setAttribute('role','alert');}}
   finally{if(number===serial)viewport.removeAttribute('aria-busy');}
  }
  function schedule(bounds){requested=clamp(bounds);++serial;clearTimeout(timer);timer=setTimeout(()=>load(requested),140);}

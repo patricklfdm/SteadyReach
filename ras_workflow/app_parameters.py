@@ -237,6 +237,14 @@ def choose(m,selections,missing_only=False):
         d['answers'][f['key']]=dict(value=choice['value'],evidence_class=choice['evidence_class'],basis=choice['basis'],confirmed=False,candidate_record=choice)
         if any(digest(s)==choice['candidate'] for s in f['suggestions']):d['answers'][f['key']]['suggestion']=choice['candidate']
         used.append(dict(field=f['key'],candidate=choice))
+    selected_fields={entry['field'] for entry in used}
+    for entry in used:
+        field,choice=entry['field'],entry['candidate']
+        if field.endswith('.flow_cfs') and choice.get('source_locus'):
+            source_field=field[:-len('flow_cfs')]+'source'
+            if source_field not in selected_fields:
+                d['answers'][source_field]=dict(value=choice['basis'],evidence_class='reported',
+                    basis=choice['source']['path'],confirmed=False)
     selected_groups={int(v['field'].split('.')[3]) for v in used if v['field'].startswith('g.structure.groups.') and v['field'].endswith('.centers_ft')}
     if selected_groups:
         from .app_automation import preflight

@@ -4,6 +4,8 @@
 
 Use **River reach (bridges excluded)** on the home page for one continuous river/reach in 1D steady flow. This builds cross sections, flow data and boundaries without a dummy culvert or roadway. The original culvert option remains available. Importing an existing native river-only model is not part of this new builder route.
 
+Public acquisition now attempts coordinate-based FEMA FIS retrieval. Use the source panel to select the applicable river/Q100 location and, if appropriate, adopt its labelled roughness candidates together. See the [source guide](SOURCE_ASSIST_EN.md#fema-reports-and-grouped-q100-selection).
+
 ## Before starting
 
 Prepare a location, design discharge with its source, the intended upstream and downstream limits, and terrain metadata. Identify whether the submerged channel comes from survey or only a surface DEM. A bridge location identifies a model limit; it does not supply the hydraulic boundary value.
