@@ -75,6 +75,10 @@ def start(key,body):
     if plan.get('analysis_kind')=='section_spacing' and (plan.get('status')=='NO_ELIGIBLE_INTERVALS' or len(plan.get('cases',[]))!=3):raise ValueError('No complete nested spacing cases to confirm; review the excluded intervals')
     review=dict(study_sha256=sha(path),decision='APPROVE_CONDITIONAL_STUDY',policy=core.POLICY,confirmed=True,reviewer=None,
         basis='Displayed sensitivity cases confirmed for local computation; no named engineering approval.',approved_case_kind=plan['case_kind'],engineering_acceptance='NOT_ASSESSED',created_utc=utc())
+    if plan.get('coverage_policy'):
+        from .spacing_cycle import policy
+        policy(plan)
+        review['basis']='Confirmed displayed nested spacing and bounded actual-water exterior DEM extension of added sections only; shared profiles remain identical across levels. Original profiles, flow, boundaries, roughness, banks in plan and interior samples remain fixed. All original rounds are retained; geometric limits and the confirmed round/width limits stop automation.'
     if plan.get('analysis_kind')=='coverage_repair':
         review['basis']='Confirmed bounded actual-water exterior DEM extension batch, preserving original samples, bank plan positions, direction, flow, boundaries and roughness. Exterior overbank material and floodplain connectivity remain conditional.'
     review_path=path.parent/'local_confirmation.json'

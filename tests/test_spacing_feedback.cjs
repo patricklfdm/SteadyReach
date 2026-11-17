@@ -15,8 +15,8 @@ const plan = {analysis_kind:'section_spacing', scope:'all',intervals:[], exclude
 const element = () => ({append(){},replaceChildren(){},addEventListener(){}});
 const context = vm.createContext({
   current:{id:'isolated',revision:3,model_type:'river',pending_study:{path:'old',sha256:'old'},pending_study_plan:plan},
-  tr:en=>en,el:(tag,text)=>{if(text)messages.push(text);return element();},details:element,field:(box,id)=>({...element(),value:id==='spacing-limit'?'12':'automatic'}),table(parent,headers,rows){tables.push({headers,rows});},notify(){},
-  check(){const checkbox={checked:false};checks.push(checkbox);return checkbox;},
+  tr:en=>en,el:(tag,text)=>{if(text)messages.push(text);return element();},details:element,field:(box,id)=>({...element(),value:id==='spacing-limit'?'12':id==='spacing-rounds'?'2':id==='spacing-width'?'2000':'automatic'}),table(parent,headers,rows){tables.push({headers,rows});},notify(){},
+  check(box,en,zh,value){const checkbox={...element(),checked:value};checks.push(checkbox);return checkbox;},
   button(en,zh,fn){buttons.set(en,fn);return element();},
   api:async(route,body)=>{calls.push({route,body});return {token:'new',entry:{path:'new-study',sha256:'new'},plan};},
   open:async()=>{},
@@ -52,5 +52,17 @@ const context = vm.createContext({
   const counts=tables.find(v=>v.headers.includes('Wet-end sections'));
   assert.equal(counts.rows[1][3],1);
   assert.ok(buttons.has('Prepare editable QA revision from selected case'));
+  plan.status='DRAFT_REQUIRES_REVIEW';plan.coverage_policy={maximum_rounds:2,maximum_width_ft:2000};
+  plan.cases=[{id:'baseline',section_count:4,added_sections:[]},{id:'refinement_1',section_count:7,added_sections:[]},{id:'refinement_2',section_count:13,added_sections:[]}];
+  context.current.pending_study_plan=plan;
+  context.renderSpacing(element());
+  await buttons.get('Prepare nested spacing preview')();
+  assert.equal(calls.at(-1).body.coverage_policy.maximum_rounds,2);
+  assert.equal(calls.at(-1).body.coverage_policy.maximum_width_ft,2000);
+  assert.ok(messages.some(text=>text.includes('at most 9 case calculations')));
+  await assert.rejects(buttons.get('Confirm and run bounded spacing batch')(),/confirm/);
+  checks.at(-1).checked=true;
+  await buttons.get('Confirm and run bounded spacing batch')();
+  assert.equal(calls.at(-1).body.confirmed,true);
   console.log('Spacing proposal persistence, automatic scope, limits and no-eligible calculation gate PASS');
 })().catch(error=>{console.error(error);process.exitCode=1;});

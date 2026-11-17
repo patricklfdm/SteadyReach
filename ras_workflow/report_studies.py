@@ -33,6 +33,9 @@ def collect(summary_path, summary):
         if analysis.get('status') not in ('COMPARISON_REQUIRES_REVIEW','STABLE_AT_REVIEW_THRESHOLD','NOT_CONVERGED') or analysis.get('failed_cases'):
             continue
         entries = [study_entry, analysis['review'], analysis['execution']]
+        if analysis.get('coverage_batch'):
+            from .spacing_cycle import verify
+            entries += verify(analysis)
         if not intact(entries): raise ValueError('Bound sensitivity study evidence changed')
         _, plan, _, _ = reviewed(study_entry['path'], analysis['review']['path'])
         journal = read(ROOT / analysis['execution']['path'])
@@ -101,7 +104,7 @@ def collect(summary_path, summary):
                 raise ValueError('Spacing convergence assessment changed')
             entries+=convergence['sources']+convergence['comparisons']
         studies.append(dict(analysis=item(path), cases=cases, comparisons=comparisons,convergence=convergence,
-                            end_coverage=end_coverage, excluded_intervals=plan.get('excluded_intervals',[]), deferred_intervals=plan.get('deferred_intervals',[]),
+                            end_coverage=end_coverage, coverage_batch=analysis.get('coverage_batch'), excluded_intervals=plan.get('excluded_intervals',[]), deferred_intervals=plan.get('deferred_intervals',[]),
                             selection=plan.get('selection'), intervals=plan.get('intervals',[]),
                             hydraulic_qa='REVIEW_REQUIRED', engineering_acceptance='NOT_ASSESSED'))
         sources += [item(path)] + entries + plan['evidence'] + [plan['specification']] + plan['source_inputs']

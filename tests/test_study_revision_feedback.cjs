@@ -29,7 +29,7 @@ vm.runInContext(source.slice(source.indexOf('async function continueStudyCase(')
   latest_spacing:{path:'spacing/analysis.json',sha256:'spacing-seal'},
   spacing_result:{status:'NOT_CONVERGED',cases:[{id:'baseline',status:'COMPUTED'},
    {id:'refinement_1',status:'COMPUTED'},{id:'refinement_2',status:'FAILED'}]}},
-  tr:en=>en,el:element,details:element,table(){},
+  tr:en=>en,el:element,details:element,table(){},check(){return {...element(),checked:false};},
   field(parent,id,en,zh,value,type,options){const input={...element(),value};selections.set(id,{input,options});return input;},
   button(en,zh,action){buttons.set(en,action);return element();},
   continueStudyCase:async(...args)=>continued.push(args)});

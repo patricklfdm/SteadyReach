@@ -123,6 +123,12 @@ def build(data, plots, folder, language='en', detail='full', details=None):
             if (study.get('selection') or {}).get('scope')=='automatic':
                 p('Intervals were recommended from verified native warnings, energy-head changes and channel Froude transitions. This orders review work; it does not establish the cause of a warning. Deferred candidate intervals: '+str(len(study.get('deferred_intervals',[])))+'. Their spacing response remains untested.',
                   '区间按已核验原生警告、能量水头变化及主槽流态转换推荐，用于安排复核顺序，不能确定警告原因。因搜索上限暂缓的候选区间：'+str(len(study.get('deferred_intervals',[])))+'；其间距响应尚未测试。')
+            cycle=study.get('coverage_batch')
+            if cycle:
+                p('Bounded coverage correction of added sections: '+cycle['status']+'. Shared profiles were updated consistently in both refinement levels. Original sections and hydraulic controls were retained. Coverage completion is separate from numerical convergence.',
+                  '新增断面有界覆盖修正：'+cycle['status']+'。两级加密中的共有断面保持一致更新，原始断面和水力控制参数保留。覆盖完成与数值收敛分别判断。')
+                table(d,[tr('Round','轮次'),tr('Wet sections: baseline / L1 / L2','湿端数：基准／一级／二级'),tr('Numerical status','数值状态')],
+                    [[v['round'],' / '.join(str(n) if n is not None else '—' for n in v['wet_sections']),v['status']] for v in cycle['round_summaries']],[.65,2.9,3.15])
             excluded=study.get('excluded_intervals',[])
             if excluded:
                 locations=', '.join(str(v['upstream_rs'])+'–'+str(v['downstream_rs']) for v in excluded)

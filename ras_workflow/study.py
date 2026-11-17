@@ -220,6 +220,14 @@ def run(study_path, review_path, timeout=180):
     if study.get('analysis_kind')=='coverage_repair':
         from .coverage_study import run as run_coverage
         return run_coverage(sp, study, rp, review, timeout)
+    if study.get('coverage_policy'):
+        from .spacing_cycle import run as run_cycle
+        return run_cycle(sp, study, rp, review, timeout)
+    return run_fixed(sp, study, rp, review, timeout)
+
+
+def run_fixed(sp, study, rp, review, timeout):
+    folder = sp.parent
     with lock(folder/'study.lock'):
         journal_path = folder/'execution.json'
         previous = read(journal_path) if journal_path.exists() else None

@@ -195,6 +195,8 @@ def prepare(model, body):
     from . import app_core as core
     from .inputs import dependencies, gate, geometry_errors, load
     from .qa_review import load_summary
+    from .spacing_cycle import policy
+    coverage_policy = policy(body)
     path, config = load(ROOT/model['active_project'])
     scenario = next(s for s in config['scenarios'] if s['id'] == model['scenario'])
     check, geometry = gate(path, config, scenario)
@@ -269,6 +271,8 @@ def prepare(model, body):
                          source=model['summary'], warning_coverage=diagnostic['warning_coverage'],
                          coverage_screen='Maximum baseline profile WSE interpolated along the saved flowline; fresh computations still required',
                          maximum_new_width_ft=max(2000.,max(r['station_ft'][-1]-r['station_ft'][0] for r in geometry['cross_sections'])))
+    if coverage_policy:
+        specification['coverage_policy'] = coverage_policy
     save(folder/'specification.json', specification)
     cases = []
     for name, variant, changes in variants:
@@ -299,6 +303,8 @@ def prepare(model, body):
                 source_inputs=dependencies(path, config), evidence=[model['summary'], diagnostic_entry, hyd['raw_hdf'], hyd['raw_controller']] + ([summary['native_supplement']] if summary.get('native_supplement') else []),
                 intervals=selected, excluded_intervals=excluded, deferred_intervals=deferred, selection=selection, cases=cases,
                 measurement_topics=[], engineering_acceptance='NOT_ASSESSED')
+    if coverage_policy:
+        plan['coverage_policy'] = coverage_policy
     plan['map_geometry'] = dict(flowline=line, retained=[dict(rs=r['rs'], cutline_xy=r['cutline_xy'])
                                                       for r in geometry['cross_sections']])
     save(folder/'study.json', plan)

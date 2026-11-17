@@ -35,6 +35,23 @@ def series(summaries,output):
     if out.exists():raise ValueError('Preserve previous convergence evidence; use a new directory')
     loaded=[load_summary(p) for p in summaries]
     if len({h['run_id'] for _,_,h in loaded})!=len(loaded):raise ValueError('Distinct real solver runs required')
+    sources=validate_native_series(loaded)
+    out.mkdir(parents=True);comparisons=[]
+    for i in range(len(loaded)-1):
+        comparisons.append(compare(loaded[i][0],loaded[i+1][0],out/f'pair_{i+1}.json'))
+    rows=assess(comparisons,THRESHOLDS['sensitivity_hw_ft'])
+    result=dict(status='STABLE_AT_REVIEW_THRESHOLD' if all(r['status']=='STABLE_AT_REVIEW_THRESHOLD' for r in rows) else 'NOT_CONVERGED',
+                created_utc=utc(),sources=sources,threshold_ft=THRESHOLDS['sensitivity_hw_ft'],rows=rows,
+                comparisons=[item(out/f'pair_{i+1}.json') for i in range(len(comparisons))],
+                hydraulic_qa='REVIEW_REQUIRED',engineering_acceptance='NOT_ASSESSED',
+                limitation='Native warnings, input sufficiency, terrain resolution and physical applicability remain separate.')
+    save(out/'convergence.json',result);return result
+
+
+def validate_native_series(loaded):
+    """Read-only validation reusable by resumable coverage/spacing batches."""
+    if len(loaded)<3 or len({h['run_id'] for _,_,h in loaded})!=len(loaded):
+        raise ValueError('At least three distinct actual nested computations required')
     sources=[];last_expected=None;last_flow=None;last_structure=None;last_plan=None
     for path,summary,hyd in loaded:
         solver=(ROOT/hyd['raw_hdf']['path']).parent.parent
@@ -53,16 +70,7 @@ def series(summaries,output):
             if settings!=last_plan:raise ValueError('Non-diagnostic solver plan settings changed')
         last_expected=expected;last_flow=flow;last_structure=structure;last_plan=settings
         sources += [item(path),item(solver/'manifest.json'),item(solver/'request.json')]
-    out.mkdir(parents=True);comparisons=[]
-    for i in range(len(loaded)-1):
-        comparisons.append(compare(loaded[i][0],loaded[i+1][0],out/f'pair_{i+1}.json'))
-    rows=assess(comparisons,THRESHOLDS['sensitivity_hw_ft'])
-    result=dict(status='STABLE_AT_REVIEW_THRESHOLD' if all(r['status']=='STABLE_AT_REVIEW_THRESHOLD' for r in rows) else 'NOT_CONVERGED',
-                created_utc=utc(),sources=sources,threshold_ft=THRESHOLDS['sensitivity_hw_ft'],rows=rows,
-                comparisons=[item(out/f'pair_{i+1}.json') for i in range(len(comparisons))],
-                hydraulic_qa='REVIEW_REQUIRED',engineering_acceptance='NOT_ASSESSED',
-                limitation='Native warnings, input sufficiency, terrain resolution and physical applicability remain separate.')
-    save(out/'convergence.json',result);return result
+    return sources
 
 
 def validate_nested(previous,current):

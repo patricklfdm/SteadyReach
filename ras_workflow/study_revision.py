@@ -14,6 +14,10 @@ def resolve(parent, body):
     if not entry or entry['sha256'] != body.get('study_token') or not intact([entry]):
         raise ValueError('Study result changed; reopen the current result before continuing')
     analysis = read(ROOT/entry['path'])
+    cycle_sources = []
+    if analysis.get('coverage_batch'):
+        from .spacing_cycle import verify
+        cycle_sources = verify(analysis)
     _, plan, _, _ = reviewed(analysis['study']['path'], analysis['review']['path'])
     expected_kind = {'coverage': 'coverage_repair', 'spacing': 'section_spacing'}[kind]
     if plan.get('analysis_kind') != expected_kind or parent['summary'] not in plan['evidence']:
@@ -46,12 +50,12 @@ def resolve(parent, body):
         raise ValueError('Study native inputs or results changed')
     geometry_path = safe_path(config_path.parent, config['geometry'])
     sources = [entry, analysis['study'], analysis['review'], analysis['execution'], record['summary'],
-               item(config_path), item(geometry_path), item(manifest_path)]+bound
+               item(config_path), item(geometry_path), item(manifest_path)]+bound+cycle_sources
     return dict(config_path=config_path, config=config, geometry=read(geometry_path),
                 summary=record['summary'], terrain=summary['terrain'],
                 geometry_source=item(geometry_path), sources=sources,
                 kind=kind, case_id=case['id'], analysis=entry,
-                maximum_width_ft=plan.get('policy', {}).get('maximum_width_ft', 2000.))
+                maximum_width_ft=analysis.get('coverage_batch', {}).get('policy', plan.get('policy', {})).get('maximum_width_ft', 2000.))
 
 
 def answers(previous, old_config, old_geometry, config, geometry, scenario, source):

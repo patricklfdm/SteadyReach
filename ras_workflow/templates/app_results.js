@@ -175,13 +175,18 @@ function renderSpacing(parent){
  const scope=field(box,'spacing-scope','Refinement extent','加密范围',current.pending_study_plan?.scope||'automatic','select',[
   ['automatic','Recommend from native results','根据原生结果自动推荐'],['warnings','Intervals beside spacing-related warnings','加密相关警告相邻区间'],['all','Entire continuous reach','完整连续河段']]);
  const limit=field(box,'spacing-limit','Maximum recommended intervals','推荐区间数量上限',current.pending_study_plan?.selection?.maximum_intervals??12,'number');limit.min=1;limit.max=100;limit.step=1;limit.disabled=scope.value!=='automatic';
+ const adaptive=check(box,'Automatically extend added wet sections within the confirmed limits','在确认范围内自动延伸新增湿端断面',current.pending_study_plan?!!current.pending_study_plan.coverage_policy:true,()=>{});
+ const rounds=field(box,'spacing-rounds','Maximum coverage correction rounds','覆盖修正轮数上限',current.pending_study_plan?.coverage_policy?.maximum_rounds??2,'number');rounds.min=1;rounds.max=3;rounds.step=1;
+ const width=field(box,'spacing-width','Maximum corrected section width (ft)','修正后断面总宽度上限（ft）',current.pending_study_plan?.coverage_policy?.maximum_width_ft??2000,'number');width.min=120;width.max=2000;
+ box.append(el('p',tr('Each extra round may run three real cases. Only exterior DEM samples on added sections can change; shared profiles are updated together. Original sections, bank plan positions and hydraulic controls remain fixed.','每个追加轮次可能运行三个真实工况。仅延伸新增断面的外侧 DEM 采样，共有断面同步更新；原始断面、岸站平面位置和水力控制参数保持固定。')));
  const preview=el('div');let proposal=null;
  box.append(button('Prepare nested spacing preview','生成两级加密预览',async()=>{
-  proposal=await api('study-prepare',{id:current.id,revision:current.revision,kind:'spacing',scope:scope.value,maximum_intervals:Number(limit.value)});
+  proposal=await api('study-prepare',{id:current.id,revision:current.revision,kind:'spacing',scope:scope.value,maximum_intervals:Number(limit.value),coverage_policy:adaptive.checked?{maximum_rounds:Number(rounds.value),maximum_width_ft:Number(width.value)}:null});
   current.pending_study=proposal.entry;current.pending_study_plan=proposal.plan;
   showProposal();notify(tr('Spacing preview saved. Review the proposed sections before confirming calculation.','加密预览已保存，请核对新增断面后确认计算。'));
  }),preview);
- const resetPreview=()=>{proposal=null;preview.replaceChildren();limit.disabled=scope.value!=='automatic';};scope.addEventListener('input',resetPreview);limit.addEventListener('input',resetPreview);
+ const resetPreview=()=>{proposal=null;preview.replaceChildren();limit.disabled=scope.value!=='automatic';rounds.disabled=width.disabled=!adaptive.checked;};scope.addEventListener('input',resetPreview);limit.addEventListener('input',resetPreview);
+ adaptive.addEventListener('change',resetPreview);rounds.addEventListener('input',resetPreview);width.addEventListener('input',resetPreview);rounds.disabled=width.disabled=!adaptive.checked;
  function showProposal(){
   preview.replaceChildren();const plan=proposal.plan;
   const reasonLabels={SECTION_SPECIFIC_CONTROLS:tr('Section-specific roughness/ineffective areas','断面特定糙率／非有效流区'),BENT_CUTLINE:tr('Bent cutline requires interpretation','折线断面需判读'),BELOW_TWO_CELL_NESTED_SPACING:tr('Two refinement levels would be below DEM spacing limit','两级加密小于 DEM 间距限值'),NATIVE_STATION_PRECISION:tr('Native station precision limit','原生断面编号精度限制'),DEM_OR_LAYOUT_CONSTRAINT:tr('DEM coverage or cutline-layout constraint','DEM 覆盖或断面布置限制'),CONFIRMED_SEARCH_LIMIT:tr('Outside selected interval count','超过所选区间数量'),SECTION_COUNT_LIMIT:tr('500-section limit','500 条断面上限')};
@@ -228,8 +233,9 @@ function renderSpacing(parent){
   }
   preview.append(el('p',tr('Added elevations are sampled from the DEM. Banks use adjacent bank fractions, added loss coefficients use the upstream interval, and the original three reach-length totals are partitioned. Review these assumptions together. Changes to these proposals require a new geometry revision.','新增高程来自 DEM；岸站按相邻断面岸站比例推定，新增损失系数沿用上游区间，原左漫滩／主槽／右漫滩总流程长度按交点位置分配。请集中审核这些假设；需要改动时先创建几何修订版。'),'warning'));
   preview.append(el('p',tr('New section ends are screened against the maximum baseline WSE interpolated along the saved flowline. Bounded rotations/extensions use fresh DEM samples. The three real calculations will check the resulting water levels again.','新增断面端点按沿已保存流线插值的基准最大水位筛查；有限方向／宽度调整采用真实 DEM 采样，随后三个真实工况再次检查水位。')));
-  const confirmed=check(preview,'I confirm the displayed sections, inferred banks and trial assumptions','我确认显示的断面、推定岸站和试算假设',false,()=>{});
-  preview.append(button('Confirm and run three spacing cases','确认并计算三个加密工况',async()=>{
+  if(plan.coverage_policy){const p=plan.coverage_policy;preview.append(el('p',tr('Confirmed automatic bounds: ','本次自动化确认范围：')+p.maximum_rounds+tr(' correction rounds, ',' 轮修正，')+p.maximum_width_ft+tr(' ft maximum total width; at most ',' ft 总宽度上限；最多 ')+(3*(1+p.maximum_rounds))+tr(' case calculations. Stops when ends are covered, baseline sections need changes, geometry cannot extend, a calculation fails, or the round limit is reached. All rounds remain saved.',' 个工况计算。端点覆盖完成、原始断面需改动、几何无法延伸、计算失败或达到轮数上限时停止，保留全部轮次。'),'warning'));}
+  const confirmed=check(preview,'I confirm the sections, inferred banks, assumptions and any displayed automatic correction bounds','我确认断面、推定岸站、假设及显示的自动修正范围',false,()=>{});
+  preview.append(button(plan.coverage_policy?'Confirm and run bounded spacing batch':'Confirm and run three spacing cases',plan.coverage_policy?'确认并运行有界加密批次':'确认并计算三个加密工况',async()=>{
    if(!proposal||!confirmed.checked)throw Error(tr('Review and confirm this spacing preview first.','请先核对并勾选确认本次加密预览。'));
    await api('study-start',{id:current.id,revision:current.revision,token:proposal.token,confirmed:true});await open(current.id);
   },'primary'));
@@ -240,6 +246,11 @@ function renderSpacing(parent){
  if(current.spacing_result){
   const r=current.spacing_result,c=r.convergence;
   const wetCases=r.cases.filter(v=>v.wet_sections?.length);
+  if(r.coverage_batch){
+   const b=r.coverage_batch,labels={COVERAGE_RESOLVED_REVIEW_REQUIRED:tr('Added-section coverage cycle completed; hydraulic review remains open','覆盖循环完成，水力复核仍待完成'),BASELINE_COVERAGE_REVIEW:tr('Baseline ends need review; automatic changes stopped','基准端点需复核，已停止自动改动'),ROUND_LIMIT_REVIEW_REQUIRED:tr('Confirmed correction-round limit reached','已达到确认的修正轮数上限'),RETAINED_OR_GEOMETRY_REVIEW:tr('Original sections or geometry constraints need review','原有断面或几何约束需要复核'),INCOMPLETE:tr('A round is incomplete; resolve its error and retry','本轮未完成，请处理错误后重试')};
+   box.append(el('p',labels[b.status]||b.status,b.status==='COVERAGE_RESOLVED_REVIEW_REQUIRED'?'status':'warning'));
+   table(box,[tr('Round (0 = initial)','轮次（0 为初始）'),tr('Wet sections: baseline / level 1 / level 2','湿端数：基准／一级／二级'),tr('Numerical spacing status','数值加密状态')],b.round_summaries.map(v=>[v.round,v.wet_sections.map(n=>n??'—').join(' / '),v.status]));
+  }
   if(r.deferred_intervals?.length)box.append(el('p',r.deferred_intervals.length+tr(' candidate intervals were deferred by the search limit and remain untested.',' 个候选区间因搜索上限暂缓，仍未测试。'),'warning'));
   if(r.excluded_intervals?.length)box.append(el('p',tr('Full-reach spacing coverage is incomplete. Excluded intervals — ','全河段加密覆盖尚不完整，排除区间 — ')+r.excluded_intervals.map(v=>v.upstream_rs+' → '+v.downstream_rs).join(', '),'warning'));
   box.append(el('p',r.status==='STABLE_AT_REVIEW_THRESHOLD'?tr('Both nested refinements meet the internal water-level threshold.','两次嵌套加密均达到内部水位变化阈值。'):tr('Spacing convergence remains open.','断面加密收敛仍待处理。'),r.status==='STABLE_AT_REVIEW_THRESHOLD'?'status':'warning'));
@@ -259,7 +270,7 @@ function renderSpacing(parent){
   if(r.failed_cases?.length){
    box.append(el('p',tr('Incomplete cases — ','未完成工况 — ')+r.failed_cases.join(', '),'warning'),
     el('p',tr('Retry the confirmed batch after resolving its error. Intact completed cases and reports are reused. Missing reports are regenerated without solving. Changed native evidence blocks reuse; only unfinished calculations may call the solver.','处理错误后可重试已确认批次。完整的已完成工况及报告直接复用；缺失报告单独补生成。原生证据变更会阻止复用，仅尚未完成的计算可能调用求解器。')),
-    button('Retry incomplete spacing batch','重试未完成加密批次',async()=>{await api('study-start',{id:current.id,revision:current.revision,token:r.study.sha256,confirmed:true,retry:true});await open(current.id);}));
+    button('Retry incomplete spacing batch','重试未完成加密批次',async()=>{await api('study-start',{id:current.id,revision:current.revision,token:(r.coverage_batch?.study||r.study).sha256,confirmed:true,retry:true});await open(current.id);}));
   }
  }
 }

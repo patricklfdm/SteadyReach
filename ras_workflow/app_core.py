@@ -442,6 +442,9 @@ def view(key,detail=True):
             parameter_path=(case.get('changes') or [{}])[0].get('path'),
             parameter_value=(case.get('changes') or [{}])[0].get('after'),
             status=records.get(case['id'],{}).get('status',waiting),error=records.get(case['id'],{}).get('error')) for case in cases]
+        if plan.get('coverage_policy'):
+            from .spacing_cycle import progress
+            result['study_progress'] = progress(ROOT/active['study']['path'], plan, active['review'])
     # Substeps may persist INPUTS_READY while the encompassing task is still
     # running. Keep polling and avoid expensive draft reads during mutations.
     if result['status']=='PROCESSING':
