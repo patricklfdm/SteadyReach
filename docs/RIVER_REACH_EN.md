@@ -91,3 +91,5 @@ English and Chinese reports use matching-language plot labels. Dense overview ma
 
 
 After boundary sensitivity completes, **Prepare QA revision suggestions** also reads verified cases bound to that exact baseline. It screens wet ends against their maximum computed water levels and reports the included study count. Geometry, flow, roughness and regime must match. The preview preserves source hashes and requires adoption followed by a fresh calculation. [Preparation and automation assessment](AUTOMATION_EN.md).
+
+Initial automatic widths also look for sufficient DEM coverage around morphological bank breaks, and avoid near-duplicate terminal sections. Unresolved morphology stays visible; review uncertain banks and run result-based section-spacing checks. [Coverage and spacing details](DEM_AUTOMATION_EN.md#initial-bank-coverage-and-endpoint-spacing).

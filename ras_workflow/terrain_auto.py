@@ -96,13 +96,13 @@ def anchors_outward(s,start,direction,length):
     return np.asarray(points),limits
 
 
-def width_row(s,center,tangent,minimum=120.,maximum=800.):
+def width_row(s,center,tangent,minimum=120.,maximum=800.,require_bank_coverage=False):
     tangent=unit_vector(tangent);left=np.array([-tangent[1],tangent[0]]);center=np.asarray(center,float)
     base=np.linspace(-minimum/2,minimum/2,81);z=s.sample(center-base[:,None]/s.factor*left)
     if not np.isfinite(z).all():raise ValueError('Initial section crosses DEM NoData')
     target=float(np.min(z)+max(2.,min(8.,(np.percentile(z,90)-np.min(z))*.5)))
     # Terrain relief is a layout screen, explicitly not a predicted flood elevation.
-    best=None
+    best=None;first_closed=None;bank_trials=[]
     for width in sorted(set([minimum,min(maximum,minimum*1.5),min(maximum,minimum*2),min(maximum,minimum*3),maximum])):
         station=np.linspace(0,width,min(500,math.ceil(width/max(1.,s.cell_ft))+1));xy=center+(width/2-station)[:,None]/s.factor*left;zz=s.sample(xy)
         if not np.isfinite(zz).all():break
@@ -110,14 +110,36 @@ def width_row(s,center,tangent,minimum=120.,maximum=800.):
         row=dict(center_xy=center.tolist(),cutline_xy=[xy[0].tolist(),xy[-1].tolist()],station_ft=station.tolist(),elevation_ft=zz.tolist(),bank_stations_ft=None,reach_lengths_ft=None,expansion_contraction=None,
             auto_layout=dict(terrain_relief_screen_ft=target,screen_is_water_level=False,endpoints_above_screen=closed,width_ft=width))
         best=row
-        if closed:break
+        if not require_bank_coverage:
+            if closed:break
+        else:
+            from .banks import propose
+            from .bank_reach import SETTINGS
+            bank=propose(row,SETTINGS)
+            bank_trials.append(dict(width_ft=width,pair_found=bool(bank.get('selected_indices')),
+                                    confidence=bank['confidence'],reasons=bank['reasons']))
+            if closed and first_closed is None:first_closed=copy.deepcopy(row)
+            if closed and bank.get('selected_indices'):break
     if best is None:raise ValueError('No complete DEM section at the proposed location')
+    if require_bank_coverage:
+        found=bool(bank_trials[-1]['pair_found'] and best['auto_layout']['endpoints_above_screen'])
+        # If no wider profile resolves the morphology, retain the first valid
+        # relief-screen section. Do not widen aimlessly or fabricate banks.
+        if not found and first_closed is not None:best=first_closed
+        best['auto_layout']['bank_coverage']=dict(status='PAIR_PROPOSED' if found else 'UNRESOLVED',
+            trials=bank_trials,maximum_width_ft=maximum,final_confirmation_required=True)
+        if found and first_closed is not None and best['auto_layout']['width_ft']>first_closed['auto_layout']['width_ft']:
+            best['auto_layout']['bank_coverage_extension_from_ft']=first_closed['auto_layout']['width_ft']
     s.stamp(best);return best
 
 
 def adaptive_sections(s,line,reach,maximum):
     line=np.asarray(line,float);dist=np.r_[0,np.cumsum(np.linalg.norm(np.diff(line,axis=0),axis=1))*s.factor];length=dist[-1]
-    spacing=max(20.,min(80.,length/7));positions=list(np.arange(0,length,spacing))+[length];reasons={round(float(v),6):'REGULAR_AND_EXTERIOR_FACE' for v in positions}
+    spacing=max(20.,min(80.,length/7));positions=list(np.arange(0,length,spacing))
+    # Keep the exact downstream endpoint while avoiding a nearly duplicate
+    # regular section just before it. Match the minimum separation used below.
+    if len(positions)>1 and length-positions[-1]<spacing*.35:positions.pop()
+    positions.append(length);reasons={round(float(v),6):'REGULAR_AND_EXTERIOR_FACE' for v in positions}
     # Extra samples at strong bends / longitudinal slope changes, bounded and separated.
     probes=np.linspace(0,length,25);xy=np.column_stack([np.interp(probes,dist,line[:,k]) for k in (0,1)]);z=s.sample(xy)
     for i in range(1,len(probes)-1):
@@ -129,7 +151,7 @@ def adaptive_sections(s,line,reach,maximum):
     for pos in positions:
         point=lambda x:np.array([np.interp(x,dist,line[:,k]) for k in (0,1)])
         center=point(pos);delta=point(min(length,pos+spacing/2))-point(max(0,pos-spacing/2))
-        row=width_row(s,center,delta,maximum=maximum);row.update(reach_id=reach,local_chainage_ft=float(pos),rs=None,
+        row=width_row(s,center,delta,maximum=maximum,require_bank_coverage=True);row.update(reach_id=reach,local_chainage_ft=float(pos),rs=None,
             position_basis=reasons[round(float(pos),6)],review_status='DRAFT_REQUIRES_REVIEW');rows.append(row)
     return rows,spacing
 
