@@ -276,14 +276,19 @@ def _objects(p,d):
         allowed.update({'g.boundaries.upstream.type','g.boundaries.downstream.type',
                         'g.boundaries.downstream.stages_ft',
                         'g.boundary_slopes.upstream','g.boundary_slopes.downstream'})
+    bank_geometry_changed=set()
     for key,a in d['answers'].items():
         if key not in allowed:raise ValueError('Unknown input field: '+key)
         if not isinstance(a,dict):raise ValueError('Answer must be an object: '+key)
-        root,*parts=key.split('.');_set(c if root=='c' else g,parts,a.get('value'))
+        root,*parts=key.split('.')
+        if root=='g' and len(parts)==3 and parts[0]=='cross_sections' and parts[2] in ('station_ft','elevation_ft','center_xy','cutline_xy'):
+            index=int(parts[1])
+            if g['cross_sections'][index].get(parts[2])!=a.get('value'):bank_geometry_changed.add(index)
+        _set(c if root=='c' else g,parts,a.get('value'))
     if g.get('terrain_review_required'):
         from .banks import propose
         for i,row in enumerate(g.get('cross_sections',[])):
-            if any(f'g.cross_sections.{i}.'+key in d['answers'] for key in ['station_ft','elevation_ft','center_xy','cutline_xy']):
+            if i in bank_geometry_changed:
                 row['bank_candidates']=propose(row,(row.get('bank_candidates') or {}).get('settings'))
     for b in g['structure']['groups']:
         for key in ['name','mann_top','mann_bottom','bottom_n_depth_ft','blockage_basis']:

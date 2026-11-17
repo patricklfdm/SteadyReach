@@ -57,7 +57,7 @@ After a river calculation, expand **Section-spacing trial** on Results.
 4. Check excluded intervals. Bounded direction/width searches screen new ends against the maximum baseline WSE interpolated along the saved flowline. Intervals that cannot support both nested levels remain listed for geometry review. The trial covers the displayed accepted intervals. Missing DEM data, incompatible datum/CRS and unsupported section-specific controls require attention.
 5. Check the confirmation box and click **Confirm and run three spacing cases**. Real HEC-RAS computes the baseline and two refinements sequentially. The progress table shows queued, processing, computed and failed cases. Keep the launcher open. Each case saves native inputs, results, warnings and reports.
 6. Review both maximum retained-section WSE differences and the native-message/wet-end counts. The internal 0.10 ft check requires both consecutive refinements to meet the threshold at every retained section, including the upstream comparison section. **Convergence remains open** calls for further interpretation. A declining difference alone does not satisfy the check.
-7. Select **Update reports and both packages** to include authenticated comparisons in the baseline delivery. **Open spacing trial files** opens the separate case models and reports. Further geometry changes use an editable revision and a new confirmation.
+7. Select **Update reports and both packages** to include authenticated comparisons in the baseline delivery. **Open spacing trial files** opens the separate case models and reports. To revise a computed refinement, select it under **Continue from computed case** and click **Prepare editable QA revision from selected case**.
 
 Automatic trials currently support one continuous workflow-built river reach. Original section elevations, banks and loss coefficients are retained. Flow, boundaries, roughness and interval length totals are held constant. Explicit roughness subdivisions or ineffective-flow areas need section-specific engineering treatment. Automatic drafts are limited to 500 sections and avoid channel intervals shorter than two DEM cells. Surface-DEM bed uncertainty, bridge influence, floodplain connectivity and hydraulic warnings remain part of engineering review.
 
@@ -78,6 +78,17 @@ A failed export can be retried through the saved confirmed batch. Completed, aut
 If a calculation fails partway, completed case files remain saved. Resolve the reported error and retry the confirmed batch to finish the calculation and export the final packages.
 
 Dry section ends establish the implemented coverage check. Spacing convergence, submerged-bed adequacy, effective floodplain connectivity, boundary influence, other warnings and engineering acceptance require further assessment. Use an editable revision for repairs needing changes to direction, actual bank position or hydraulic controls, and review those changes together.
+
+## Continue from a computed case
+
+1. After a wet-end repair batch, click **Continue from final repair with automatic QA preparation**. For a spacing trial, select a completed refinement and choose **Prepare editable QA revision from selected case**.
+2. The app verifies the selected calculation and source files, then opens a separate editable project. Its starting geometry, bank positions, flow, roughness and boundaries come from the chosen case. Section and profile identities carry the matching input provenance across changed section counts. The result comparison uses this selected calculation as the parent.
+3. Keep the launcher open while **automatic preparation** runs. The program uses the selected case's actual water levels to search for compatible DEM extensions and direction changes, proposes banks for changed profiles, and fills dependent draft values. Missing or conflicting information remains visible. Completed preparation returns to the model page.
+4. Inspect the consolidated changes, plan and profiles. Edit uncertain banks, flow paths or assumptions as needed. Open the complete parameter review and confirm when ready to calculate. The new calculation writes its own native results, reports and packages.
+
+Every continuation requires a fresh full-parameter confirmation. Local terrain and imagery references are resolved for the new project location. Unchanged geometry retains its bank-method metadata through review. Altered section samples trigger fresh candidates and invalidate the old geometry review. If source hashes have changed, reopen the source calculation and resolve the reported mismatch before continuing.
+
+If another project is processing, the independent draft opens with the reason preparation was deferred. Wait for that job to finish, then choose **Prepare an automatic draft** in the saved revision.
 
 ## Remaining human decisions
 

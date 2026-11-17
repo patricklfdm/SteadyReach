@@ -102,7 +102,11 @@ def prior_results(m,g):
     if not intact([parent['summary']]):raise ValueError('Parent calculation changed; recreate the revision')
     from . import app_core,app_parameters
     from .qa_locator import collect
-    old_g=app_parameters.objects(app_core.model(parent['project_id']))[4]
+    if parent.get('geometry'):
+        if not intact([parent['geometry']]):raise ValueError('Parent case geometry changed; recreate the revision')
+        old_g=read(ROOT/parent['geometry']['path'])
+    else:
+        old_g=app_parameters.objects(app_core.model(parent['project_id']))[4]
     old={float(r['rs']):r for r in old_g['cross_sections']};summary=read(ROOT/parent['summary']['path']);h=summary['hydraulics']
     for r in collect(h)['rows']:
         if r['left_excess_ft'] or r['right_excess_ft']:water[float(r['rs'])]=max(water.get(float(r['rs']),float('-inf')),r['wse_ft'])

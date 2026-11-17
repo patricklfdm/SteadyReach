@@ -133,7 +133,8 @@ def execute(key):
     from . import app_geometry_auto
     progress(m, 'Preparing DEM geometry / 准备 DEM 几何')
     try:
-        proposal = app_geometry_auto.prepare(m, dict(mode='qa' if g['cross_sections'] else 'initial'))
+        proposal = app_geometry_auto.prepare(m, dict(mode='qa' if g['cross_sections'] else 'initial',
+                                                     **m.get('automatic_options', {})))
         usable = [v for v in proposal['layouts'] if v['can_apply']]
         if usable:
             layout = usable[0]

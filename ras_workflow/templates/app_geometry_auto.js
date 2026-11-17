@@ -104,3 +104,14 @@ async function prepareQaRevision(){
  const changes=Math.max(0,...proposal.layouts.map(layout=>layout.changed_sections.length));
  notify(tr('QA preview saved. ','QA 预览已保存。')+changes+tr(' proposed section changes. Open DEM layout and QA suggestions to review and adopt.',' 条断面改动提案。请展开 DEM 自动布置与 QA 修正，查看并选择采用。'));
 }
+
+async function continueStudyCase(kind,caseId,token){
+ const next=await api('revision',{id:current.id,revision:current.revision,confirmed:true,
+  study_kind:kind,case_id:caseId,study_token:token,prepare:true});
+ await open(next.id);
+ if(next.status!=='PROCESSING'){
+  notify(tr('Independent draft saved. Automatic preparation could not start. Resolve the displayed issue, then choose Prepare an automatic draft.','独立草稿已保存，自动准备暂未启动。请处理页面提示后点击“自动准备草稿”。'),true);
+  return;
+ }
+ notify(tr('Created an independent revision from ','已基于 ')+caseId+tr('. Joint DEM and bank preparation is running. Review the consolidated draft before confirming a new calculation.',' 创建独立修订版，正在联合准备 DEM 和岸站。完成后集中核对草稿，确认后才开始新计算。'));
+}

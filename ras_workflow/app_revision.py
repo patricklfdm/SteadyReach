@@ -13,18 +13,37 @@ def create(key, body):
     if not parent.get('summary') or not intact([parent['summary']]):raise ValueError('An intact completed calculation is required')
     from .app_parameters import objects
     sp,p,d,c,g=objects(parent)
+    d=copy.deepcopy(d)
     source_base=(ROOT/p['project']).parent
+    delivery_base=source_base
+    delivery_settings=copy.deepcopy(c.get('delivery',{}))
+    source=None
+    if body.get('study_kind'):
+        from .study_revision import resolve, answers
+        source=resolve(parent,body)
+        d['answers']=answers(d['answers'],c,g,source['config'],source['geometry'],parent['scenario'],source)
+        d.pop('section_workflow',None)
+        d['geometry_edit_sources']=d.get('geometry_edit_sources',[])+source['sources']
+        c,g=source['config'],source['geometry']
+        source_base=source['config_path'].parent
     key2='site_'+unique_id().lower();folder=core.folder(key2);folder.mkdir(parents=True)
     c=copy.deepcopy(c);g=copy.deepcopy(g)
+    c['delivery']=delivery_settings
     for field in ('raster','provenance'):
-        if c.get('terrain',{}).get(field):c['terrain'][field]=os.path.relpath(safe_path(source_base,c['terrain'][field]),folder)
+        if c.get('terrain',{}).get(field):
+            c['terrain'][field]=os.path.relpath(safe_path(source_base,c['terrain'][field]),folder)
+            answer=d.get('answers',{}).get('c.terrain.'+field)
+            if answer is not None:answer['value']=c['terrain'][field]
     for field in ('native_project','reference_results','benchmark_preparation'):
         if c.get(field):c[field]=os.path.relpath(safe_path(source_base,c[field]),folder)
     delivery=c.setdefault('delivery',{})
-    delivery['additional_sources']=[os.path.relpath(safe_path(source_base,v),folder) for v in delivery.get('additional_sources',[])]
+    delivery['additional_sources']=[os.path.relpath(safe_path(delivery_base,v),folder) for v in delivery.get('additional_sources',[])]
+    imagery=delivery.get('imagery',{})
+    if imagery.get('raster'):imagery['raster']=os.path.relpath(safe_path(delivery_base,imagery['raster']),folder)
     for field in ('authorization','configuration_approval','intake_candidates','section_workflow'):
         c.pop(field,None)
-    c.update(project_id=key2,title=parent['title']+' · revision',geometry='geometry.json',model_proposal_pending=True)
+    title=parent['title']+' / '+source['case_id'] if source else parent['title']
+    c.update(project_id=key2,title=title+' · revision',geometry='geometry.json',model_proposal_pending=True)
     g.update(approved_for_model=False,status='EDITABLE_REVISION')
     save(folder/'geometry.json',g);save(folder/'initial.json',c)
     session=intake.prepare(folder/'initial.json',parent['scenario'])
@@ -36,12 +55,23 @@ def create(key, body):
     draft.update(consent=False,reviewer=None,basis='Editable revision of an existing conditional calculation; confirm all current parameters before a new solve.')
     save(new_sp.parent/'draft.json',draft)
     m=copy.deepcopy(parent)
-    for field in ('summary','engine_state','active_project','latest_reports','latest_delivery','previous_delivery','run_confirmation','pending_review','task','run_scenario','exports_need_refresh','pending_study','active_study','latest_study','latest_spacing','latest_coverage','latest_coverage_exports','exit_code'):
+    for field in ('summary','engine_state','active_project','latest_reports','latest_delivery','previous_delivery','run_confirmation','pending_review','task','run_scenario','exports_need_refresh','pending_study','active_study','latest_study','latest_spacing','latest_coverage','latest_coverage_exports','automatic_preparation','automatic_options','exit_code'):
         m.pop(field,None)
+    origin=source['summary'] if source else parent['summary']
     m.update(id=key2,title=c['title'],project=rel(folder/'initial.json'),session=session['session'],revision=0,
              status='INPUTS_READY',phase='EDIT_REVISION',errors=[],created_utc=utc(),
-             parent_revision=dict(project_id=parent['id'],summary=parent['summary'],app=item(core.folder(parent['id'])/'app.json'),created_utc=utc()))
-    core.persist(m,'CREATE_EDITABLE_REVISION',dict(parent=parent['id'],summary=parent['summary']))
+             parent_revision=dict(project_id=parent['id'],summary=origin,app=item(core.folder(parent['id'])/'app.json'),created_utc=utc()))
+    if source:
+        m['parent_revision'].update(geometry=source['geometry_source'],study=source['analysis'],case_id=source['case_id'])
+        m['terrain']=source['terrain']
+        m['automatic_options']=dict(maximum_width_ft=source['maximum_width_ft'])
+    core.persist(m,'CREATE_EDITABLE_REVISION',dict(parent=parent['id'],summary=origin))
+    if source and body.get('prepare') is True:
+        try:
+            core.launch(key2,'automatic-prepare')
+        except ValueError as error:
+            m.update(errors=[str(error)],phase='EDIT_REVISION')
+            core.persist(m,'AUTOMATIC_PREPARATION_DEFERRED',dict(error=str(error)))
     return core.view(key2)
 
 

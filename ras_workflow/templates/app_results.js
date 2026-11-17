@@ -144,6 +144,8 @@ function renderCoverage(parent){
   '最终工况的独立报告和交付包见下方，原基准保留在主结果区。断面端点覆盖、断面加密收敛及工程接受需分别判断。')),
   button('Open repair evidence','打开修订证据',()=>api('open-folder',{id:current.id,path:current.latest_coverage.path.replace(/\/[^/]+$/,'')})));
  const exports=current.coverage_exports;
+ const finalCase=result.cases.filter(row=>row.status==='COMPUTED').at(-1);
+ if(finalCase)box.append(button('Continue from final repair with automatic QA preparation','从最终修订工况继续自动准备',()=>continueStudyCase('coverage',finalCase.id,current.latest_coverage.sha256)));
  if(exports){
   box.append(button('Open final repair reports','打开最终修订报告',()=>api('open-folder',{id:current.id,path:exports.reports})));
   for(const key of ['minimal','complete'])if(exports.delivery?.[key])box.append(button(key==='minimal'?'Open repaired Minimal':'Open repaired Complete',key==='minimal'?'打开修订后最小包':'打开修订后完整包',()=>api('open-folder',{id:current.id,path:exports.delivery[key].path})));
@@ -215,6 +217,11 @@ function renderSpacing(parent){
   box.append(el('p',r.status==='STABLE_AT_REVIEW_THRESHOLD'?tr('Both nested refinements meet the internal water-level threshold.','两次嵌套加密均达到内部水位变化阈值。'):tr('Spacing convergence remains open.','断面加密收敛仍待处理。'),r.status==='STABLE_AT_REVIEW_THRESHOLD'?'status':'warning'));
   if(c)table(box,[tr('Profile','工况'),tr('First refinement max |ΔWSE| ft','第一级最大 |Δ水位| ft'),tr('Second refinement max |ΔWSE| ft','第二级最大 |Δ水位| ft')],c.rows.map(v=>[v.profile,...v.last_two_max_xs_deltas_ft.map(x=>x.toFixed(6))]));
   table(box,[tr('Case','工况'),tr('Sections','断面数'),tr('Native messages','原生信息'),tr('Wet-end sections','湿端断面数')],r.cases.map(v=>[v.id,v.section_count,v.diagnostics?.native_messages??'—',v.wet_sections?.length??'—']));
+  const completed=r.cases.filter(row=>row.status==='COMPUTED'&&row.id!=='baseline');
+  if(completed.length){
+   const selected=field(box,'spacing-continue-case','Continue from computed case','选择继续使用的已计算工况',completed.at(-1).id,'select',completed.map(row=>[row.id,row.id,row.id]));
+   box.append(button('Prepare editable QA revision from selected case','从所选工况自动准备可编辑修订版',()=>continueStudyCase('spacing',selected.value,current.latest_spacing.sha256)));
+  }
   box.append(el('p',tr('The 0.10 ft threshold is a workflow screen. Results cover the selected intervals and compare every retained section. Hydraulic warnings, submerged-bed accuracy and engineering acceptance remain open. The baseline deliverables can be refreshed to include this comparison.','0.10 ft 为工作流筛查阈值。结论限于所选区间，并对比全部保留断面。水力警告、水下河床准确性与工程验收仍需判断。可更新基准报告及交付包以纳入本次对比。')),
    button('Open spacing trial files','打开加密试算文件',()=>api('open-folder',{id:current.id,path:current.latest_spacing.path.replace(/\/[^/]+$/,'')})));
   if(r.failed_cases?.length)box.append(el('p',tr('Incomplete cases — ','未完成工况 — ')+r.failed_cases.join(', '),'warning'));
