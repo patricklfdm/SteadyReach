@@ -65,6 +65,7 @@ function renderRevisionComparison(parent,comparison){
 }
 
 function renderResultTools(parent){
+ renderResultAtlas(parent);
  if(!current.native_review)parent.append(button('Prepare QA revision suggestions','根据 QA 创建修订建议',prepareQaRevision));
  renderStudy(parent);
  renderSpacing(parent);
@@ -91,18 +92,7 @@ function renderResultTools(parent){
  if(current.native_supplement){const s=current.native_supplement;box.append(el('p',s.rows.length+tr(' group tables · ',' 份孔组表 · ')+(s.warnings?.records.length||0)+tr(' native messages',' 条原生信息'),'status'));if(s.missing_groups.length)box.append(el('p',tr('Still missing: ','仍缺：')+JSON.stringify(s.missing_groups),'warning'));table(box,['Profile','Group','Q cfs','V US ft/s','V DS ft/s','Control'],s.rows.map(r=>[r.profile,r.native_group,r.flow_cfs,r.inlet_velocity_fts,r.outlet_velocity_fts,r.control]));box.append(el('small',tr('Cross-checked native text at display precision. Blank road-flow fields remain unknown.','已交叉核验的原生文本，精度以原生显示为准；道路流量空白仍为未知。')));}
  if(current.exports_need_refresh)box.append(el('p',tr('The earlier reports/packages are retained but belong to the previous edition.','旧报告和交付包仍保留，属于上一版本。'),'warning'));
  box.append(button('Update reports and both packages','更新报告及两种交付包',async()=>{await api('delivery',{id:current.id});await open(current.id);},'primary'));
- const qa=current.qa_locations;if(!qa?.rows.length)return;
- const area=details(parent,'Locate wet edges and separated water areas','定位湿端点与分隔水面',true);
- area.append(el('p',tr('These plots use this run’s original section and water-surface arrays. Red means a low section end. A separated wet interval does not prove a connected real-world flow path. To change geometry, create an editable revision first.','下图使用本次原始断面及计算水位数组。红色表示低端点；分隔的湿区不证明实际纵向过流连通。修改几何前请先创建可编辑修订版。')));
- for(const r of qa.rows){const row=details(area,r.profile+' · RS '+r.rs,r.profile+' · RS '+r.rs);row.append(el('p',tr('WSE / left excess / right excess (ft): ','水位／超左端点／超右端点（ft）：')+[r.wse_ft,r.left_excess_ft,r.right_excess_ft].map(v=>v.toFixed(3)).join(' / ')));
-  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 700 230');svg.classList.add('repair-profile');svg.setAttribute('role','img');svg.setAttribute('aria-label',r.profile+' RS '+r.rs);row.append(svg);
-  const x=r.station_ft,z=r.elevation_ft,lo=Math.min(...z,r.wse_ft),hi=Math.max(...z,r.wse_ft),pt=(a,b)=>[55+(a-x[0])/(x.at(-1)-x[0])*615,185-(b-lo)/Math.max(1,hi-lo)*155];
-  svgEl(svg,'polyline',{points:x.map((v,i)=>pt(v,z[i]).join(',')).join(' '),fill:'none',stroke:'#795438','stroke-width':2});
-  for(const [a,b]of r.wet_intervals_ft){const [x1,y1]=pt(a,r.wse_ft),[x2,y2]=pt(b,r.wse_ft);svgEl(svg,'line',{x1,y1,x2,y2,stroke:'#1679be','stroke-width':3});}
-  for(const i of [0,x.length-1]){const [cx,cy]=pt(x[i],z[i]);svgEl(svg,'circle',{cx,cy,r:5,fill:z[i]<r.wse_ft?'#c33122':'#286954'});}
-  svgEl(svg,'text',{x:5,y:20}).textContent=hi.toFixed(2)+' ft';svgEl(svg,'text',{x:5,y:186}).textContent=lo.toFixed(2)+' ft';svgEl(svg,'text',{x:55,y:215}).textContent=tr('Station (ft): ','横距（ft）：')+x[0].toFixed(1)+' → '+x.at(-1).toFixed(1);
-  if(r.cutline_xy)row.append(el('small',tr('Projected cutline: ','投影断面线：')+r.cutline_xy.map(p=>p.map(v=>v.toFixed(2)).join(', ')).join(' → ')));
- }
+
 }
 
 function renderStudyProgress(parent,progress){

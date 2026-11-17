@@ -493,12 +493,6 @@ def view(key,detail=True):
             from .app_outputs import validate as validate_outputs,diagnostics as supplemented_qa
             result['native_supplement']=validate_outputs(s['native_supplement'])
             result['results']['diagnostics']=supplemented_qa(h,result['native_supplement'])
-        from .qa_locator import collect as locate
-        geometry=None
-        if m.get('session') and not m.get('native_review'):
-            from .app_parameters import objects
-            geometry=objects(m)[4]
-        result['qa_locations']=locate(h,geometry)
         if m.get('exports_need_refresh'):
             if not current_refreshed_reports(m):result['report_files']=[]
             result['delivery']=None

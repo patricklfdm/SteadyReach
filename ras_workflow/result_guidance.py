@@ -90,7 +90,7 @@ def organize(model, summary, diagnostics, studies, evidence_errors=()):
                      '先判断实际漫滩连通性，再核对有限范围 DEM 延伸。湿端批次保留岸站平面位置及内部样点，确认后才计算。'), wet,
                 mode='PREVIEW_THEN_CONFIRM' if workflow else 'NATIVE_EDITOR')
     if matching(PATHS):
-        add('paths', 'qa', text('Inspect flow paths and transitions', '核对过流路径与流态转换'),
+        add('paths', 'atlas', text('Inspect flow paths and transitions', '核对过流路径与流态转换'),
             text('Review banks, disconnected wet areas, controls and actual bypass paths. Terrain alone cannot decide whether an area conveys flow; no ineffective area or bank relocation is applied here.',
                  '核对岸站、分隔湿区、控制条件及实际绕流路径。地形本身不能决定区域是否有效过流；此处不会自动设置非有效流区或移动岸站。'), matching(PATHS))
     if workflow and river:
@@ -129,10 +129,9 @@ def organize(model, summary, diagnostics, studies, evidence_errors=()):
         solver_started=False, geometry_changed=False, engineering_acceptance='NOT_ASSESSED')
 
 
-def collect(key, body):
+def load_evidence(key, body):
     from . import app_core as core
     from .qa_review import load_summary
-    from .report_studies import collect as collect_studies
     m = core.model(key)
     core.require_idle(m)
     if body.get('summary_hash') != m.get('summary', {}).get('sha256') or not intact([m.get('summary', {})]):
@@ -148,6 +147,12 @@ def collect(key, body):
     if summary.get('native_supplement') and diagnostics:
         from .app_outputs import validate, diagnostics as supplement_diagnostics
         diagnostics = supplement_diagnostics(hyd, validate(summary['native_supplement']))
+    return m, path, summary, hyd, diagnostics, errors
+
+
+def collect(key, body):
+    from .report_studies import collect as collect_studies
+    m, path, summary, hyd, diagnostics, errors = load_evidence(key, body)
     try:
         studies, sources = collect_studies(path, summary)
     except (ValueError, OSError, KeyError) as error:
