@@ -239,11 +239,16 @@ function renderSpacing(parent){
  }
  if(current.spacing_result){
   const r=current.spacing_result,c=r.convergence;
+  const wetCases=r.cases.filter(v=>v.wet_sections?.length);
   if(r.deferred_intervals?.length)box.append(el('p',r.deferred_intervals.length+tr(' candidate intervals were deferred by the search limit and remain untested.',' 个候选区间因搜索上限暂缓，仍未测试。'),'warning'));
   if(r.excluded_intervals?.length)box.append(el('p',tr('Full-reach spacing coverage is incomplete. Excluded intervals — ','全河段加密覆盖尚不完整，排除区间 — ')+r.excluded_intervals.map(v=>v.upstream_rs+' → '+v.downstream_rs).join(', '),'warning'));
   box.append(el('p',r.status==='STABLE_AT_REVIEW_THRESHOLD'?tr('Both nested refinements meet the internal water-level threshold.','两次嵌套加密均达到内部水位变化阈值。'):tr('Spacing convergence remains open.','断面加密收敛仍待处理。'),r.status==='STABLE_AT_REVIEW_THRESHOLD'?'status':'warning'));
   if(c)table(box,[tr('Profile','工况'),tr('First refinement max |ΔWSE| ft','第一级最大 |Δ水位| ft'),tr('Second refinement max |ΔWSE| ft','第二级最大 |Δ水位| ft')],c.rows.map(v=>[v.profile,...v.last_two_max_xs_deltas_ft.map(x=>x.toFixed(6))]));
-  table(box,[tr('Case','工况'),tr('Sections','断面数'),tr('Native messages','原生信息'),tr('Wet-end sections','湿端断面数')],r.cases.map(v=>[v.id,v.section_count,v.diagnostics?.native_messages??'—',v.wet_sections?.length??'—']));
+  table(box,[tr('Case','工况'),tr('Sections','断面数'),tr('Native messages','原生信息'),tr('Wet-end sections','湿端断面数')],r.cases.map(v=>[v.id,v.section_count,v.diagnostics?.native_messages??'—',v.wet_sections?new Set(v.wet_sections.map(Number)).size:'—']));
+  if(wetCases.length){
+   box.append(el('p',tr('Wet section ends make this spacing comparison provisional, even when water-level differences meet the threshold. Use the computed case below to prepare an independent geometry revision. Review its proposed coverage changes, confirm and compute it, then repeat spacing assessment from the revised baseline. The existing nested trial remains unchanged.','湿端使本次加密对比仍属暂定，即使水位差达到阈值也不代表收敛验收完成。可从下方已计算工况自动准备独立几何修订版，核对覆盖建议、确认计算后，再从新基准进行加密评估。现有嵌套试算保留不变。'),'warning'));
+   table(box,[tr('Case','工况'),tr('Wet RS retained from baseline','基准已有断面的湿端 RS'),tr('Wet RS added by refinement','加密新增断面的湿端 RS')],wetCases.map(v=>[v.id,v.retained_wet_sections?(v.retained_wet_sections.join(', ')||tr('None','无')):tr('Not classified in this saved result','旧结果未分类'),v.added_wet_sections?(v.added_wet_sections.join(', ')||tr('None','无')):tr('Not classified in this saved result','旧结果未分类')]));
+  }
   const completed=r.cases.filter(row=>row.status==='COMPUTED'&&row.id!=='baseline');
   if(completed.length){
    const selected=field(box,'spacing-continue-case','Continue from computed case','选择继续使用的已计算工况',completed.at(-1).id,'select',completed.map(row=>[row.id,row.id,row.id]));
@@ -253,7 +258,7 @@ function renderSpacing(parent){
    button('Open spacing trial files','打开加密试算文件',()=>api('open-folder',{id:current.id,path:current.latest_spacing.path.replace(/\/[^/]+$/,'')})));
   if(r.failed_cases?.length){
    box.append(el('p',tr('Incomplete cases — ','未完成工况 — ')+r.failed_cases.join(', '),'warning'),
-    el('p',tr('Retry the previously confirmed batch after resolving its error. A report-only failure reuses intact native outputs; a failed calculation may need a solver retry.','处理错误后可重试此前确认的批次。仅报告失败时复用完整原生输出；计算失败时可能需要重新求解。')),
+    el('p',tr('Retry the confirmed batch after resolving its error. Intact completed cases and reports are reused. Missing reports are regenerated without solving. Changed native evidence blocks reuse; only unfinished calculations may call the solver.','处理错误后可重试已确认批次。完整的已完成工况及报告直接复用；缺失报告单独补生成。原生证据变更会阻止复用，仅尚未完成的计算可能调用求解器。')),
     button('Retry incomplete spacing batch','重试未完成加密批次',async()=>{await api('study-start',{id:current.id,revision:current.revision,token:r.study.sha256,confirmed:true,retry:true});await open(current.id);}));
   }
  }

@@ -15,7 +15,7 @@ class StudyReportRecoveryTests(unittest.TestCase):
         for changed in ('configuration','inputs','hash'):
             config={'title':'test'};deps=[{'path':'input'}]
             summary=dict(configuration={} if changed=='configuration' else config,errors=[])
-            manifest=dict(source_inputs=[] if changed=='inputs' else deps,input_snapshots=[],outputs=[])
+            manifest=dict(source_inputs=[] if changed=='inputs' else deps,input_snapshots=[],native_before=[],outputs=[])
             with patch('ras_workflow.qa_review.load_summary',return_value=(Path('summary.json'),summary,dict(raw_hdf={'path':'solver/project/p.hdf'},run_id='original'))), \
                  patch.object(study,'intact',return_value=changed!='hash'),patch.object(study,'read',return_value=manifest), \
                  patch.object(study,'dependencies',return_value=deps),patch('ras_workflow.report.generate') as generate:
@@ -24,7 +24,7 @@ class StudyReportRecoveryTests(unittest.TestCase):
 
     def test_recovery_retains_native_identity_and_failed_record(self):
         config={'title':'test'};record=dict(status='FAILED',summary={'path':'summary'},errors=['Report: optional source'])
-        manifest=dict(source_inputs=[{'path':'input'}],input_snapshots=[],outputs=[])
+        manifest=dict(source_inputs=[{'path':'input'}],input_snapshots=[],native_before=[],outputs=[])
         with patch('ras_workflow.qa_review.load_summary',return_value=(Path('summary.json'),dict(configuration=config,errors=[]),dict(raw_hdf={'path':'solver/project/p.hdf'},run_id='original'))), \
              patch.object(study,'intact',return_value=True),patch.object(study,'read',return_value=manifest), \
              patch.object(study,'dependencies',return_value=manifest['source_inputs']),patch('ras_workflow.report.generate',return_value={}) as generate, \
@@ -34,6 +34,18 @@ class StudyReportRecoveryTests(unittest.TestCase):
             self.assertEqual(receipt['run_id'],'original');self.assertFalse(receipt['solver_started'])
             self.assertEqual(receipt['prior_failure'],record);self.assertEqual(record['status'],'FAILED')
             generate.assert_called_once()
+
+    def test_changed_native_inputs_block_reuse_even_when_outputs_survive(self):
+        config={'title':'test'};deps=[{'path':'input'}]
+        native={'path':'native.g01'}
+        manifest=dict(source_inputs=deps,input_snapshots=[],native_before=[native],outputs=[])
+        with patch('ras_workflow.qa_review.load_summary',return_value=(Path('summary.json'),dict(configuration=config,errors=[]),dict(raw_hdf={'path':'solver/project/p.hdf'},run_id='original'))), \
+             patch.object(study,'intact',side_effect=lambda entries:native not in entries), \
+             patch.object(study,'read',return_value=manifest),patch.object(study,'dependencies',return_value=deps), \
+             patch('ras_workflow.report.generate') as generate:
+            with self.assertRaisesRegex(ValueError,'native evidence changed'):
+                study.recover_case_reports({'summary':{'path':'summary'}},Path('project.json'),config)
+            generate.assert_not_called()
 
 
 if __name__=='__main__':unittest.main()

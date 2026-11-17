@@ -134,6 +134,9 @@ def build(data, plots, folder, language='en', detail='full', details=None):
                 [[r['profile']]+[f'{v:.6f}' for v in r['last_two_max_xs_deltas_ft']] for r in convergence['rows']],[1.1,2.8,2.8])
             table(d,[tr('Case','工况'),tr('Sections','断面数'),tr('Native messages','原生信息'),tr('Wet-end sections','湿端断面数')],
                 [[case['id'],case['section_count'],case['diagnostics'].get('native_messages'),len(case['wet_sections'])] for case in study['cases']],[2.1,1.1,1.75,1.75])
+            if any(case['wet_sections'] for case in study['cases']):
+                p('Wet section ends make this spacing comparison provisional, even if its numerical differences meet the threshold. Prepare and confirm an independent coverage revision, then repeat spacing assessment from the revised baseline; do not change one level of the existing nested series.',
+                  '湿端使本次加密对比仍属暂定，即使数值差达到阈值也不能完成收敛验收。应在独立修订版中核对并确认覆盖调整，再从新基准重新进行加密评估；不能单独修改现有嵌套序列中的某一级。')
             p('The internal threshold is '+str(convergence['threshold_ft'])+' ft. Coverage is limited to the selected refinement intervals. Added elevations were sampled from the same DEM and added banks were inferred from neighboring sections. Hydraulic warnings and physical applicability remain open.',
               '内部阈值为 '+str(convergence['threshold_ft'])+' ft，结论限于所选加密区间。新增高程从同一 DEM 采样，新增岸站按相邻断面推定。水力警告与物理适用性仍需复核。')
     else:

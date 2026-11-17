@@ -129,18 +129,24 @@ def report_retry_candidate(record):
                 and all(str(e).startswith('Report:') for e in errors))
 
 
-def recover_case_reports(record, project, config):
-    """Retry only a failed report, binding intact native outputs to unchanged case inputs."""
+def verified_case(record, project, config):
+    """Authenticate a saved computation independently of the current code/cache key."""
     from .qa_review import load_summary
-    from . import report
     if not intact([record['summary']]):raise ValueError('Completed case summary changed')
     path,summary,hyd=load_summary(ROOT/record['summary']['path'])
     if summary['configuration']!=config or summary.get('errors'):
         raise ValueError('Completed case configuration or solver checkpoint differs')
     manifest=read((ROOT/hyd['raw_hdf']['path']).parent.parent/'manifest.json')
     if manifest['source_inputs']!=dependencies(project,config) or not intact(
-            manifest['source_inputs']+manifest['input_snapshots']+manifest['outputs']):
+            manifest['source_inputs']+manifest['input_snapshots']+manifest['native_before']+manifest['outputs']):
         raise ValueError('Completed case inputs or native evidence changed')
+    return path, summary, hyd
+
+
+def recover_case_reports(record, project, config):
+    """Write a separate report edition; never overwrite or rerun native evidence."""
+    from . import report
+    path, summary, hyd = verified_case(record, project, config)
     folder=path.parent/('reports_retry_'+unique_id())
     result=report.generate(path,folder)
     receipt=dict(status='REPORTS_REGENERATED',summary=record['summary'],reports=item(folder/'report_manifest.json'),
@@ -171,21 +177,40 @@ def run_case(sp, study, rp, review, case, journal, journal_path, timeout):
         if p.exists() and read(p) != content: raise ValueError('Approved study configuration changed: ' + rel(p))
         if not p.exists(): save(p, content)
     previous=next((r for r in journal['cases'] if r['id']==case['id']),{})
-    retry_report=report_retry_candidate(previous)
+    resume_native = (previous.get('status') == 'COMPUTED' or report_retry_candidate(previous)
+                     or previous.get('resume_native') is True)
     record = dict(id=case['id'], status='IN_PROGRESS', started_utc=utc())
-    if retry_report:record.update(summary=previous['summary'],errors=previous['errors'])
+    if previous:
+        journal.setdefault('attempt_history', []).append(copy.deepcopy(previous))
+    if resume_native:
+        record.update(summary=previous['summary'], resume_native=True, solver_started=False)
     journal['cases'] = [r for r in journal['cases'] if r['id'] != case['id']] + [record]; save(journal_path, journal)
+    failure_stage = 'calculation'
     try:
-        if retry_report:
-            recovery=recover_case_reports(previous,dest/'project.json',c)
-            record.update(exit_code=0,status='COMPUTED',errors=[],report_recovery=recovery,solver_started=False)
+        if resume_native:
+            from .report_catalog import inspect
+            failure_stage = 'evidence'
+            summary_path, _, hyd = verified_case(previous, dest/'project.json', c)
+            failure_stage = 'report'
+            catalog = inspect(summary_path)
+            latest = catalog['latest']
+            record.update(run_id=hyd['run_id'], reused_calculation=True, report_issues=catalog['issues'])
+            if latest:
+                record.update(reports=latest['manifest'], reports_reused=True)
+                if previous.get('report_recovery') and intact([previous['report_recovery']]):
+                    record['report_recovery'] = previous['report_recovery']
+            else:
+                recovery = recover_case_reports(previous, dest/'project.json', c)
+                record.update(report_recovery=recovery, reports=read(ROOT/recovery['path'])['reports'], reports_reused=False)
+            record.update(exit_code=0, status='COMPUTED', errors=[])
         else:
             code = execute(str(dest/'project.json'), study['scenario_id'], timeout=timeout)
             state = read(dest/'state.json')
             record.update(exit_code=code, status='COMPUTED' if code == 0 else 'BLOCKED' if code == 2 else 'FAILED',
                           summary=state['latest_summary'], errors=state.get('errors', []))
     except Exception as e:
-        record.update(exit_code=1, status='FAILED', error=str(e))
+        record.update(exit_code=1, status='FAILED', error=str(e), failure_stage=failure_stage,
+                      errors=[failure_stage.capitalize()+': '+str(e)])
     record['finished_utc'] = utc(); save(journal_path, journal)
     return record
 
@@ -266,12 +291,14 @@ def analyze(study_path, review_path):
                       selection=study.get('selection'), intervals=study.get('intervals',[]),
                       cases=[dict(records.get(c['id'],{}),id=c['id'],section_count=c['section_count']) for c in study['cases']])
         from .app_revision import _diagnostic_summary
-        from .qa_locator import collect as locate
+        from .spacing_coverage import observations, assess_coverage
+        baseline_stations = [row['rs'] for row in read(ROOT/study['cases'][0]['geometry']['path'])['cross_sections']]
         for case in result['cases']:
             if case.get('status')!='COMPUTED':continue
             summary=read(ROOT/case['summary']['path'])
             case['diagnostics']=_diagnostic_summary(summary)
-            case['wet_sections']=[r['rs'] for r in locate(summary['hydraulics'])['rows'] if r['left_excess_ft']>0 or r['right_excess_ft']>0]
+            case.update(observations(summary['hydraulics'], baseline_stations))
+        result['end_coverage'] = assess_coverage(result['cases'])
         if not failed:
             convergence=series([records[c['id']]['summary']['path'] for c in study['cases']],folder/('convergence_'+unique_id()))
             result.update(status=convergence['status'],convergence=convergence)

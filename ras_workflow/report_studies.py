@@ -59,9 +59,10 @@ def collect(summary_path, summary):
                               boundaries=h.get('boundaries'), boundary_slopes=h.get('boundary_slopes')))
             if plan.get('analysis_kind')=='section_spacing':
                 from .app_revision import _diagnostic_summary
-                from .qa_locator import collect as locate
-                cases[-1].update(section_count=case['section_count'],diagnostics=_diagnostic_summary(result),
-                    wet_sections=[r['rs'] for r in locate(h)['rows'] if r['left_excess_ft']>0 or r['right_excess_ft']>0])
+                from .spacing_coverage import observations
+                baseline_stations = [row['rs'] for row in read(ROOT/plan['cases'][0]['geometry']['path'])['cross_sections']]
+                cases[-1].update(status='COMPUTED', section_count=case['section_count'], diagnostics=_diagnostic_summary(result),
+                                 **observations(h, baseline_stations))
         baseline = records['baseline']['summary']['path']
         repeat = compare(summary_path, baseline, None)
         if (repeat['unmatched_baseline_profiles'] or repeat['unmatched_candidate_profiles']
@@ -77,7 +78,12 @@ def collect(summary_path, summary):
             if saved != [actual]: raise ValueError('Sensitivity comparison differs from native outputs')
             comparisons.append(actual)
         convergence=None
+        end_coverage=None
         if plan.get('analysis_kind')=='section_spacing':
+            from .spacing_coverage import assess_coverage
+            end_coverage=assess_coverage(cases)
+            if 'end_coverage' in analysis and analysis['end_coverage'] != end_coverage:
+                raise ValueError('Spacing end-coverage assessment differs from native outputs')
             from .convergence import assess
             from .qa import THRESHOLDS
             convergence=analysis.get('convergence')
@@ -95,7 +101,7 @@ def collect(summary_path, summary):
                 raise ValueError('Spacing convergence assessment changed')
             entries+=convergence['sources']+convergence['comparisons']
         studies.append(dict(analysis=item(path), cases=cases, comparisons=comparisons,convergence=convergence,
-                            excluded_intervals=plan.get('excluded_intervals',[]), deferred_intervals=plan.get('deferred_intervals',[]),
+                            end_coverage=end_coverage, excluded_intervals=plan.get('excluded_intervals',[]), deferred_intervals=plan.get('deferred_intervals',[]),
                             selection=plan.get('selection'), intervals=plan.get('intervals',[]),
                             hydraulic_qa='REVIEW_REQUIRED', engineering_acceptance='NOT_ASSESSED'))
         sources += [item(path)] + entries + plan['evidence'] + [plan['specification']] + plan['source_inputs']
