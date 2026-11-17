@@ -9,6 +9,9 @@ def prepare(key,body):
     if body.get('revision')!=m['revision']:raise ValueError('Project changed; reload')
     if not m.get('active_project') or not m.get('summary') or not intact([m['summary']]):raise ValueError('Compute a baseline before preparing a sensitivity batch')
     if m.get('native_review'):raise ValueError('This batch editor currently supports workflow-built geometry only')
+    if body.get('kind')=='spacing':
+        from .section_spacing import prepare as prepare_spacing
+        return prepare_spacing(m,body)
     choices=body.get('parameters',[])
     if not isinstance(choices,list) or not 1<=len(choices)<=3:raise ValueError('Choose 1–3 parameters (up to six variants plus baseline)')
     c=read(ROOT/m['active_project']);g=read((ROOT/m['active_project']).parent/c['geometry']);sc=next(s for s in c['scenarios'] if s['id']==m['scenario'])
@@ -46,7 +49,7 @@ def prepare(key,body):
     out=core.folder(key)/'studies'/unique_id();spec=dict(id='sensitivity',case_kind=c['case_kind'],purpose='User-selected local sensitivity comparison; not automatic design acceptance',sources=[m['summary']],measurement_topics=topics,cases=cases,delivery_enabled=False)
     save(out/'specification.json',spec);path=study.prepare(ROOT/m['active_project'],m['scenario'],out/'specification.json',out/'prepared')
     m['pending_study']=item(path);core.persist(m,'PREPARE_SENSITIVITY',dict(study=m['pending_study']))
-    return dict(token=m['pending_study']['sha256'],plan=read(path),warning='Each case is a real HEC-RAS run. Only the displayed ranges are tested; no interaction or convergence claim.')
+    return dict(token=m['pending_study']['sha256'],entry=m['pending_study'],plan=read(path),warning='Each case is a real HEC-RAS run. Only the displayed ranges are tested; no interaction or convergence claim.')
 
 
 def start(key,body):
@@ -66,6 +69,10 @@ def execute(key):
     if not intact(list(active.values())):raise ValueError('Confirmed sensitivity changed')
     result=study.run(active['study']['path'],active['review']['path'])
     path=(ROOT/active['study']['path']).parent/'analysis.json'
-    m.update(latest_study=item(path),status='RESULTS_READY',phase='STUDY_FINISHED',errors=[])
+    entry=item(path)
+    result_field='latest_spacing' if result.get('analysis_kind')=='section_spacing' else 'latest_study'
+    m.update(status='RESULTS_READY',phase='STUDY_FINISHED',errors=[])
+    m[result_field]=entry
+    m.pop('pending_study',None)
     m['exports_need_refresh']=True
-    core.persist(m,'SENSITIVITY_FINISHED',dict(status=result['status'],analysis=m['latest_study']))
+    core.persist(m,'SENSITIVITY_FINISHED',dict(status=result['status'],analysis=entry))

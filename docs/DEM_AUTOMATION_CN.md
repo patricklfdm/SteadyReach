@@ -52,3 +52,8 @@ QA 建议会联合搜索邻近断面。候选包含原方向及 ±1、±2、±3�
 - QA 修正保护结构功能断面位置，并保留水力警告供复核。自动草稿可补入缺失的流态或适用的边界坡度假设，供最终确认。绕流表达与断面间距收敛需要分别进行工程评估。
 
 HEC 指南要求断面具有代表性、近似垂直流向并覆盖相关漫滩；涵洞还需要适当的外部功能断面。参见官方[断面几何](https://www.hec.usace.army.mil/confluence/rasdocs/ras1dtechref/7.0/basic-data-requirements/geometric-data/cross-section-geometry)及[涵洞断面位置](https://www.hec.usace.army.mil/confluence/rasdocs/ras1dtechref/7.0/modeling-culverts/general-culvert-modeling-guidelines/cross-section-locations-for-culverts)。本程序的自动搜索阈值为实现启发式参数，并非这些指南规定的阈值。
+
+
+## 嵌套加密检查
+
+连续纯河段完成计算后，可在结果页准备两级 DEM 加密，按基准水位筛查范围、保留已有控制，一次确认后批量调用真实求解器并比较。请核对排除区间、新算湿端和原生警告。新增断面覆盖搜索宽度上限为 2000 ft，已有断面更宽时采用其最大宽度。[逐步加密指南](RESULTS_REVIEW_CN.md)。

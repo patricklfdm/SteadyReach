@@ -16,7 +16,7 @@ def collect(summary_path, summary):
         if not study_entry: continue
         plan = read(safe_path(ROOT, study_entry['path']))
         if target not in plan.get('evidence', []): continue
-        if analysis.get('status') != 'COMPARISON_REQUIRES_REVIEW' or analysis.get('failed_cases'):
+        if analysis.get('status') not in ('COMPARISON_REQUIRES_REVIEW','STABLE_AT_REVIEW_THRESHOLD','NOT_CONVERGED') or analysis.get('failed_cases'):
             continue
         entries = [study_entry, analysis['review'], analysis['execution']]
         if not intact(entries): raise ValueError('Bound sensitivity study evidence changed')
@@ -43,6 +43,11 @@ def collect(summary_path, summary):
             entries += [record['summary'], item(manifest_path), case['draft'], case['geometry']] + bound
             cases.append(dict(id=case['id'], changes=case['changes'], run_id=h['run_id'],
                               boundaries=h.get('boundaries'), boundary_slopes=h.get('boundary_slopes')))
+            if plan.get('analysis_kind')=='section_spacing':
+                from .app_revision import _diagnostic_summary
+                from .qa_locator import collect as locate
+                cases[-1].update(section_count=case['section_count'],diagnostics=_diagnostic_summary(result),
+                    wet_sections=[r['rs'] for r in locate(h)['rows'] if r['left_excess_ft']>0 or r['right_excess_ft']>0])
         baseline = records['baseline']['summary']['path']
         repeat = compare(summary_path, baseline, None)
         if (repeat['unmatched_baseline_profiles'] or repeat['unmatched_candidate_profiles']
@@ -57,7 +62,26 @@ def collect(summary_path, summary):
             saved = [v for v in analysis['comparisons'] if v['case'] == case['id']]
             if saved != [actual]: raise ValueError('Sensitivity comparison differs from native outputs')
             comparisons.append(actual)
-        studies.append(dict(analysis=item(path), cases=cases, comparisons=comparisons,
+        convergence=None
+        if plan.get('analysis_kind')=='section_spacing':
+            from .convergence import assess
+            from .qa import THRESHOLDS
+            convergence=analysis.get('convergence')
+            if not convergence or not intact(convergence['sources']+convergence['comparisons']):
+                raise ValueError('Spacing convergence evidence changed')
+            pairs=[]
+            for i in range(len(plan['cases'])-1):
+                a,b=plan['cases'][i:i+2]
+                pair=compare(records[a['id']]['summary']['path'],records[b['id']]['summary']['path'],None)
+                if pair!=read(ROOT/convergence['comparisons'][i]['path']):raise ValueError('Spacing comparison differs from native outputs')
+                pairs.append(pair)
+            rows=assess(pairs,THRESHOLDS['sensitivity_hw_ft'])
+            expected_status='STABLE_AT_REVIEW_THRESHOLD' if all(r['status']=='STABLE_AT_REVIEW_THRESHOLD' for r in rows) else 'NOT_CONVERGED'
+            if rows!=convergence['rows'] or convergence['threshold_ft']!=THRESHOLDS['sensitivity_hw_ft'] or analysis['status']!=expected_status or convergence['status']!=expected_status:
+                raise ValueError('Spacing convergence assessment changed')
+            entries+=convergence['sources']+convergence['comparisons']
+        studies.append(dict(analysis=item(path), cases=cases, comparisons=comparisons,convergence=convergence,
+                            excluded_intervals=plan.get('excluded_intervals',[]),
                             hydraulic_qa='REVIEW_REQUIRED', engineering_acceptance='NOT_ASSESSED'))
         sources += [item(path)] + entries + plan['evidence'] + [plan['specification']] + plan['source_inputs']
     unique = {v['path']: v for v in sources}

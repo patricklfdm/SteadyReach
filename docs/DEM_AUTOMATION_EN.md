@@ -52,3 +52,8 @@ Review the proposed directions and floodplain connections together. Deselecting 
 - QA repair protects structure-face locations and retains hydraulic warnings for review. The automatic-draft route can fill a missing regime or supported boundary-slope assumption for final confirmation. Bypass representation and section-spacing convergence require their own engineering assessment.
 
 HEC guidance calls for representative geometry and sections approximately normal to flow, covering the relevant floodplain; culverts also need appropriate functional exterior sections. See [cross-section geometry](https://www.hec.usace.army.mil/confluence/rasdocs/ras1dtechref/7.0/basic-data-requirements/geometric-data/cross-section-geometry) and [culvert section locations](https://www.hec.usace.army.mil/confluence/rasdocs/ras1dtechref/7.0/modeling-culverts/general-culvert-modeling-guidelines/cross-section-locations-for-culverts). The automatic search thresholds are implementation heuristics, not thresholds prescribed by those references.
+
+
+## Nested spacing checks
+
+For completed continuous river models, the Results page can prepare two DEM refinement levels with baseline-WSE extent screening, preserved existing controls, one batch confirmation and real solver comparison. Review excluded intervals, fresh wet ends and native warnings. New-section coverage searches use a 2000 ft width bound, increased to the existing maximum section width when needed. [Step-by-step spacing guide](RESULTS_REVIEW_EN.md).

@@ -413,8 +413,20 @@ def view(key,detail=True):
             from .project_actions import process_alive
             if not process_alive(task.get('pid')):result.update(status='INTERRUPTED',errors=['The worker stopped; saved inputs and outputs remain. Retry the task.'])
     if not detail:return result
+    if result.get('job',{}).get('action')=='study' and m.get('active_study'):
+        active=m['active_study'];plan=read(ROOT/active['study']['path'])
+        journal_path=(ROOT/active['study']['path']).parent/'execution.json'
+        records={}
+        if journal_path.exists():
+            journal=read(journal_path)
+            if journal['study']!=active['study'] or journal['review']!=active['review']:raise ValueError('Study progress identity changed')
+            records={row['id']:row for row in journal['cases']}
+        result['study_progress']=[dict(id=case['id'],section_count=case.get('section_count'),
+            status=records.get(case['id'],{}).get('status','QUEUED'),error=records.get(case['id'],{}).get('error')) for case in plan['cases']]
     if m.get('catalog_attempt') and intact([m['catalog_attempt']]):result['catalog_result']=read(ROOT/m['catalog_attempt']['path'])
     if m.get('latest_study') and intact([m['latest_study']]):result['study_result']=read(ROOT/m['latest_study']['path'])
+    if m.get('latest_spacing') and intact([m['latest_spacing']]):result['spacing_result']=read(ROOT/m['latest_spacing']['path'])
+    if m.get('pending_study') and intact([m['pending_study']]):result['pending_study_plan']=read(ROOT/m['pending_study']['path'])
     if m.get('automatic_preparation') and intact([m['automatic_preparation']]):
         result['preparation_result']=read(ROOT/m['automatic_preparation']['path'])
     result['native']=native_preview(m)

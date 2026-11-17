@@ -3,7 +3,7 @@ import copy
 import csv
 import os
 
-from .common import ROOT, finite, intact, item, lock, read, rel, safe_path, save, sha, utc, identifier
+from .common import ROOT, finite, intact, item, lock, read, rel, safe_path, save, sha, utc, identifier, unique_id
 from .inputs import dependencies, gate, geometry_errors, load
 from .qa import compare, THRESHOLDS
 from .river import is_river, boundary_errors
@@ -135,8 +135,16 @@ def run(study_path, review_path, timeout=180):
         journal['status'] = 'IN_PROGRESS'; save(journal_path, journal)
         for case in study['cases']:
             dest = (ROOT/case['draft']['path']).parent; c = read(ROOT/case['draft']['path'])
+            geometry_hash=case['geometry']['sha256']
+            if study.get('analysis_kind')=='section_spacing':
+                from .section_spacing import confirm_geometry
+                geometry=confirm_geometry(read(ROOT/case['geometry']['path']),item(rp))
+                target=dest/'geometry.confirmed.json'
+                if target.exists() and read(target)!=geometry:raise ValueError('Confirmed spacing geometry changed')
+                if not target.exists():save(target,geometry)
+                c['geometry']=target.name;geometry_hash=sha(target)
             c['authorization'] = 'authorization.json'; c['geometry_review'] = review['basis']
-            auth = dict(project_id=study['project_id'], allowed_geometry_sha256=case['geometry']['sha256'],
+            auth = dict(project_id=study['project_id'], allowed_geometry_sha256=geometry_hash,
                         scope=study['case_kind'], study=item(sp), review=item(rp), authority=review['reviewer'], basis=review['basis'])
             for name, content in [('authorization.json', auth), ('project.json', c)]:
                 p = dest/name
@@ -207,6 +215,21 @@ def analyze(study_path, review_path):
                   case_kind=study['case_kind'], comparisons=comparisons, measurement_priorities=rows, failed_cases=failed,
                   threshold_ft=THRESHOLDS['sensitivity_hw_ft'], engineering_acceptance='NOT_ASSESSED',
                   limitation='Ranking applies only to explicit tested ranges. Untested parameters are unresolved, not insensitive. QA and interactions remain open.')
+    if study.get('analysis_kind')=='section_spacing':
+        from .convergence import series
+        result.update(analysis_kind='section_spacing',scope=read(ROOT/study['specification']['path'])['scope'],
+                      excluded_intervals=study.get('excluded_intervals',[]),
+                      cases=[dict(records.get(c['id'],{}),id=c['id'],section_count=c['section_count']) for c in study['cases']])
+        from .app_revision import _diagnostic_summary
+        from .qa_locator import collect as locate
+        for case in result['cases']:
+            if case.get('status')!='COMPUTED':continue
+            summary=read(ROOT/case['summary']['path'])
+            case['diagnostics']=_diagnostic_summary(summary)
+            case['wet_sections']=[r['rs'] for r in locate(summary['hydraulics'])['rows'] if r['left_excess_ft']>0 or r['right_excess_ft']>0]
+        if not failed:
+            convergence=series([records[c['id']]['summary']['path'] for c in study['cases']],folder/('convergence_'+unique_id()))
+            result.update(status=convergence['status'],convergence=convergence)
     save(folder/'analysis.json', result)
     with (folder/'measurement_priorities.csv').open('w', newline='', encoding='utf-8-sig') as f:
         fields = ['id', 'priority', 'evidence_status', 'range_basis', 'max_abs_hw_change_ft', 'max_abs_matched_xs_change_ft', 'measurement_action']

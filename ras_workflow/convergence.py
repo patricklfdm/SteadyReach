@@ -3,6 +3,7 @@
 Two consecutive refinements must meet the existing review threshold. Passing
 this numerical check does not clear warning review or establish design safety.
 """
+import math
 import re
 from .common import ROOT,read,item,intact,safe_path,save,utc
 from .qa import compare,THRESHOLDS
@@ -44,18 +45,12 @@ def series(summaries,output):
         flow=next(v['sha256'] for v in manifest['native_before'] if v['path'].lower().endswith('.f01'))
         geometry=next(ROOT/v['path'] for v in manifest['native_before'] if v['path'].lower().endswith('.g01'))
         plan=next(ROOT/v['path'] for v in manifest['native_before'] if v['path'].lower().endswith('.p01'))
-        structure,settings=nonspacing_signature(geometry.read_text(encoding='ascii'),plan.read_text(encoding='ascii'))
+        structure,settings=nonspacing_signature(geometry.read_text(encoding='ascii'),plan.read_text(encoding='ascii'), expected.get('model_type','culvert'))
         if last_expected:
-            for key in ['groups','channel_n','overbank_n','culvert_n','road_width_ft','road_min_ft','us_xs_rs','ds_xs_rs','structure_rs']:
-                if expected[key]!=last_expected[key]:raise ValueError('Non-spacing input changed: '+key)
+            validate_nested(last_expected,expected)
             if flow!=last_flow:raise ValueError('Boundary/flow inputs changed')
             if structure!=last_structure:raise ValueError('Full native structure/deck input changed')
             if settings!=last_plan:raise ValueError('Non-diagnostic solver plan settings changed')
-            old={r['rs']:r for r in last_expected['cross_sections']};new={r['rs']:r for r in xs}
-            if not old.keys()<=new.keys() or len(new)<=len(old):raise ValueError('Series must add sections and retain every original')
-            for rs,a in old.items():
-                for key in ['station_ft','elevation_ft','bank_stations_ft','center_xy','cutline_xy','expansion_contraction']:
-                    if a[key]!=new[rs][key]:raise ValueError('Original section changed: '+str(rs)+' / '+key)
         last_expected=expected;last_flow=flow;last_structure=structure;last_plan=settings
         sources += [item(path),item(solver/'manifest.json'),item(solver/'request.json')]
     out.mkdir(parents=True);comparisons=[]
@@ -70,9 +65,40 @@ def series(summaries,output):
     save(out/'convergence.json',result);return result
 
 
-def nonspacing_signature(geometry,plan):
+def validate_nested(previous,current):
+    """Keep hydraulic controls fixed and conserve the three interval lengths."""
+    changing={'cross_sections','xs_count','xs_stations','manning_by_section','ineffective_by_section'}
+    for key in previous.keys()|current.keys():
+        if key not in changing and previous.get(key)!=current.get(key):
+            raise ValueError('Non-spacing input changed: '+key)
+    old=previous['cross_sections'];new=current['cross_sections']
+    old_ids=[r['rs'] for r in old];new_ids=[r['rs'] for r in new]
+    if len(set(new_ids))!=len(new_ids) or not set(old_ids)<=set(new_ids) or len(new)<=len(old):
+        raise ValueError('Series must add sections and retain every original')
+    indices=[new_ids.index(rs) for rs in old_ids]
+    if indices!=sorted(indices) or indices[0]!=0 or indices[-1]!=len(new)-1:
+        raise ValueError('Spacing trials must preserve endpoints and section order')
+    for i,a in enumerate(old):
+        b=new[indices[i]]
+        for key in ('station_ft','elevation_ft','bank_stations_ft','center_xy','cutline_xy',
+                    'expansion_contraction','manning_segments','ineffective_left','ineffective_right'):
+            if a.get(key)!=b.get(key):
+                raise ValueError('Original section changed: '+str(a['rs'])+' / '+key)
+        for key in ('manning_by_section','ineffective_by_section'):
+            if previous.get(key) is not None and (current.get(key) is None or previous[key][i]!=current[key][indices[i]]):
+                raise ValueError('Original section control changed: '+str(a['rs'])+' / '+key)
+        parts=new[indices[i]:indices[i+1]] if i+1<len(old) else [b]
+        for axis in range(3):
+            total=sum(r['reach_lengths_ft'][axis] for r in parts)
+            if not math.isclose(total,a['reach_lengths_ft'][axis],rel_tol=1e-9,abs_tol=1e-6):
+                raise ValueError('Reach length total changed: '+str(a['rs']))
+
+
+def nonspacing_signature(geometry,plan,model_type='culvert'):
     blocks=re.split(r'(?m)^Type RM Length L Ch R =',geometry)[1:]
-    structures=[b for b in blocks if b.lstrip().startswith('2 ,')]
-    if len(structures)!=1:raise ValueError('Spacing series requires one inspected culvert record')
+    structures=[b for b in blocks if not re.match(r'\s*1\s*,',b)]
+    if model_type=='river' and structures:raise ValueError('River spacing series contains a structure')
+    if model_type!='river' and (len(structures)!=1 or not re.match(r'\s*2\s*,',structures[0])):
+        raise ValueError('Spacing series requires one inspected culvert record')
     settings=re.sub(r'(?m)^(?:Plan Title|Short Identifier|Global Log Level|Log Output Level)=.*\n?','',plan)
-    return structures[0],settings
+    return structures,settings

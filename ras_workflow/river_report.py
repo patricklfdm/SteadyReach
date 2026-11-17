@@ -23,6 +23,7 @@ def build(data, plots, folder, language='en', detail='full', details=None):
         'conditional_surface_dem':'地表 DEM 条件性近似','surveyed_channel':'实测河槽',
         'combined_survey_and_dem':'河槽测量与 DEM 组合','normal_depth':'正常水深',
         'known_stage':'已知水位',
+        'cross_sections':'断面数',
         'boundary_slopes.downstream':'下游正常水深坡降',
         'boundary_slopes.upstream':'上游正常水深坡降',
         'Entered by the local user for this computation; not independently verified.':'本次由用户填写或采用，未经独立核实。',
@@ -99,10 +100,10 @@ def build(data, plots, folder, language='en', detail='full', details=None):
     d.add_heading(tr('Completed sensitivity tests','已完成的敏感性测试'),1)
     if studies:
         sensitivity=[]
-        for study in studies:
+        for study_index,study in enumerate(studies,1):
             for comparison in study['comparisons']:
                 case=next(v for v in study['cases'] if v['id']==comparison['case'])
-                changes='; '.join(localized(v['path'])+': '+str(v['before'])+' → '+str(v['after']) for v in case['changes'])
+                changes=tr('Study '+str(study_index),'第 '+str(study_index)+' 批')+' / '+'; '.join(localized(v['path'])+': '+str(v['before'])+' → '+str(v['after']) for v in case['changes'])
                 for profile in comparison['rows']:
                     delta=[v for v in comparison['cross_section_differences'] if v['profile']==profile['profile']]
                     largest=max(delta,key=lambda v:abs(v['delta_wse_ft']))
@@ -111,6 +112,24 @@ def build(data, plots, folder, language='en', detail='full', details=None):
         table(d,[tr('Changed input','变更输入'),tr('Profile','工况'),tr('Max |ΔWSE| ft','最大 |Δ水位| ft'),'RS'],sensitivity,[3.15,.7,1.4,1.45])
         p('Only completed studies tied to this exact baseline are included. Comparisons were recalculated from hashed native results. Each study baseline reproduces the report water levels. These ranges are conditional tests, not measured confidence intervals. No boundary case is automatically adopted and hydraulic QA remains open.',
           '仅纳入绑定本次基准的已完成测试。差值已按哈希校验的原生结果重新计算，各测试基准重现本报告水位。范围属于条件性测试，不是实测置信区间；不自动采用任何边界方案，水力 QA 仍待闭合。')
+        for study_index,study in enumerate(studies,1):
+            convergence=study.get('convergence')
+            if not convergence:continue
+            d.add_heading(tr('Nested section-spacing assessment','嵌套断面加密评估')+' '+str(study_index),2)
+            status=tr('Stable at the workflow threshold','达到工作流阈值') if convergence['status']=='STABLE_AT_REVIEW_THRESHOLD' else tr('Convergence remains open','收敛仍待处理')
+            excluded=study.get('excluded_intervals',[])
+            if excluded:
+                locations=', '.join(str(v['upstream_rs'])+'–'+str(v['downstream_rs']) for v in excluded)
+                p('Unrefined intervals requiring direction review include RS '+locations+'. Full-reach spacing coverage remains incomplete.',
+                  '需复核方向且未加密的区间包括 RS '+locations+'，全河段加密覆盖尚未完整。')
+            p(status+'. Both consecutive refinements are checked at every retained section using native water levels.',
+              status+'。连续两级加密均采用原生水位核对全部保留断面。')
+            table(d,[tr('Profile','工况'),tr('First max |ΔWSE| ft','第一级最大 |Δ水位| ft'),tr('Second max |ΔWSE| ft','第二级最大 |Δ水位| ft')],
+                [[r['profile']]+[f'{v:.6f}' for v in r['last_two_max_xs_deltas_ft']] for r in convergence['rows']],[1.1,2.8,2.8])
+            table(d,[tr('Case','工况'),tr('Sections','断面数'),tr('Native messages','原生信息'),tr('Wet-end sections','湿端断面数')],
+                [[case['id'],case['section_count'],case['diagnostics'].get('native_messages'),len(case['wet_sections'])] for case in study['cases']],[2.1,1.1,1.75,1.75])
+            p('The internal threshold is '+str(convergence['threshold_ft'])+' ft. Coverage is limited to the selected refinement intervals. Added elevations were sampled from the same DEM and added banks were inferred from neighboring sections. Hydraulic warnings and physical applicability remain open.',
+              '内部阈值为 '+str(convergence['threshold_ft'])+' ft，结论限于所选加密区间。新增高程从同一 DEM 采样，新增岸站按相邻断面推定。水力警告与物理适用性仍需复核。')
     else:
         p('No completed sensitivity study is bound to this exact baseline. Tests from prior geometry revisions are not reused.',
           '未发现绑定本次基准的已完成敏感性测试；不沿用旧几何修订版的测试结果。')

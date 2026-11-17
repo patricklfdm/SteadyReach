@@ -44,6 +44,7 @@ function renderRevisionComparison(parent,comparison){
 function renderResultTools(parent){
  if(!current.native_review)parent.append(button('Prepare QA revision suggestions','根据 QA 创建修订建议',prepareQaRevision));
  renderStudy(parent);
+ renderSpacing(parent);
  if(current.delivery?.mapped&&!current.exports_need_refresh)parent.append(button('Open QGIS review copy','打开 QGIS 复核副本',async()=>{const r=await api('qgis-preview',{id:current.id});notify(tr('Opened a separate preview copy: ','已打开独立复核副本：')+r.path);}));
  const box=details(parent,'Complete native outputs / refresh deliverables','补齐原生输出／更新交付包',!!current.exports_need_refresh||['UNAVAILABLE','COMPLETE_WITH_DIFFERENCES'].includes(current.automatic_native_outputs?.status));
  if(current.model_type==='river')box.append(el('p',tr('The workflow exports the full native warning table for the river reach. There are no culvert group tables.','工作流导出整个河段的原生警告表，纯河道没有涵孔组表。')));
@@ -79,6 +80,82 @@ function renderResultTools(parent){
  }
 }
 
+function renderStudyProgress(parent,progress){
+ const states={QUEUED:tr('Queued','等待中'),IN_PROGRESS:tr('Computing / exporting reports','计算／导出报告中'),COMPUTED:tr('Computed','已计算'),BLOCKED:tr('Needs input','待处理'),FAILED:tr('Failed','失败')};
+ const names={baseline:tr('Baseline','基准'),refinement_1:tr('First refinement','第一级加密'),refinement_2:tr('Second refinement','第二级加密')};
+ table(parent,[tr('Case','工况'),tr('Sections','断面数'),tr('Progress','进度')],progress.map(row=>[names[row.id]||row.id,row.section_count??'—',states[row.status]||row.status]));
+ for(const row of progress)if(row.error)parent.append(el('p',row.id+' · '+row.error,'warning'));
+}
+
+function renderSpacing(parent){
+ if(current.native_review||current.model_type!=='river')return;
+ const box=details(parent,'Section-spacing trial','断面加密试算',!!current.spacing_result);
+ box.append(el('p',tr('Prepare two nested DEM refinements around spacing-related warnings or throughout the reach. Review the added sections and inferred banks once, then run the baseline and both refinements sequentially.','按加密相关警告定位区间，或选择全河段，准备两级嵌套 DEM 加密。集中核对新增断面和推定岸站后，依次计算基准及两级加密。')));
+ const scope=field(box,'spacing-scope','Refinement extent','加密范围',current.pending_study_plan?.scope||'warnings','select',[
+  ['warnings','Intervals beside spacing-related warnings','加密相关警告相邻区间'],['all','Entire continuous reach','完整连续河段']]);
+ const preview=el('div');let proposal=null;
+ box.append(button('Prepare nested spacing preview','生成两级加密预览',async()=>{
+  proposal=await api('study-prepare',{id:current.id,revision:current.revision,kind:'spacing',scope:scope.value});
+  current.pending_study=proposal.entry;current.pending_study_plan=proposal.plan;
+  showProposal();notify(tr('Spacing preview saved. Review the proposed sections before confirming calculation.','加密预览已保存，请核对新增断面后确认计算。'));
+ }),preview);
+ scope.addEventListener('input',()=>{proposal=null;preview.replaceChildren();});
+ function showProposal(){
+  preview.replaceChildren();const plan=proposal.plan;
+  if(plan.excluded_intervals?.length)preview.append(el('p',tr('Intervals excluded because new cutlines could not fit — ','新增断面无法适配而排除的区间 — ')+plan.excluded_intervals.map(v=>v.upstream_rs+' → '+v.downstream_rs).join(', ')+tr('. These locations remain for geometry review.','。这些位置仍需几何复核。'),'warning'));
+  table(preview,[tr('Case','工况'),tr('Sections','断面数'),tr('Added this level','本级新增')],plan.cases.map(c=>[c.id,c.section_count,c.added_sections.length]));
+  if(plan.map_geometry){
+   const map=details(preview,'Section plan view','断面平面位置');
+   map.append(el('p',tr('Gray retained sections · orange first refinement · blue second refinement · magenta flowline.','灰色为保留断面，橙色为第一级新增，蓝色为第二级新增，紫红色为流线。')));
+   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 700 520');svg.classList.add('repair-profile');svg.setAttribute('role','img');svg.setAttribute('aria-label',tr('Nested section positions','嵌套加密断面位置'));map.append(svg);
+   const groups=[{rows:plan.map_geometry.retained,color:'#6d7c83'},...plan.cases.filter(c=>c.added_sections.length).map((c,i)=>({rows:c.added_sections,color:i?'#1679be':'#bc7019'}))];
+   const points=groups.flatMap(g=>g.rows.flatMap(r=>r.cutline_xy)),xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
+   const lo=[Math.min(...xs),Math.min(...ys)],hi=[Math.max(...xs),Math.max(...ys)],scale=Math.min(650/(hi[0]-lo[0]),470/(hi[1]-lo[1]));
+   const pt=p=>[350+(p[0]-(lo[0]+hi[0])/2)*scale,260-(p[1]-(lo[1]+hi[1])/2)*scale].join(',');
+   for(const group of groups)for(const row of group.rows)svgEl(svg,'polyline',{points:row.cutline_xy.map(pt).join(' '),fill:'none',stroke:group.color,'stroke-width':1});
+   svgEl(svg,'polyline',{points:plan.map_geometry.flowline.map(pt).join(' '),fill:'none',stroke:'#aa245d','stroke-width':2});
+  }
+  const intervals=details(preview,'Selected intervals and warning locations','所选区间及警告位置');
+  table(intervals,['RS → RS',tr('Channel length (ft)','主槽长度（ft）'),tr('Selection basis','选择依据')],plan.intervals.map(v=>[
+   v.upstream_rs+' → '+v.downstream_rs,v.channel_length_ft.toFixed(2),v.reasons.join(', ')||tr('Full-reach selection','已选择全河段')]));
+  for(const c of plan.cases.filter(c=>c.added_sections.length)){
+   const area=details(preview,c.id+' · added sections',c.id+' · 新增断面');
+   for(const row of c.added_sections){
+    const profile=details(area,'RS '+row.station+' · '+row.width_ft.toFixed(1)+' ft','RS '+row.station+' · '+row.width_ft.toFixed(1)+' ft');
+    profile.append(el('p',tr('Adjacent sections / inferred banks (ft) — ','相邻断面／推定岸站（ft）— ')+row.bracket.join(' / ')+' · '+row.banks_ft.map(v=>v.toFixed(2)).join(' / ')));
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 700 230');svg.classList.add('repair-profile');svg.setAttribute('role','img');svg.setAttribute('aria-label','DEM RS '+row.station);profile.append(svg);
+    const x=row.station_ft,z=row.elevation_ft,lo=Math.min(...z),hi=Math.max(...z),px=v=>55+(v-x[0])/(x.at(-1)-x[0])*615,py=v=>185-(v-lo)/Math.max(1,hi-lo)*155;
+    for(let i=0;i<=5;i++){const y=30+i*31;svgEl(svg,'line',{x1:55,x2:670,y1:y,y2:y,stroke:'#d9e1e7'});svgEl(svg,'text',{x:3,y:y+4}).textContent=(hi-(hi-lo)*i/5).toFixed(1);}
+    for(let i=0;i<=5;i++){const value=x[0]+(x.at(-1)-x[0])*i/5;svgEl(svg,'line',{x1:px(value),x2:px(value),y1:30,y2:185,stroke:'#d9e1e7'});svgEl(svg,'text',{x:px(value),y:201,'text-anchor':'middle'}).textContent=value.toFixed(0);}
+    svgEl(svg,'polyline',{points:x.map((v,i)=>[px(v),py(z[i])].join(',')).join(' '),fill:'none',stroke:'#795438','stroke-width':2});
+    for(const bank of row.banks_ft)svgEl(svg,'line',{x1:px(bank),x2:px(bank),y1:25,y2:190,stroke:'#b83b29','stroke-dasharray':'5 3'});
+    svgEl(svg,'text',{x:55,y:215}).textContent=tr('Station / elevation in ft','横距与高程单位均为 ft');
+    profile.append(el('p',tr('Projected cutline — ','投影断面线 — ')+row.cutline_xy.map(p=>p.map(v=>v.toFixed(2)).join(', ')).join(' → ')));
+   }
+  }
+  preview.append(el('p',tr('Added elevations are sampled from the DEM. Banks use adjacent bank fractions, added loss coefficients use the upstream interval, and the original three reach-length totals are partitioned. Review these assumptions together. Changes to these proposals require a new geometry revision.','新增高程来自 DEM；岸站按相邻断面岸站比例推定，新增损失系数沿用上游区间，原左漫滩／主槽／右漫滩总流程长度按交点位置分配。请集中审核这些假设；需要改动时先创建几何修订版。'),'warning'));
+  preview.append(el('p',tr('New section ends are screened against the maximum baseline WSE interpolated along the saved flowline. Bounded rotations/extensions use fresh DEM samples. The three real calculations will check the resulting water levels again.','新增断面端点按沿已保存流线插值的基准最大水位筛查；有限方向／宽度调整采用真实 DEM 采样，随后三个真实工况再次检查水位。')));
+  const confirmed=check(preview,'I confirm the displayed sections, inferred banks and trial assumptions','我确认显示的断面、推定岸站和试算假设',false,()=>{});
+  preview.append(button('Confirm and run three spacing cases','确认并计算三个加密工况',async()=>{
+   if(!proposal||!confirmed.checked)throw Error(tr('Review and confirm this spacing preview first.','请先核对并勾选确认本次加密预览。'));
+   await api('study-start',{id:current.id,revision:current.revision,token:proposal.token,confirmed:true});await open(current.id);
+  },'primary'));
+ }
+ if(current.pending_study_plan?.analysis_kind==='section_spacing'){
+  proposal={plan:current.pending_study_plan,token:current.pending_study.sha256};showProposal();
+ }
+ if(current.spacing_result){
+  const r=current.spacing_result,c=r.convergence;
+  if(r.excluded_intervals?.length)box.append(el('p',tr('Full-reach spacing coverage is incomplete. Excluded intervals — ','全河段加密覆盖尚不完整，排除区间 — ')+r.excluded_intervals.map(v=>v.upstream_rs+' → '+v.downstream_rs).join(', '),'warning'));
+  box.append(el('p',r.status==='STABLE_AT_REVIEW_THRESHOLD'?tr('Both nested refinements meet the internal water-level threshold.','两次嵌套加密均达到内部水位变化阈值。'):tr('Spacing convergence remains open.','断面加密收敛仍待处理。'),r.status==='STABLE_AT_REVIEW_THRESHOLD'?'status':'warning'));
+  if(c)table(box,[tr('Profile','工况'),tr('First refinement max |ΔWSE| ft','第一级最大 |Δ水位| ft'),tr('Second refinement max |ΔWSE| ft','第二级最大 |Δ水位| ft')],c.rows.map(v=>[v.profile,...v.last_two_max_xs_deltas_ft.map(x=>x.toFixed(6))]));
+  table(box,[tr('Case','工况'),tr('Sections','断面数'),tr('Native messages','原生信息'),tr('Wet-end sections','湿端断面数')],r.cases.map(v=>[v.id,v.section_count,v.diagnostics?.native_messages??'—',v.wet_sections?.length??'—']));
+  box.append(el('p',tr('The 0.10 ft threshold is a workflow screen. Results cover the selected intervals and compare every retained section. Hydraulic warnings, submerged-bed accuracy and engineering acceptance remain open. The baseline deliverables can be refreshed to include this comparison.','0.10 ft 为工作流筛查阈值。结论限于所选区间，并对比全部保留断面。水力警告、水下河床准确性与工程验收仍需判断。可更新基准报告及交付包以纳入本次对比。')),
+   button('Open spacing trial files','打开加密试算文件',()=>api('open-folder',{id:current.id,path:current.latest_spacing.path.replace(/\/[^/]+$/,'')})));
+  if(r.failed_cases?.length)box.append(el('p',tr('Incomplete cases — ','未完成工况 — ')+r.failed_cases.join(', '),'warning'));
+ }
+}
+
 function renderStudy(parent){
  if(current.native_review)return;
  const box=details(parent,'Optional sensitivity batch','可选：敏感性批量计算');
@@ -95,6 +172,6 @@ function renderStudy(parent){
  else box.append(el('small',tr('For blockage, HEC-RAS applies the fill depth throughout the barrel. Do not use a local inlet-photo depth without deciding whether that assumption is appropriate. No generic percentage range is filled automatically.','填塞深度会作用于整根涵管。入口照片中的局部淤堵不能未经判断直接等同于全涵长填塞；不会自动填入通用百分比范围。')));
  const preview=el('div');box.append(preview);let proposal=null;
  for(const input of [path,low,high])input.addEventListener('input',()=>{proposal=null;preview.replaceChildren();});
- box.append(button('Prepare and review batch','准备并核对批量工况',async()=>{if(!low.value.trim()||!high.value.trim())throw Error(tr('Enter both bounds.','请填写两个范围端值。'));proposal=await api('study-prepare',{id:current.id,revision:current.revision,parameters:[{path:path.value,low:Number(low.value),high:Number(high.value)}]});preview.replaceChildren();table(preview,['Case','Changes'],proposal.plan.cases.map(c=>[c.id,c.changes.map(v=>v.path+': '+JSON.stringify(v.before)+' → '+JSON.stringify(v.after)).join('; ')]));preview.append(el('p',tr('Only these cases will be calculated. Reports are generated for each case; GIS packages are kept with the original baseline to avoid repeated map exports.','只计算显示的这些工况；每个工况生成报告，GIS 交付包保留原基准，避免重复出图。')),button('Confirm displayed cases and calculate','确认显示工况并计算',async()=>{if(!proposal)throw Error('Prepare the current range again');await api('study-start',{id:current.id,revision:current.revision,token:proposal.token,confirmed:true});await open(current.id);},'primary'));}));
- if(current.study_result){const r=current.study_result;box.append(el('p',r.status,'status'));table(box,[tr('Parameter','参数'),tr('Tested response','测试响应'),current.model_type==='river'?'Max Δ upstream WSE ft':'Max ΔHW ft','Max ΔXS WSE ft'],r.measurement_priorities.map(p=>[p.id,p.priority,p.max_abs_hw_change_ft,p.max_abs_matched_xs_change_ft]));if(r.failed_cases.length)box.append(el('p',tr('Failed/incomplete cases: ','失败／未完成工况：')+r.failed_cases.join(', '),'warning'));box.append(button('Open study results','打开敏感性结果',()=>api('open-folder',{id:current.id,path:current.latest_study.path.replace(/\/[^/]+$/,'')})));}
+ box.append(button('Prepare and review batch','准备并核对批量工况',async()=>{if(!low.value.trim()||!high.value.trim())throw Error(tr('Enter both bounds.','请填写两个范围端值。'));proposal=await api('study-prepare',{id:current.id,revision:current.revision,parameters:[{path:path.value,low:Number(low.value),high:Number(high.value)}]});current.pending_study=proposal.entry;current.pending_study_plan=proposal.plan;preview.replaceChildren();table(preview,['Case','Changes'],proposal.plan.cases.map(c=>[c.id,c.changes.map(v=>v.path+': '+JSON.stringify(v.before)+' → '+JSON.stringify(v.after)).join('; ')]));preview.append(el('p',tr('Only these cases will be calculated. Reports are generated for each case; GIS packages are kept with the original baseline to avoid repeated map exports.','只计算显示的这些工况；每个工况生成报告，GIS 交付包保留原基准，避免重复出图。')),button('Confirm displayed cases and calculate','确认显示工况并计算',async()=>{if(!proposal)throw Error('Prepare the current range again');await api('study-start',{id:current.id,revision:current.revision,token:proposal.token,confirmed:true});await open(current.id);},'primary'));}));
+ if(current.study_result&&current.study_result.analysis_kind!=='section_spacing'){const r=current.study_result;box.append(el('p',r.status,'status'));table(box,[tr('Parameter','参数'),tr('Tested response','测试响应'),current.model_type==='river'?'Max Δ upstream WSE ft':'Max ΔHW ft','Max ΔXS WSE ft'],r.measurement_priorities.map(p=>[p.id,p.priority,p.max_abs_hw_change_ft,p.max_abs_matched_xs_change_ft]));if(r.failed_cases.length)box.append(el('p',tr('Failed/incomplete cases: ','失败／未完成工况：')+r.failed_cases.join(', '),'warning'));box.append(button('Open study results','打开敏感性结果',()=>api('open-folder',{id:current.id,path:current.latest_study.path.replace(/\/[^/]+$/,'')})));}
 }
