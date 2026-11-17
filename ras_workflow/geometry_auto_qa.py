@@ -2,7 +2,6 @@
 import copy,math
 import numpy as np
 from .common import ROOT,read,intact,digest,finite
-from .geometry_qa import spatial_issues,section_fingerprint
 from .banks import annotate
 
 
@@ -16,7 +15,8 @@ def extend(row,s,water,maximum):
     if len(row['cutline_xy'])!=2:raise ValueError('Curved cutline: explicit geometry review required')
     x=np.asarray(row['station_ft'],float);z=np.asarray(row['elevation_ft'],float);a,b=np.asarray(row['cutline_xy'],float);v=(b-a)/np.linalg.norm(b-a)
     if not np.isfinite(z).all():raise ValueError('Existing samples contain NoData')
-    width=x[-1]-x[0];remaining=(maximum-width)/2
+    if min(z[0],z[-1])>water:return None,dict(status='ENDS_ALREADY_ABOVE_PRIOR_WSE')
+    width=x[-1]-x[0];remaining=maximum-width
     if remaining<=0:return None,dict(status='MAX_WIDTH_ALREADY_REACHED')
     tails=[];lengths=[];notes=[]
     for point,sign,height in ((a,-1,z[0]),(b,1,z[-1])):
@@ -29,7 +29,8 @@ def extend(row,s,water,maximum):
             if heights[j]>water and valid[j+1] and heights[j+1]>water:end=j+1;break
         if end is None:return None,dict(status='NO_DRY_END_WITHIN_BOUND',side='left' if sign<0 else 'right',tested_extension_ft=float(distances[-1]),nodata=bool(not valid.all()))
         length=float(distances[end]);tails.append((distances[1:end+1],heights[1:end+1]));lengths.append(length)
-    if not any(lengths):return None,dict(status='ENDS_ALREADY_ABOVE_PRIOR_WSE')
+    if sum(lengths)>remaining+1e-6:
+        return None,dict(status='REQUIRED_WIDTH_EXCEEDS_BOUND',required_width_ft=width+sum(lengths),maximum_width_ft=maximum)
     # Keep every original point. Bound only new exterior sample counts to HEC-RAS's limit.
     budget=500-len(x)
     if budget<4:return None,dict(status='ORIGINAL_SECTION_NEAR_POINT_LIMIT')
@@ -115,46 +116,29 @@ def prior_results(m,g):
 
 
 def propose(m,g,s,maximum=1200.,reference_screen=None):
-    from .app_section_repair import suggest
-    from .geometry_editor import transform_section
     from .app_automation import preflight
-    candidate=copy.deepcopy(g);rows=candidate['cross_sections'];changes=[];unresolved=[]
+    from .section_joint import repair
+    rows=g['cross_sections'];unresolved=[]
     ui=next((i for i,r in enumerate(rows) if r['rs']==g['structure'].get('us_xs_rs')),None)
     protected={ui,ui+1} if ui is not None else set()
-    rotations=suggest(g,m,protected=protected)
-    for change in rotations['changes']:
-        i=change['index'];row=rows[i]
-        if i in protected or not terrain_owned(row,s) or any(row.get(k) for k in ('manning_segments','ineffective_left','ineffective_right')):
-            unresolved.append(dict(rs=row['rs'],code='PROTECTED_SECTION_OR_FLOW_SUBDIVISION',action='Review this section explicitly; automatic rotation cannot relocate a structure or explicit flow subdivisions'));continue
-        cut,center,p=transform_section(row,g['horizontal_crs'],change['parameters']);xy=cut[0]+(np.asarray(row['station_ft'])-row['station_ft'][0])[:,None]/p['width_ft']*(cut[-1]-cut[0]);z=s.sample(xy)
-        if not np.isfinite(z).all():unresolved.append(dict(rs=row['rs'],code='ROTATION_NODATA'));continue
-        row.update(cutline_xy=cut.tolist(),center_xy=center.tolist(),elevation_ft=z.tolist(),bank_stations_ft=None)
-        row.pop('terrain_review',None)
-        s.stamp(row);changes.append(dict(rs=row['rs'],action='ROTATE_FROM_SPATIAL_QA',parameters=p,banks_need_confirmation=True))
     water,messages,sources,old=prior_results(m,g)
     study_count=sum(entry.get('role')=='boundary_coverage_study' for entry in sources)
     if reference_screen:
         water={row['rs']:row['water_ft'] for row in reference_screen['sections']}
         sources.append(reference_screen['source'])
-    for i,row in enumerate(rows):
-        rs=float(row['rs'])
-        if rs not in water:continue
-        before=rows[i] if reference_screen else g['cross_sections'][i]
-        prior=old.get(rs)
-        keys=('cutline_xy','center_xy','station_ft','elevation_ft')
-        prior_invalid=not reference_screen and (not prior or any(before.get(k)!=prior.get(k) for k in keys) or any(c['rs']==rs for c in changes))
-        if i in protected or not terrain_owned(before,s) or prior_invalid:
-            unresolved.append(dict(rs=rs,code='PRIOR_WSE_GEOMETRY_CHANGED_OR_PROTECTED',action='Confirm current geometry and compute before using prior WSE'));continue
-        after,record=extend(before,s,water[rs],maximum)
-        if after is None:
-            if reference_screen and record['status']=='ENDS_ALREADY_ABOVE_PRIOR_WSE':continue
-            unresolved.append(dict(rs=rs,**record));continue
-        trial=copy.deepcopy(rows);trial[i]=after
-        blockers=[q for q in spatial_issues(trial) if i in q['sections']]
-        if blockers:unresolved.append(dict(rs=rs,code='EXTENSION_SPATIAL_CONFLICT',issues=blockers));continue
-        if reference_screen:
-            record['threshold_reference_wse_ft']=record.pop('threshold_prior_wse_ft')
-        rows[i]=after;changes.append(dict(rs=rs,action='EXTEND_REFERENCE_COVERAGE' if reference_screen else 'EXTEND_WET_ENDS',**record))
+    if not reference_screen:
+        for row in rows:
+            rs=float(row['rs']);prior=old.get(rs)
+            keys=('cutline_xy','center_xy','station_ft','elevation_ft')
+            if rs in water and (not prior or any(row.get(k)!=prior.get(k) for k in keys)):
+                water.pop(rs)
+                unresolved.append(dict(rs=rs,code='PRIOR_WSE_GEOMETRY_CHANGED_OR_PROTECTED',action='Confirm current geometry and compute before using prior WSE'))
+    joint=repair(g,s,water,maximum,protected)
+    candidate=joint['geometry'];rows=candidate['cross_sections'];changes=joint['changes'];unresolved+=joint['unresolved']
+    if reference_screen:
+        for change in changes:
+            change['threshold_reference_wse_ft']=change.pop('threshold_prior_wse_ft',None)
+            if change['action']=='EXTEND_WET_ENDS':change['action']='EXTEND_REFERENCE_COVERAGE'
     # Route other warnings to explicit review; do not fabricate a geometric cure.
     for issue in messages:
         if issue['code'] not in ('WET_SECTION_EDGE','NATIVE_WET_SECTION_EDGE'):
@@ -168,5 +152,6 @@ def propose(m,g,s,maximum=1200.,reference_screen=None):
         before_sections={str(i):copy.deepcopy(r) for i,r in enumerate(g['cross_sections']) if r['rs'] in changed},
         issues=issues,warnings=['REFERENCE_WSE_COVERAGE_SCREEN'] if reference_screen else ['PRIOR_WSE_IS_A_SCREEN_NOT_NEW_HYDRAULICS'],unresolved=unresolved,
         reference_screen=reference_screen,boundary_study_count=study_count if not reference_screen else 0,
+        joint_search=joint['search'],
         can_apply=bool(changes) and not any(q.get('blocking') and q['code']!='DERIVED_INPUT_CHANGED' for q in issues),basis='QA-driven bounded repair; preserved interior samples on extension; dependent values require refresh before final calculation confirmation.')],
         reference_screen=reference_screen,sources=[s.source]+sources,solver_run=False)

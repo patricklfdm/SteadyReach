@@ -5,6 +5,8 @@ export's actual extent. No screenshots, guessed years or local datum shifts.
 """
 import json
 import math
+import time
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 import numpy as np
 import rasterio
@@ -17,6 +19,21 @@ from .common import item, read, safe_path, save, ROOT, utc
 from .terrain import fetch
 
 SERVICE = 'https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer'
+
+
+def fetch_imagery(url, path, budget, failures):
+    """Retry transient gateway responses with bounded delays and retained evidence."""
+    for attempt in range(1, 4):
+        try:
+            return fetch(url, path, budget)
+        except HTTPError as error:
+            failures.append(dict(url=url, attempt=attempt, status_code=error.code,
+                                 error=str(error), time_utc=utc()))
+            error.close()
+            if error.code not in (429, 500, 502, 503, 504) or attempt == 3:
+                raise
+            print(f'Imagery HTTP {error.code}; retry {attempt + 1}/3 for {path.name}', flush=True)
+            time.sleep(attempt)
 
 
 def acquire(crs, bounds, output, max_download_bytes=40_000_000, max_pixels=1600):
@@ -33,10 +50,10 @@ def acquire(crs, bounds, output, max_download_bytes=40_000_000, max_pixels=1600)
     if type(max_download_bytes)!=int or not 1_000_000<=max_download_bytes<=100_000_000:
         raise ValueError('Imagery download budget must be 1..100 MB')
     folder=safe_path(ROOT,output);folder.mkdir(parents=True,exist_ok=False)
-    remaining=max_download_bytes;receipts=[]
+    remaining=max_download_bytes;receipts=[];failures=[]
     def get(url,name,limit):
         nonlocal remaining
-        record=fetch(url,folder/name,min(remaining,limit));receipts.append(record);remaining-=record['size_bytes']
+        record=fetch_imagery(url,folder/name,min(remaining,limit),failures);receipts.append(record);remaining-=record['size_bytes']
         return folder/name
     def get_json(route,params,name):
         result=read(get(SERVICE+route+'?'+urlencode(params),name,5_000_000))
@@ -112,6 +129,6 @@ def acquire(crs, bounds, output, max_download_bytes=40_000_000, max_pixels=1600)
     except Exception as e:
         state.update(status='FAILED',error=str(e));raise
     finally:
-        state.update(finished_utc=utc(),download_bytes=max_download_bytes-remaining,requests=receipts)
+        state.update(finished_utc=utc(),download_bytes=max_download_bytes-remaining,requests=receipts,failed_requests=failures)
         save(folder/'acquisition.json',state)
     return state

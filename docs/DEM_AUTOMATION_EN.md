@@ -24,7 +24,7 @@ On Results choose **Prepare QA revision suggestions**. The original completed pr
 
 | Finding | Program action | What remains a user decision |
 |---|---|---|
-| Intersecting eligible DEM sections | Propose bounded rotations and resample the real DEM, retaining centers and widths | Direction approximately normal to flow, physical route and floodplain coverage |
+| Intersecting eligible DEM sections or intersecting extension proposals | Jointly compare neighboring directions and coverage, retain centers, resample rotated sections and extend eligible ends | Direction approximately normal to flow, physical route and floodplain coverage |
 | Previous calculated WSE above a section end | Attempt to extend the straight cutline outward to consecutive DEM points above that previous WSE, subject to width, NoData and intersection limits | Whether the added terrain belongs to the same floodplain and represents the intended conveyance |
 | Structure-adjacent section, non-DEM source, explicit flow subdivisions, changed geometry or unavailable terrain | Withhold unsupported changes and show the reason | Appropriate geometry/data or a manual adjustment |
 | Hydraulic jump, uncertain boundary, missing native table, questionable structure or unresolved convergence | Preserve the finding; no automatic numerical cure | Physical model choice, supporting evidence and subsequent sensitivity/QA |
@@ -32,6 +32,16 @@ On Results choose **Prepare QA revision suggestions**. The original completed pr
 For a wet-end extension, **every original station/elevation sample is preserved**. Station labels may shift to accommodate the added left end, while existing bank map locations stay fixed. The adapter limits the total to 500 points by reducing only new exterior sampling when needed; near-limit originals may require manual review. It does not raise endpoints or narrow a section to remove a warning. New width defaults to a maximum of 1,200 ft; change it only when the actual downloaded terrain covers the relevant area.
 
 In the QA preview, brown is proposed ground, grey dashed is original ground and red dashed (where available) is the **previous** computed WSE. It is a screening reference, not the result of the revised model. Choose which proposed section changes to adopt; the selected combination is checked again. The original calculation and unresolved findings remain available. Confirm the full inputs and compute the revision, then inspect its new results. A disappearing wet-end finding does not demonstrate complete hydraulic QA or design adequacy.
+
+## Joint direction and coverage review
+
+QA suggestions now search neighboring sections together. The candidates use the saved direction and rotations of ±1, ±2, ±3, ±5, ±7.5, ±10, ±15, ±20, ±25 and ±30 degrees. Each rotated section is resampled from the verified DEM. Where a saved flowline is available, the proposed cut must cross it once and remain within its neighboring section-order interval. The original center stays fixed.
+
+The bounded search prioritizes coverage, then smaller rotations and added width. It first searches candidates with the best available coverage at each section, then considers the complete candidate set. A connected group is limited to 100,000 search nodes. When that limit is reached, the page labels the retained feasible combination for review. A group with no feasible combination keeps its saved geometry and reports the conflict.
+
+Expand **Direction and extent search details** to see each rotation, left/right extension and sample treatment. Straight extensions preserve original samples and bank plan positions. Rotated sections receive new samples and bank candidates. Confirm those banks in the same preview. Single-sided extensions can use the available total width budget. Both-sided extensions must fit within the combined budget.
+
+Review the proposed directions and floodplain connections together. Deselecting one linked change can create an intersection, which the adoption check reports. After adoption, the complete parameter review refreshes equivalent derived inputs and lists assumptions. Recompute to check the new water levels and warnings. Repeat from an independent revision when actual water levels require more coverage.
 
 ## Scope and practical limits
 
