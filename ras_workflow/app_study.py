@@ -70,6 +70,13 @@ def start(key,body):
         if m.get('pending_study') and m['pending_study']!=entry:
             raise ValueError('A different preview is pending; review that preview before retrying a previous batch')
     if body.get('revision')!=m['revision'] or body.get('confirmed') is not True or not entry or body.get('token')!=entry['sha256'] or not intact([entry]):raise ValueError('Review the current study and explicitly confirm its cases')
+    review_entry=confirmation(m,entry)
+    m['active_study']=dict(study=entry,review=review_entry);core.persist(m,'CONFIRM_SENSITIVITY')
+    return core.launch(key,'study')
+
+
+def confirmation(m,entry):
+    """Bind one displayed study; called only after explicit study/batch consent."""
     path=ROOT/entry['path'];plan=read(path)
     if m['summary'] not in plan['evidence']:raise ValueError('Baseline edition changed; prepare the study again')
     if plan.get('analysis_kind')=='section_spacing' and (plan.get('status')=='NO_ELIGIBLE_INTERVALS' or len(plan.get('cases',[]))!=3):raise ValueError('No complete nested spacing cases to confirm; review the excluded intervals')
@@ -87,8 +94,7 @@ def start(key,body):
     else:
         save(review_path,review)
     study.reviewed(path,review_path)
-    m['active_study']=dict(study=entry,review=item(path.parent/'local_confirmation.json'));core.persist(m,'CONFIRM_SENSITIVITY')
-    return core.launch(key,'study')
+    return item(path.parent/'local_confirmation.json')
 
 
 def execute(key):

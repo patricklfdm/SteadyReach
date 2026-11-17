@@ -1,7 +1,7 @@
 from pathlib import Path
 from datetime import datetime, timezone
 from contextlib import contextmanager
-import hashlib, json, math, os, re, uuid
+import hashlib, json, math, os, re, time, uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -18,7 +18,16 @@ def save(path, obj):
     path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.partial')
     tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=2, allow_nan=False), encoding='utf-8')
-    os.replace(tmp, path)
+    # Windows readers/indexers can briefly deny replacement. Keep the old file
+    # intact and retry only sharing/lock violations; never suppress permissions.
+    for delay in (0.02, 0.05, 0.1, 0.2, 0.3, None):
+        try:
+            os.replace(tmp, path)
+            return
+        except OSError as error:
+            if getattr(error, 'winerror', None) not in (32, 33) or delay is None:
+                raise
+            time.sleep(delay)
 
 def sha(path):
     h = hashlib.sha256()

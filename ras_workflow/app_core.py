@@ -328,7 +328,7 @@ def run(key):
     persist(m,'FINISHED',dict(calculation=state.get('calculation_status'),exit_code=code,summary=m.get('summary')))
 
 def launch(key,action):
-    if action not in ('prepare','run','report','delivery','acquire','analyze','study','catalog','native-export','automatic-prepare'):raise ValueError('Unknown task')
+    if action not in ('prepare','run','report','delivery','acquire','analyze','study','catalog','native-export','automatic-prepare','check-batch'):raise ValueError('Unknown task')
     global_state=ROOT/'status/app/active.json'
     with lock(ROOT/'status/app/launch.lock'):
         m=model(key);require_idle(m)
@@ -369,6 +369,9 @@ def worker(record):
             elif job['action']=='study':
                 from .app_study import execute as execute_study
                 execute_study(key)
+            elif job['action']=='check-batch':
+                from .app_check_batch import execute
+                execute(key)
             elif job['action']=='automatic-prepare':
                 from .app_autoprepare import execute
                 execute(key)
@@ -423,7 +426,10 @@ def view(key,detail=True):
             if not process_alive(task.get('pid')):result.update(status='INTERRUPTED',errors=['The worker stopped; saved inputs and outputs remain. Retry the task.'])
             else:result['status']='PROCESSING'
     if not detail:return result
-    if result.get('job',{}).get('action')=='study' and m.get('active_study'):
+    if m.get('active_check_batch'):
+        from .app_check_batch import progress
+        result['check_batch_progress']=progress(m)
+    if result.get('job',{}).get('action') in ('study','check-batch') and m.get('active_study'):
         active=m['active_study'];plan=read(ROOT/active['study']['path'])
         journal_path=(ROOT/active['study']['path']).parent/'execution.json'
         records={};journal={}
@@ -460,6 +466,9 @@ def view(key,detail=True):
     if m.get('latest_coverage_exports') and intact([m['latest_coverage_exports']]):
         exports=read(ROOT/m['latest_coverage_exports']['path'])
         if exports['analysis']==m.get('latest_coverage'):result['coverage_exports']=exports
+    if m.get('pending_check_batch'):
+        from .app_check_batch import preview
+        result['check_batch_preview']=preview(m['pending_check_batch'])
     if m.get('pending_study') and intact([m['pending_study']]):
         plan=read(ROOT/m['pending_study']['path']);result['pending_study_plan']=plan
         if plan.get('analysis_kind')=='coverage_repair' and intact([plan['initial_preview']]):

@@ -8,6 +8,8 @@ Use the model page's **Prepare together, confirm once** panel. It reduces repeat
 
 ## Fast path for a new model
 
+After the first calculation, use **Results → Prepare checks and delivery together** to prepare supported sensitivity and spacing checks in one preview. Review the limits once; the app runs the confirmed checks in sequence and then updates reports and both delivery folders. See [checks and delivery](RESULTS_REVIEW_EN.md#checks-and-delivery-with-one-confirmation) for scope, exclusions and recovery.
+
 1. Create the site, allow the USGS terrain/source lookup to finish, and import the available site folder or files. Check the crossing, flow direction, elevation units and datum. Identify each opening's ends on the map or associate survey points when the material supports that interpretation.
 2. In **Prepare together, confirm once**, click **Prepare an automatic draft**. The background task reuses extracted text, reads supported material, builds or repairs eligible DEM geometry, proposes banks and fills compatible source values and labelled conditional estimates. An initial layout is staged as editable geometry. Inspect the map and uncertainty flags when the task finishes.
 3. Resolve the displayed source differences and remaining missing items. Existing manual values take priority. Use the bank-profile grid and numeric left/right inputs for corrections. Numeric edits snap to the nearest DEM sample and display the chosen station plus pending-save feedback. Both the single-section editor and gallery save through **Save all changes** or **Review all parameters**. Switching sections retains pending choices. Out-of-range or reversed banks show a persistent message and block saving.

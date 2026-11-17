@@ -13,6 +13,20 @@ For an independently revised model, **Comparison with previous calculation** sho
 3. If the automatic adapter has all needed outputs, no supplementary upload is required. If it lacks a group table or complete warning list, use the optional step below. No reviewer identity, reason form or screenshot upload is required.
 4. If assumptions or geometry need changing, create a separate editable revision. Confirm its inputs before a new solve. Old calculations remain available in the project list.
 
+## Checks and delivery with one confirmation
+
+For a completed workflow-built model, expand **Prepare checks and delivery together**. Leave the desired checks selected, set the limits and click **Prepare checks and delivery preview**. Preparation does not start HEC-RAS.
+
+- Sensitivity uses up to four active parameters with already adopted, applicable source ranges. It lists unsupported or unselected ranges; it does not invent percentage bounds. To choose another range, use the optional sensitivity panel first.
+- Automatic nested spacing currently applies to continuous river reaches. It uses authenticated native results to recommend feasible intervals and displays excluded intervals, plan positions, profiles, inferred banks and coverage assumptions. The default interval limit is 12; the model and geometry limits may reduce the selection.
+- Added-section coverage correction allows 0–3 rounds, default 2, with a displayed total-width cap (default 2,000 ft). Zero means no additional correction rounds. Original profiles and hydraulic controls remain fixed. Wet original sections, geometric conflicts, unavailable DEM data or the round limit stop further correction.
+
+Inspect the proposed ranges, all relevant added profiles and the maximum native-calculation count. Tick the combined confirmation and click **Confirm and run checks → deliverables**. The app runs available checks in order, shows stage/case progress, then refreshes English/Chinese reports, the English summary and Complete/Minimal packages. The baseline geometry is preserved; the app does not choose a preferred boundary or automatically promote a trial case.
+
+Unavailable checks retain their reason. A completed study can still be **NOT_CONVERGED** and require engineering interpretation; this does not prevent a report from documenting it. A failed native calculation or invalid evidence stops later stages. After correcting an external failure, **Resume checks and delivery** reuses the original confirmed scope and authenticates completed cases before reuse. A report/export failure does not require another hydraulic solve. Changed inputs or confirmation evidence require a new preview. Progress and saved previews survive reopening, and changing preview limits requires preparing them again.
+
+Successful exports mean files are ready for review. Hydraulic QA, missing physical data and engineering acceptance retain their separate status.
+
 ## Complete missing native outputs
 
 After each new solve, the adapter automatically exports **every computed culvert group/profile** and the complete **Errors, Warnings and Notes** table from its owned HEC-RAS process. It checks the native selectors, headers, model/output hashes, geometry and HDF/COM values before including the texts in reports. No AI service, reviewer form or screenshot upload is needed. Complete keeps the original text and export receipt in `Evidence/NativeSupplement`; Minimal keeps its normal compact contents.

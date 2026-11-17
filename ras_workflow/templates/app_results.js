@@ -65,6 +65,7 @@ function renderRevisionComparison(parent,comparison){
 }
 
 function renderResultTools(parent){
+ renderCheckBatch(parent);
  renderResultAtlas(parent);
  if(!current.native_review)parent.append(button('Prepare QA revision suggestions','根据 QA 创建修订建议',prepareQaRevision));
  renderStudy(parent);
@@ -188,52 +189,7 @@ function renderSpacing(parent){
  const resetPreview=()=>{proposal=null;preview.replaceChildren();limit.disabled=scope.value!=='automatic';rounds.disabled=width.disabled=!adaptive.checked;};scope.addEventListener('input',resetPreview);limit.addEventListener('input',resetPreview);
  adaptive.addEventListener('change',resetPreview);rounds.addEventListener('input',resetPreview);width.addEventListener('input',resetPreview);rounds.disabled=width.disabled=!adaptive.checked;
  function showProposal(){
-  preview.replaceChildren();const plan=proposal.plan;
-  const reasonLabels={SECTION_SPECIFIC_CONTROLS:tr('Section-specific roughness/ineffective areas','断面特定糙率／非有效流区'),BENT_CUTLINE:tr('Bent cutline requires interpretation','折线断面需判读'),BELOW_TWO_CELL_NESTED_SPACING:tr('Two refinement levels would be below DEM spacing limit','两级加密小于 DEM 间距限值'),NATIVE_STATION_PRECISION:tr('Native station precision limit','原生断面编号精度限制'),DEM_OR_LAYOUT_CONSTRAINT:tr('DEM coverage or cutline-layout constraint','DEM 覆盖或断面布置限制'),CONFIRMED_SEARCH_LIMIT:tr('Outside selected interval count','超过所选区间数量'),SECTION_COUNT_LIMIT:tr('500-section limit','500 条断面上限')};
-  if(plan.selection){
-   preview.append(el('p',tr('Native-result selection is a review proposal, not a diagnosis. Energy loss >1 ft or weighted velocity-head change >0.5 ft supports a spacing check; channel Froude values crossing below 0.9 and above 1.1 flag a transition for interpretation. Solver-difficulty warnings are considered first.','原生结果推荐用于复核，不作原因诊断。能量损失大于 1 ft 或加权流速水头变化大于 0.5 ft 提示间距检查；主槽弗劳德数跨越 0.9 以下和 1.1 以上提示流态判读。优先考虑求解困难警告。')));
-   if(plan.selection.unlocated_spacing_issues?.length)preview.append(el('p',plan.selection.unlocated_spacing_issues.length+tr(' spacing messages could not be located; review native evidence.',' 条加密相关信息无法定位，请复核原生证据。'),'warning'));
-  }
-  for(const [key,en,zh] of [['excluded_intervals','Excluded intervals: geometry/data decision needed','排除区间：需要几何／资料判断'],['deferred_intervals','Deferred by the search limit; not tested','因搜索上限暂缓：尚未测试']])if(plan[key]?.length){const list=details(preview,en,zh);table(list,['RS → RS',tr('Reason','原因')],plan[key].map(v=>[v.upstream_rs+' → '+v.downstream_rs,(reasonLabels[v.reason_code]||v.reason||tr('Geometry constraint','几何限制'))]));}
-  if(plan.excluded_intervals?.length||plan.deferred_intervals?.length)preview.append(el('p',tr('Some intervals remain outside this trial. A stable result will apply only to the selected changes.','部分区间不在本次试算内；结果稳定也仅适用于所选加密改动。'),'warning'));
-  if(plan.status==='NO_ELIGIBLE_INTERVALS'){
-   preview.append(el('p',tr('No complete two-level trial can be prepared within these constraints. Review the exclusions or prepare an editable geometry revision. No calculation was started.','在当前约束内无法准备完整的两级试算。请查看排除原因，或准备可编辑几何修订版。未启动计算。'),'warning'));return;
-  }
-  table(preview,[tr('Case','工况'),tr('Sections','断面数'),tr('Added this level','本级新增')],plan.cases.map(c=>[c.id,c.section_count,c.added_sections.length]));
-  if(plan.map_geometry){
-   const map=details(preview,'Section plan view','断面平面位置');
-   map.append(el('p',tr('Gray retained sections · orange first refinement · blue second refinement · magenta flowline.','灰色为保留断面，橙色为第一级新增，蓝色为第二级新增，紫红色为流线。')));
-   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 700 520');svg.classList.add('repair-profile');svg.setAttribute('role','img');svg.setAttribute('aria-label',tr('Nested section positions','嵌套加密断面位置'));map.append(svg);
-   const groups=[{rows:plan.map_geometry.retained,color:'#6d7c83'},...plan.cases.filter(c=>c.added_sections.length).map((c,i)=>({rows:c.added_sections,color:i?'#1679be':'#bc7019'}))];
-   const points=groups.flatMap(g=>g.rows.flatMap(r=>r.cutline_xy)),xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
-   const lo=[Math.min(...xs),Math.min(...ys)],hi=[Math.max(...xs),Math.max(...ys)],scale=Math.min(650/(hi[0]-lo[0]),470/(hi[1]-lo[1]));
-   const pt=p=>[350+(p[0]-(lo[0]+hi[0])/2)*scale,260-(p[1]-(lo[1]+hi[1])/2)*scale].join(',');
-   for(const group of groups)for(const row of group.rows)svgEl(svg,'polyline',{points:row.cutline_xy.map(pt).join(' '),fill:'none',stroke:group.color,'stroke-width':1});
-   svgEl(svg,'polyline',{points:plan.map_geometry.flowline.map(pt).join(' '),fill:'none',stroke:'#aa245d','stroke-width':2});
-  }
-  const intervals=details(preview,'Selected intervals and warning locations','所选区间及警告位置');
-  table(intervals,['RS → RS',tr('Channel length (ft)','主槽长度（ft）'),tr('Selection basis','选择依据')],plan.intervals.map(v=>[
-   v.upstream_rs+' → '+v.downstream_rs,v.channel_length_ft.toFixed(2),v.reasons.join(', ')||tr('Full-reach selection','已选择全河段')]));
-  const observed=plan.intervals.flatMap(v=>(v.observations||[]).map(o=>[v.upstream_rs+' → '+v.downstream_rs,o.profile,...[o.energy_loss_ft,o.velocity_head_change_ft,o.upstream_froude,o.downstream_froude].map(n=>Number.isFinite(n)?n.toFixed(4):'—')]));
-  if(observed.length){const values=details(preview,'Computed evidence for recommended intervals','推荐区间的计算依据');table(values,['RS → RS',tr('Profile','工况'),tr('Energy loss ft','能量损失 ft'),tr('Velocity-head change ft','流速水头变化 ft'),'Fr US','Fr DS'],observed);}
-  for(const c of plan.cases.filter(c=>c.added_sections.length)){
-   const area=details(preview,c.id+' · added sections',c.id+' · 新增断面');
-   for(const row of c.added_sections){
-    const profile=details(area,'RS '+row.station+' · '+row.width_ft.toFixed(1)+' ft','RS '+row.station+' · '+row.width_ft.toFixed(1)+' ft');
-    profile.append(el('p',tr('Adjacent sections / inferred banks (ft) — ','相邻断面／推定岸站（ft）— ')+row.bracket.join(' / ')+' · '+row.banks_ft.map(v=>v.toFixed(2)).join(' / ')));
-    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 700 230');svg.classList.add('repair-profile');svg.setAttribute('role','img');svg.setAttribute('aria-label','DEM RS '+row.station);profile.append(svg);
-    const x=row.station_ft,z=row.elevation_ft,lo=Math.min(...z),hi=Math.max(...z),px=v=>55+(v-x[0])/(x.at(-1)-x[0])*615,py=v=>185-(v-lo)/Math.max(1,hi-lo)*155;
-    for(let i=0;i<=5;i++){const y=30+i*31;svgEl(svg,'line',{x1:55,x2:670,y1:y,y2:y,stroke:'#d9e1e7'});svgEl(svg,'text',{x:3,y:y+4}).textContent=(hi-(hi-lo)*i/5).toFixed(1);}
-    for(let i=0;i<=5;i++){const value=x[0]+(x.at(-1)-x[0])*i/5;svgEl(svg,'line',{x1:px(value),x2:px(value),y1:30,y2:185,stroke:'#d9e1e7'});svgEl(svg,'text',{x:px(value),y:201,'text-anchor':'middle'}).textContent=value.toFixed(0);}
-    svgEl(svg,'polyline',{points:x.map((v,i)=>[px(v),py(z[i])].join(',')).join(' '),fill:'none',stroke:'#795438','stroke-width':2});
-    for(const bank of row.banks_ft)svgEl(svg,'line',{x1:px(bank),x2:px(bank),y1:25,y2:190,stroke:'#b83b29','stroke-dasharray':'5 3'});
-    svgEl(svg,'text',{x:55,y:215}).textContent=tr('Station / elevation in ft','横距与高程单位均为 ft');
-    profile.append(el('p',tr('Projected cutline — ','投影断面线 — ')+row.cutline_xy.map(p=>p.map(v=>v.toFixed(2)).join(', ')).join(' → ')));
-   }
-  }
-  preview.append(el('p',tr('Added elevations are sampled from the DEM. Banks use adjacent bank fractions, added loss coefficients use the upstream interval, and the original three reach-length totals are partitioned. Review these assumptions together. Changes to these proposals require a new geometry revision.','新增高程来自 DEM；岸站按相邻断面岸站比例推定，新增损失系数沿用上游区间，原左漫滩／主槽／右漫滩总流程长度按交点位置分配。请集中审核这些假设；需要改动时先创建几何修订版。'),'warning'));
-  preview.append(el('p',tr('New section ends are screened against the maximum baseline WSE interpolated along the saved flowline. Bounded rotations/extensions use fresh DEM samples. The three real calculations will check the resulting water levels again.','新增断面端点按沿已保存流线插值的基准最大水位筛查；有限方向／宽度调整采用真实 DEM 采样，随后三个真实工况再次检查水位。')));
-  if(plan.coverage_policy){const p=plan.coverage_policy;preview.append(el('p',tr('Confirmed automatic bounds: ','本次自动化确认范围：')+p.maximum_rounds+tr(' correction rounds, ',' 轮修正，')+p.maximum_width_ft+tr(' ft maximum total width; at most ',' ft 总宽度上限；最多 ')+(3*(1+p.maximum_rounds))+tr(' case calculations. Stops when ends are covered, baseline sections need changes, geometry cannot extend, a calculation fails, or the round limit is reached. All rounds remain saved.',' 个工况计算。端点覆盖完成、原始断面需改动、几何无法延伸、计算失败或达到轮数上限时停止，保留全部轮次。'),'warning'));}
+  const plan=proposal.plan;if(renderSpacingPreview(preview,plan)===false)return;
   const confirmed=check(preview,'I confirm the sections, inferred banks, assumptions and any displayed automatic correction bounds','我确认断面、推定岸站、假设及显示的自动修正范围',false,()=>{});
   preview.append(button(plan.coverage_policy?'Confirm and run bounded spacing batch':'Confirm and run three spacing cases',plan.coverage_policy?'确认并运行有界加密批次':'确认并计算三个加密工况',async()=>{
    if(!proposal||!confirmed.checked)throw Error(tr('Review and confirm this spacing preview first.','请先核对并勾选确认本次加密预览。'));
@@ -274,6 +230,56 @@ function renderSpacing(parent){
     button('Retry incomplete spacing batch','重试未完成加密批次',async()=>{await api('study-start',{id:current.id,revision:current.revision,token:(r.coverage_batch?.study||r.study).sha256,confirmed:true,retry:true});await open(current.id);}));
   }
  }
+}
+
+function renderSpacingPreview(preview,plan){
+ preview.replaceChildren();
+  const reasonLabels={SECTION_SPECIFIC_CONTROLS:tr('Section-specific roughness/ineffective areas','断面特定糙率／非有效流区'),BENT_CUTLINE:tr('Bent cutline requires interpretation','折线断面需判读'),BELOW_TWO_CELL_NESTED_SPACING:tr('Two refinement levels would be below DEM spacing limit','两级加密小于 DEM 间距限值'),NATIVE_STATION_PRECISION:tr('Native station precision limit','原生断面编号精度限制'),DEM_OR_LAYOUT_CONSTRAINT:tr('DEM coverage or cutline-layout constraint','DEM 覆盖或断面布置限制'),CONFIRMED_SEARCH_LIMIT:tr('Outside selected interval count','超过所选区间数量'),SECTION_COUNT_LIMIT:tr('500-section limit','500 条断面上限')};
+  if(plan.selection){
+   preview.append(el('p',tr('Native-result selection is a review proposal, not a diagnosis. Energy loss >1 ft or weighted velocity-head change >0.5 ft supports a spacing check; channel Froude values crossing below 0.9 and above 1.1 flag a transition for interpretation. Solver-difficulty warnings are considered first.','原生结果推荐用于复核，不作原因诊断。能量损失大于 1 ft 或加权流速水头变化大于 0.5 ft 提示间距检查；主槽弗劳德数跨越 0.9 以下和 1.1 以上提示流态判读。优先考虑求解困难警告。')));
+   if(plan.selection.unlocated_spacing_issues?.length)preview.append(el('p',plan.selection.unlocated_spacing_issues.length+tr(' spacing messages could not be located; review native evidence.',' 条加密相关信息无法定位，请复核原生证据。'),'warning'));
+  }
+  for(const [key,en,zh] of [['excluded_intervals','Excluded intervals: geometry/data decision needed','排除区间：需要几何／资料判断'],['deferred_intervals','Deferred by the search limit; not tested','因搜索上限暂缓：尚未测试']])if(plan[key]?.length){const list=details(preview,en,zh);table(list,['RS → RS',tr('Reason','原因')],plan[key].map(v=>[v.upstream_rs+' → '+v.downstream_rs,(reasonLabels[v.reason_code]||v.reason||tr('Geometry constraint','几何限制'))]));}
+  if(plan.excluded_intervals?.length||plan.deferred_intervals?.length)preview.append(el('p',tr('Some intervals remain outside this trial. A stable result will apply only to the selected changes.','部分区间不在本次试算内；结果稳定也仅适用于所选加密改动。'),'warning'));
+  if(plan.status==='NO_ELIGIBLE_INTERVALS'){
+   preview.append(el('p',tr('No complete two-level trial can be prepared within these constraints. Review the exclusions or prepare an editable geometry revision. No calculation was started.','在当前约束内无法准备完整的两级试算。请查看排除原因，或准备可编辑几何修订版。未启动计算。'),'warning'));return false;
+  }
+  table(preview,[tr('Case','工况'),tr('Sections','断面数'),tr('Added this level','本级新增')],plan.cases.map(c=>[c.id,c.section_count,c.added_sections.length]));
+  if(plan.map_geometry){
+   const map=details(preview,'Section plan view','断面平面位置');
+   map.append(el('p',tr('Gray retained sections · orange first refinement · blue second refinement · magenta flowline.','灰色为保留断面，橙色为第一级新增，蓝色为第二级新增，紫红色为流线。')));
+   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 700 520');svg.classList.add('repair-profile');svg.setAttribute('role','img');svg.setAttribute('aria-label',tr('Nested section positions','嵌套加密断面位置'));map.append(svg);
+   const groups=[{rows:plan.map_geometry.retained,color:'#6d7c83'},...plan.cases.filter(c=>c.added_sections.length).map((c,i)=>({rows:c.added_sections,color:i?'#1679be':'#bc7019'}))];
+   const points=groups.flatMap(g=>g.rows.flatMap(r=>r.cutline_xy)),xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
+   const lo=[Math.min(...xs),Math.min(...ys)],hi=[Math.max(...xs),Math.max(...ys)],scale=Math.min(650/(hi[0]-lo[0]),470/(hi[1]-lo[1]));
+   const pt=p=>[350+(p[0]-(lo[0]+hi[0])/2)*scale,260-(p[1]-(lo[1]+hi[1])/2)*scale].join(',');
+   for(const group of groups)for(const row of group.rows)svgEl(svg,'polyline',{points:row.cutline_xy.map(pt).join(' '),fill:'none',stroke:group.color,'stroke-width':1});
+   svgEl(svg,'polyline',{points:plan.map_geometry.flowline.map(pt).join(' '),fill:'none',stroke:'#aa245d','stroke-width':2});
+  }
+  const intervals=details(preview,'Selected intervals and warning locations','所选区间及警告位置');
+  table(intervals,['RS → RS',tr('Channel length (ft)','主槽长度（ft）'),tr('Selection basis','选择依据')],plan.intervals.map(v=>[
+   v.upstream_rs+' → '+v.downstream_rs,v.channel_length_ft.toFixed(2),v.reasons.join(', ')||tr('Full-reach selection','已选择全河段')]));
+  const observed=plan.intervals.flatMap(v=>(v.observations||[]).map(o=>[v.upstream_rs+' → '+v.downstream_rs,o.profile,...[o.energy_loss_ft,o.velocity_head_change_ft,o.upstream_froude,o.downstream_froude].map(n=>Number.isFinite(n)?n.toFixed(4):'—')]));
+  if(observed.length){const values=details(preview,'Computed evidence for recommended intervals','推荐区间的计算依据');table(values,['RS → RS',tr('Profile','工况'),tr('Energy loss ft','能量损失 ft'),tr('Velocity-head change ft','流速水头变化 ft'),'Fr US','Fr DS'],observed);}
+  for(const c of plan.cases.filter(c=>c.added_sections.length)){
+   const area=details(preview,c.id+' · added sections',c.id+' · 新增断面');
+   for(const row of c.added_sections){
+    const profile=details(area,'RS '+row.station+' · '+row.width_ft.toFixed(1)+' ft','RS '+row.station+' · '+row.width_ft.toFixed(1)+' ft');
+    profile.append(el('p',tr('Adjacent sections / inferred banks (ft) — ','相邻断面／推定岸站（ft）— ')+row.bracket.join(' / ')+' · '+row.banks_ft.map(v=>v.toFixed(2)).join(' / ')));
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 700 230');svg.classList.add('repair-profile');svg.setAttribute('role','img');svg.setAttribute('aria-label','DEM RS '+row.station);profile.append(svg);
+    const x=row.station_ft,z=row.elevation_ft,lo=Math.min(...z),hi=Math.max(...z),px=v=>55+(v-x[0])/(x.at(-1)-x[0])*615,py=v=>185-(v-lo)/Math.max(1,hi-lo)*155;
+    for(let i=0;i<=5;i++){const y=30+i*31;svgEl(svg,'line',{x1:55,x2:670,y1:y,y2:y,stroke:'#d9e1e7'});svgEl(svg,'text',{x:3,y:y+4}).textContent=(hi-(hi-lo)*i/5).toFixed(1);}
+    for(let i=0;i<=5;i++){const value=x[0]+(x.at(-1)-x[0])*i/5;svgEl(svg,'line',{x1:px(value),x2:px(value),y1:30,y2:185,stroke:'#d9e1e7'});svgEl(svg,'text',{x:px(value),y:201,'text-anchor':'middle'}).textContent=value.toFixed(0);}
+    svgEl(svg,'polyline',{points:x.map((v,i)=>[px(v),py(z[i])].join(',')).join(' '),fill:'none',stroke:'#795438','stroke-width':2});
+    for(const bank of row.banks_ft)svgEl(svg,'line',{x1:px(bank),x2:px(bank),y1:25,y2:190,stroke:'#b83b29','stroke-dasharray':'5 3'});
+    svgEl(svg,'text',{x:55,y:215}).textContent=tr('Station / elevation in ft','横距与高程单位均为 ft');
+    profile.append(el('p',tr('Projected cutline — ','投影断面线 — ')+row.cutline_xy.map(p=>p.map(v=>v.toFixed(2)).join(', ')).join(' → ')));
+   }
+  }
+  preview.append(el('p',tr('Added elevations are sampled from the DEM. Banks use adjacent bank fractions, added loss coefficients use the upstream interval, and the original three reach-length totals are partitioned. Review these assumptions together. Changes to these proposals require a new geometry revision.','新增高程来自 DEM；岸站按相邻断面岸站比例推定，新增损失系数沿用上游区间，原左漫滩／主槽／右漫滩总流程长度按交点位置分配。请集中审核这些假设；需要改动时先创建几何修订版。'),'warning'));
+  preview.append(el('p',tr('New section ends are screened against the maximum baseline WSE interpolated along the saved flowline. Bounded rotations/extensions use fresh DEM samples. The three real calculations will check the resulting water levels again.','新增断面端点按沿已保存流线插值的基准最大水位筛查；有限方向／宽度调整采用真实 DEM 采样，随后三个真实工况再次检查水位。')));
+  if(plan.coverage_policy){const p=plan.coverage_policy;preview.append(el('p',tr('Confirmed automatic bounds: ','本次自动化确认范围：')+p.maximum_rounds+tr(' correction rounds, ',' 轮修正，')+p.maximum_width_ft+tr(' ft maximum total width; at most ',' ft 总宽度上限；最多 ')+(3*(1+p.maximum_rounds))+tr(' case calculations. Stops when ends are covered, baseline sections need changes, geometry cannot extend, a calculation fails, or the round limit is reached. All rounds remain saved.',' 个工况计算。端点覆盖完成、原始断面需改动、几何无法延伸、计算失败或达到轮数上限时停止，保留全部轮次。'),'warning'));}
+ return true;
 }
 
 function renderStudy(parent){
