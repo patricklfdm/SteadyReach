@@ -6,7 +6,7 @@ For a reach without structures, choose **River reach (bridges excluded)** and fo
 
 Use the model page's **Prepare together, confirm once** panel. It reduces repeated transcription and review without treating unknown buried geometry as measured data. It works locally without an AI service. It does not start HEC-RAS until the final parameter confirmation.
 
-After each successful main calculation, the app automatically prepares the applicable next result review: bounded wet-end extension first, otherwise adopted-range sensitivity and feasible spacing. It preserves existing previews and stops at physical/geometry decisions. Additional native calculations still require the displayed confirmation. See [Automatic next review](RESULTS_REVIEW_EN.md#automatic-next-review).
+After each successful main calculation, the app automatically prepares the applicable next result review: bounded wet-end extension first, otherwise adopted-range sensitivity and feasible spacing. If fixed-direction extension leaves conflicts, it also prepares an independent joint direction/width draft with eligible banks and dependent values. Open that draft for consolidated review; no need to create it and select the QA tool separately. Existing user-selected previews and later draft edits remain preserved. Physical interpretations and additional native calculations still require review and the displayed confirmation. See [Automatic next review](RESULTS_REVIEW_EN.md#automatic-next-review).
 
 ## Fast path for a new model
 

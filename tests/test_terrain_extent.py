@@ -104,6 +104,37 @@ class TerrainExtentTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Inputs changed'):
                 app_geometry.perform(model['id'], 'expand-terrain', dict(revision=0, buffer_m=150.))
 
+    def local_revision(self):
+        model=app_core.create(dict(title='Synthetic local revision',latitude=37.,longitude=-107.,route='coordinates',model_type='river'))
+        config=read(ROOT/model['project']);save(self.folder/'terrain.json',self.previous)
+        config['terrain']=dict(mode='local',raster=str(self.old),provenance=str(self.folder/'terrain.json'),vertical_unit='m',vertical_datum='TEST_DATUM',create_native=False)
+        save(ROOT/model['project'],config)
+        session=intake.prepare(ROOT/model['project'],'q100')
+        model.update(session=session['session'],terrain=self.previous,status='INPUTS_READY',metadata=dict(dem_vertical_unit='m',dem_vertical_datum='TEST_DATUM'))
+        app_core.persist(model)
+        return model,ROOT/model['session']
+
+    def test_local_revision_without_acquisition_checkpoint_can_expand(self):
+        with patch.object(app_core,'BASE',self.folder/'projects'):
+            model,sp=self.local_revision();before=read(sp.parent/'draft.json')
+            self.assertFalse((sp.parent/'terrain_checkpoint.json').exists())
+            result=app_terrain_extent.expand_model(model,dict(revision=0,buffer_m=100.))
+            after=read(sp.parent/'draft.json');checkpoint=read(sp.parent/'terrain_checkpoint.json')
+            self.assertEqual(after['geometry'],before['geometry']);self.assertEqual(after['answers'],before['answers'])
+            self.assertEqual(result['metadata'],model['metadata'])
+            self.assertEqual(digest(checkpoint['terrain']),digest(result['terrain']));self.assertNotIn('metadata',checkpoint)
+            self.assertEqual(geometry_editor.context(sp)[7]['raster']['sha256'],result['terrain']['raster']['sha256'])
+
+    def test_failed_commit_restores_absent_checkpoint_and_original_draft(self):
+        with patch.object(app_core,'BASE',self.folder/'projects'):
+            model,sp=self.local_revision();before=read(sp.parent/'draft.json')
+            with patch.object(app_core,'persist',side_effect=OSError('test commit failure')):
+                with self.assertRaisesRegex(OSError,'test commit failure'):
+                    app_terrain_extent.expand_model(model,dict(revision=0,buffer_m=100.))
+            self.assertFalse((sp.parent/'terrain_checkpoint.json').exists())
+            self.assertEqual(read(sp.parent/'draft.json'),before)
+            self.assertEqual(read(app_core.folder(model['id'])/'app.json'),model)
+
 
 if __name__ == '__main__':
     unittest.main()

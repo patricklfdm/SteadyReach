@@ -15,6 +15,12 @@ For an independently revised model, **Comparison with previous calculation** sho
 
 ## Automatic next review
 
+If the fixed-direction extension preview still has incompatible locations, the app also prepares **one independent joint direction and width draft**. It uses the same displayed width bound, existing DEM sampling and neighboring-section conflict checks. Eligible geometry, bank candidates and dependent values are staged together. The original model, its results and the fixed-direction preview remain available; no extra HEC-RAS calculation starts.
+
+Choose **Open the prepared geometry revision** to inspect its map, profiles, interpretations and complete parameter list, then confirm a new calculation. Remaining review-item counts include retained hydraulic messages; they are not counts of geometric conflicts or proof that warnings have been closed. A previous water level screens candidate extent only. The revised geometry needs its own solve, boundary checks and spacing assessment.
+
+Refreshing or preparing the same next review again reuses the saved independent draft. It preserves later edits and does not recreate a deleted or abandoned draft. If preparation only partly succeeds, open that draft and use **Prepare an automatic draft** after addressing the displayed cause. Existing results remain available. Older automatic coverage previews can use **Prepare joint geometry suggestions** to add this follow-up without replacing their saved scope. A manually selected study preview is not replaced.
+
 After a new successful main calculation, **Suggested next review** automatically prepares the applicable next step. It does not start additional calculations or replace the saved baseline.
 
 - When authenticated water levels exceed section ends, continuous river models receive a fixed-direction DEM extension preview. Suggested bounds are at most 3 repair calculations and 2,000 ft total section width. The preview lists changed sections and unresolved locations; inspect exterior floodplain connectivity and roughness suitability before confirming. Original interior elevations, bank positions in plan and hydraulic controls remain protected.

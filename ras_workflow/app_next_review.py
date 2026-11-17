@@ -38,6 +38,11 @@ def prepare(model):
         if model.get(field):
             if not intact([model[field]]):
                 raise ValueError('Existing preview changed; prepare it again in its review panel')
+            previous=current(model)
+            if (field=='pending_study' and previous and previous.get('action')=='coverage'
+                    and previous.get('preview')==model[field] and previous.get('unresolved')
+                    and previous.get('status')!='CONFIRMED_SEPARATELY'):
+                return with_joint_revision(model,previous)
             return dict(record, reason='EXISTING_PREVIEW', existing_preview=model[field])
     if model.get('latest_coverage'):
         return dict(record, reason='EXISTING_COVERAGE_RESULT')
@@ -63,6 +68,21 @@ def prepare(model):
         record.update(preview=proposed['entry'], options=options,
                       maximum_calculations=proposed['plan']['maximum_calculations'],
                       status='PREVIEW_READY' if proposed['plan']['status'] == 'REVIEW_REQUIRED' else 'NO_AVAILABLE_CHECKS')
+    return with_joint_revision(model,record)
+
+
+def with_joint_revision(model,record):
+    joint=record.get('joint_revision') or {}
+    if (record.get('action')=='coverage' and record.get('unresolved')
+            and (not joint or joint.get('status')=='PREPARATION_FAILED' and not joint.get('entry'))):
+        from .app_joint_review import prepare as prepare_joint
+        latest=core.model(model['id'])
+        latest['phase']='Preparing joint geometry revision / 准备方向与宽度联合修订'
+        core.persist(latest)
+        try:
+            record['joint_revision']=prepare_joint(latest,record['options']['maximum_width_ft'])
+        except Exception as error:
+            record['joint_revision']=dict(status='PREPARATION_FAILED',error=str(error),solver_started=False)
     return record
 
 
@@ -109,4 +129,7 @@ def current(model):
         sources = plan.get('sources') if record['action'] == 'checks' else plan['source_inputs']+plan['evidence']
         if not intact(sources):
             return None
+    if record.get('joint_revision'):
+        from .app_joint_review import current as joint_current
+        record['joint_revision']=joint_current(record['joint_revision'])
     return record

@@ -125,7 +125,7 @@ def expand_model(model, body, maximum_cells=None):
     rebound_geometry, rebound = rebind_preserved_sections(geometry, previous, expanded,
         model['metadata'].get('dem_vertical_unit'), model['metadata'].get('dem_vertical_datum'))
     checkpoint_path = sp.parent / 'terrain_checkpoint.json'
-    checkpoint = read(checkpoint_path)
+    checkpoint = read(checkpoint_path) if checkpoint_path.exists() else None
     before = dict(model=model, draft=draft, checkpoint=checkpoint)
     save(destination.parent / 'before.json', before)
     receipt = copy.deepcopy(draft.get('section_workflow', {}))
@@ -141,7 +141,10 @@ def expand_model(model, body, maximum_cells=None):
     # Replace only stored terrain path answers that would override the new receipt.
     for field in ('c.terrain.raster', 'c.terrain.provenance'):
         updated_draft['answers'].pop(field, None)
-    updated_checkpoint = dict(checkpoint, terrain=expanded, created_utc=utc())
+    # Editable revisions may refer directly to a verified local DEM without
+    # retaining the original acquisition checkpoint. Keep their explicit
+    # metadata; do not manufacture a new product-metadata approval.
+    updated_checkpoint = dict(checkpoint or {}, terrain=expanded, created_utc=utc())
     updated_model = copy.deepcopy(model)
     updated_model.update(terrain=expanded, revision=model['revision'] + 1,
                          status='INPUTS_READY', phase='TERRAIN_EXTENT_READY', errors=[])
@@ -153,7 +156,8 @@ def expand_model(model, body, maximum_cells=None):
             save(sp.parent / 'draft.json', updated_draft)
             core.persist(updated_model, 'EXPAND_CACHED_DEM', dict(buffer_m=body['buffer_m'], terrain=expanded['raster']))
         except Exception:
-            save(checkpoint_path, checkpoint)
+            if checkpoint is None:checkpoint_path.unlink(missing_ok=True)
+            else:save(checkpoint_path, checkpoint)
             save(sp.parent / 'draft.json', draft)
             save(core.folder(key) / 'app.json', model)
             raise

@@ -360,6 +360,9 @@ def worker(record):
     for _ in range(100):
         if model(key).get('task')==rel(path):break
         time.sleep(.05)
+    # A Windows virtual-environment launcher may have a different PID from
+    # its actual Python worker. Retain both identities for owned substeps.
+    job=read(path);job['worker_pid']=os.getpid();save(path,job)
     try:
         with lock(ROOT/'status/app/execution.lock'):
             if job['action']=='prepare':

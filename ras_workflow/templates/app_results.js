@@ -323,9 +323,24 @@ function renderNextReview(parent){
    box.append(el('p',reasons[record.reason]||tr('Automatic review preparation needs attention.','自动复核准备需要处理。'),record.status==='PREVIEW_READY'?'status':'warning'));
    if(record.error)box.append(el('p',record.error,'warning'));
    if(record.action==='coverage'&&record.options)box.append(el('p',tr('Proposed first-round extensions: ','首轮建议延伸：')+record.changes+tr(' · at most ',' 条 · 最多 ')+record.options.maximum_rounds+tr(' calculations · total section width limit ',' 轮计算 · 总断面宽度上限 ')+record.options.maximum_width_ft+' ft'));
+   const joint=record.joint_revision;
+   if(record.action==='coverage'&&record.unresolved?.length)box.append(el('p',tr('Unresolved fixed-direction locations: ','固定方向延伸尚未解决的位置：')+record.unresolved.length,'warning'));
+   if(joint){
+    const ready=joint.status==='DRAFT_READY';
+    const message=ready?tr('A separate joint direction and width draft was prepared automatically. Review its map, banks and complete parameters before calculating.','已自动准备独立的方向与宽度联合修订草稿。请检查地图、岸站及完整参数，再确认计算。'):
+     joint.status==='EDITED_REVISION'?tr('The prepared revision has since been edited. Your edits are retained; review its current values.','已准备的修订版随后有过编辑。修改已保留，请以草稿当前参数为准。'):
+     joint.status==='COMPUTED_REVISION'?tr('The prepared revision has already been calculated. Open its results to continue.','已准备的修订版已完成计算，请打开该结果继续。'):
+     joint.status==='REVISION_PROCESSING'?tr('The independent revision is processing. Open it to follow progress; the original results remain available.','独立修订版正在处理，打开即可查看进度；原计算结果仍可使用。'):
+     tr('Joint preparation needs attention. Saved results and any independent draft remain available.','联合准备需要处理，已有结果及已建立的独立草稿仍保留。');
+    box.append(el('p',message,ready?'status':'warning'));
+    if(ready)box.append(el('p',tr('Staged geometry: ','几何已写入草稿：')+tr(joint.geometry_applied?'yes':'no',joint.geometry_applied?'是':'否')+tr(' · proposed changes: ',' · 建议修改：')+joint.changes+tr(' · rotations: ',' · 其中旋转：')+joint.rotations+tr(' · remaining review items: ',' · 仍需复核：')+(joint.unresolved||[]).length));
+    if(joint.error)box.append(el('p',joint.error,'warning'));
+    if(joint.project_id&&!['UNAVAILABLE','SOURCE_CHANGED'].includes(joint.status))box.append(button('Open the prepared geometry revision','打开已准备的几何修订',async()=>{await open(joint.project_id);},'primary'));
+   }
    box.append(el('p',tr('Preparation starts no additional solver run. Inspect the preview and its assumptions, then use its confirmation control. Existing results and packages remain available.','准备过程不启动追加求解。请查看预览及假设，再使用对应的确认按钮。已有结果与交付包仍可使用。'),'muted'));
    if(record.preview)box.append(button('Inspect the prepared review','查看已准备的复核',()=>{const target=document.getElementById(record.action==='coverage'?'qa-tool-coverage':'qa-tool-check-batch');if(target){const panel=target.closest('details');if(panel)panel.open=true;target.scrollIntoView({block:'start'});}}));
   }
  }else box.append(el('p',tr('Prepare the applicable next review from this saved calculation. No additional solver run starts.','根据已保存计算准备适用的下一项复核，不启动追加求解。')));
  if(!record||['PREPARATION_FAILED','UNAVAILABLE'].includes(record.status))box.append(button('Prepare next review automatically','自动准备下一项复核',async()=>{await api('next-review',{id:current.id,revision:current.revision});await open(current.id);}));
+ else if(record.action==='coverage'&&record.unresolved?.length&&(!record.joint_revision||record.joint_revision.status==='PREPARATION_FAILED'&&!record.joint_revision.entry))box.append(button('Prepare joint geometry suggestions','准备联合几何建议',async()=>{await api('next-review',{id:current.id,revision:current.revision});await open(current.id);}));
 }

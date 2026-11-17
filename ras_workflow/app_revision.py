@@ -9,6 +9,16 @@ def create(key, body):
     parent=core.model(key);core.require_idle(parent)
     if body.get('revision')!=parent['revision']:raise ValueError('Project changed; reload before revising')
     if body.get('confirmed') is not True:raise ValueError('Confirm creating an independent editable revision')
+    return create_draft(parent,body)
+
+
+def create_draft(parent,body,preparation_task=None):
+    """Internal snapshot; a worker-owned task keeps its new draft read-only while preparing."""
+    if preparation_task:
+        task=read(ROOT/preparation_task)
+        if (parent.get('task')!=preparation_task or task.get('project_id')!=parent['id']
+                or task.get('status')!='RUNNING' or task.get('worker_pid',task.get('pid'))!=os.getpid()):
+            raise ValueError('Automatic revision must belong to the current project worker')
     if parent.get('native_review'):raise ValueError('For native-model edits, edit a copy in HEC-RAS and import its input files as a new project')
     if not parent.get('summary') or not intact([parent['summary']]):raise ValueError('An intact completed calculation is required')
     from .app_parameters import objects
@@ -69,6 +79,8 @@ def create(key, body):
         m['parent_revision'].update(geometry=source['geometry_source'],study=source['analysis'],case_id=source['case_id'])
         m['terrain']=source['terrain']
         m['automatic_options']=dict(maximum_width_ft=source['maximum_width_ft'])
+    if preparation_task:
+        m.update(task=preparation_task,status='PROCESSING',phase='PREPARING_JOINT_GEOMETRY')
     core.persist(m,'CREATE_EDITABLE_REVISION',dict(parent=parent['id'],summary=origin))
     if source and body.get('prepare') is True:
         try:

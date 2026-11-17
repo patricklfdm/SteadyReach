@@ -61,6 +61,37 @@ class NextReviewTests(unittest.TestCase):
             result=next_review.execute('test_only')
         self.assertEqual(result['status'],'GEOMETRY_REVIEW_REQUIRED');checks.assert_not_called()
 
+    def test_unresolved_extension_prepares_joint_draft_without_changing_scope(self):
+        self.wet();proposal=self.proposal();proposal['preview']['unresolved']=[dict(rs=100)]
+        with patch.object(coverage_study,'prepare',return_value=proposal), \
+             patch('ras_workflow.app_joint_review.prepare',return_value=dict(status='DRAFT_READY',project_id='child')) as joint, \
+             patch.object(app_study,'start') as start:
+            result=next_review.execute('test_only')
+        joint.assert_called_once();self.assertEqual(joint.call_args.args[1],2000)
+        self.assertEqual(result['preview'],self.preview);self.assertEqual(result['action'],'coverage')
+        self.assertEqual(result['joint_revision']['project_id'],'child');start.assert_not_called()
+
+    def test_joint_failure_does_not_erase_available_fixed_direction_preview(self):
+        self.wet();proposal=self.proposal();proposal['preview']['unresolved']=[dict(rs=100)]
+        with patch.object(coverage_study,'prepare',return_value=proposal), \
+             patch('ras_workflow.app_joint_review.prepare',side_effect=ValueError('test joint failure')):
+            result=next_review.execute('test_only')
+        self.assertEqual(result['status'],'PREVIEW_READY');self.assertEqual(result['preview'],self.preview)
+        self.assertEqual(result['joint_revision']['error'],'test joint failure')
+        self.assertEqual(self.model['status'],'RESULTS_READY')
+
+    def test_existing_automatic_coverage_can_be_augmented_without_replacing_it(self):
+        self.wet();proposal=self.proposal();proposal['preview']['unresolved']=[dict(rs=100)]
+        with patch.object(coverage_study,'prepare',return_value=proposal),patch.object(next_review,'with_joint_revision',side_effect=lambda m,r:r):
+            next_review.execute('test_only')
+        self.model['pending_study']=self.preview
+        with patch.object(coverage_study,'prepare') as coverage, \
+             patch('ras_workflow.app_joint_review.prepare',return_value=dict(status='DRAFT_READY',project_id='child')) as joint:
+            result=next_review.execute('test_only')
+        coverage.assert_not_called();joint.assert_called_once()
+        self.assertEqual(self.model['pending_study'],self.preview)
+        self.assertEqual(result['joint_revision']['project_id'],'child')
+
     def test_wet_structure_model_requires_geometry_judgment(self):
         self.wet();self.model['model_type']='culvert'
         with patch.object(coverage_study,'prepare') as prepare:
