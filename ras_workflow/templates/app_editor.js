@@ -1,6 +1,6 @@
 'use strict';
 // No-model editor and explicit, editable pre-solver checkpoint.
-let classEdits={},finalReview=null;
+let classEdits={},finalReview=null,dependencyReviewState=null;
 const originName=c=>({missing:tr('Missing','缺失'),assumed:tr('ASSUMPTION','假设值'),inferred:tr('ESTIMATE','估计值'),terrain_derived:tr('Terrain-derived candidate','地形推导候选'),derived:tr('Derived candidate','推导候选'),reported:tr('User-reported source value','用户转录资料值'),user_entered:tr('User entry · unverified','用户填写 · 未独立核实'),source_input_unverified:tr('Source input · unverified','原始输入 · 未独立核实'),model_setting:tr('Model identifier','模型标识')}[c]||c);
 function parameterInput(parent,f){
  const box=el('section',undefined,'parameter');box.dataset.key=f.key;parent.append(box);
@@ -47,6 +47,7 @@ function renderFinalReview(){
  const state=el('p',review.ready?tr('Technical input checks passed. Assumptions remain conditional.','必要输入检查通过。假设仍属于条件性输入。'):tr('Fill the items below, then refresh this list. The solver is paused.','请补齐下列项目并刷新清单，求解器处于等待状态。'),review.ready?'status':'warning');state.id='review-state';screen.append(state);
  if(review.errors.length){const ul=el('ul');const remaining=review.errors.length>8?details(screen,'All remaining input checks','其余输入检查',false):null;const restList=el('ul');remaining?.append(restList);for(const [index,e] of review.errors.entries()){const f=review.fields.find(f=>f.key===e.field),li=el('li',typeof e==='string'?e:(f?tr(f.label.en,f.label.zh)+': ':'')+tr(e.en,e.zh));if(f)li.append(button('Go to field','定位此项',async()=>{const input=document.getElementById('input-'+f.key);let parent=input?.parentElement;while(parent){if(parent.tagName==='DETAILS')parent.open=true;parent=parent.parentElement;}input?.scrollIntoView({block:'center'});input?.focus();}));if(index<8)ul.append(li);else restList.append(li);}screen.append(ul);}
  if(review.refreshed_equivalent_fields?.length)screen.append(el('p',review.refreshed_equivalent_fields.length+tr(' unchanged derived values were rebound to the current geometry. Values, ranges and sources are listed below.',' 项数值及依据均相同的推导值已自动关联当前几何。请在下方核对数值、范围和来源。'),'status'));
+ renderDependencyReview(screen,review);
  const context=details(screen,'Project, map settings and source files','项目、地图设置和来源文件',false);table(context,[tr('Setting','设置'),tr('Value','数值')],[[tr('Coordinates','坐标'),JSON.stringify(review.inputs.configuration?.location||current.native?.location||'see input source')],['GIS / Mapper',String(review.inputs.gis)],...Object.entries(review.inputs.metadata)]);table(context,[tr('Source','来源'), 'SHA-256'],review.inputs.sources.map(s=>[s.path,s.sha256]));
  if(review.native){const d=details(screen,'Complete native model inspection','完整原生模型输入',true);d.append(el('pre',JSON.stringify(review.inputs.native,null,2)),el('p',tr('For native-file edits, change the source in HEC-RAS and import that version again. This review binds the exact input files.','原生文件参数需在 HEC-RAS 中修改后重新读取；本次核对绑定确切的输入文件。')));}
  else{
@@ -61,6 +62,53 @@ function renderFinalReview(){
  const actions=el('div',undefined,'card confirm-card');screen.append(actions);actions.append(button('Save and refresh parameter list','保存并刷新参数清单',showFinalReview));
  const consent=check(actions,'I have checked these inputs, including estimates, bank positions and limitations, and want to run this conditional calculation.','我已核对这些输入、估计值、左右岸及限制，确认采用它们进行本次条件性计算。',false,v=>{const b=$('#confirm-run');if(b)b.disabled=!v||!finalReview?.ready||dirty;});consent.id='confirm-parameters';
  const run=button('Confirm and run HEC-RAS','确认并运行 HEC-RAS',async()=>{if(!consent.checked||dirty||!finalReview?.ready)throw Error(tr('Refresh and confirm the current parameters first.','请先刷新并确认当前参数。'));await api('start',{id:current.id,revision:current.revision,start:true,confirmed:true,review_token:finalReview.review_token});finalReview=null;await open(current.id);},'primary');run.id='confirm-run';run.disabled=true;actions.append(run);
+}
+function renderDependencyReview(parent,review){
+ if(dependencyReviewState?.token!==review.review_token)dependencyReviewState={token:review.review_token,choices:new Map()};
+ const keys=new Set(review.errors.filter(e=>e.code==='DERIVED_INPUT_CHANGED').map(e=>e.field));
+ const fields=review.fields.filter(f=>keys.has(f.key));if(!fields.length)return;
+ const box=el('section',undefined,'card');parent.append(box);
+ box.append(el('h2',tr('Review changed dependencies together','集中处理已变化的关联参数')),
+  el('p',tr('Compare saved values and current derivations below. Choose replacements, explicitly retain a conditional assumption, or edit the full field. No selection is made for you.','在这里比较原值和当前推导。可采用候选、明确保留原值为条件性假设，或修改完整字段。不会自动替你选择。')));
+ const choices=dependencyReviewState.choices,feedback=el('p','', 'status');box.append(feedback);
+ const count=()=>{feedback.textContent=choices.size+tr(' choices selected, not saved · ',' 项已选择，尚未保存 · ')+(fields.length-choices.size)+tr(' awaiting a decision',' 项尚待决定');};
+ for(const f of fields){
+  const row=el('section',undefined,'parameter');box.append(row);
+  row.append(el('strong',tr(f.label.en,f.label.zh)+(f.unit?' · '+f.unit:'')),
+   el('p',tr('Saved value: ','原值：')+format(f.value,f.kind)+' · '+originName(f.evidence_class)));
+  const prior=f.answer?.candidate_record||{};
+  row.append(el('p',tr(prior.condition?.en||f.basis,prior.condition?.zh||f.basis),'muted'));
+  if(prior.range)row.append(el('p',tr('Previous reference range: ','原参考范围：')+prior.range.join(' – ')));
+  const refs=details(row,'Current candidates and sources','当前候选与依据',true);
+  for(const [i,c] of f.parameter_candidates.entries()){
+   refs.append(el('strong',(i+1)+': '+format(c.value,f.kind)+' · '+originName(c.evidence_class)),
+    el('p',tr(c.condition?.en||c.basis,c.condition?.zh||c.basis)));
+   if(c.range)refs.append(el('p',tr('Reference range: ','参考范围：')+c.range.join(' – ')+tr(' · see applicability; not a confidence interval',' · 请核对适用性，不代表置信区间')));
+   for(const source of [c.source,...(c.sources||[])].filter(Boolean))refs.append(el('small',source.path||String(source)));
+  }
+  if(!f.parameter_candidates.length)refs.append(el('p',tr('No current candidate is available. Inspect the source and edit the field, or explicitly retain a justified assumption.','暂无可用候选。请查看资料后修改字段，或明确保留有依据的假设。'),'warning'));
+  const options=[['','Choose after reviewing','核对后选择'],...f.parameter_candidates.map((c,i)=>[String(i),(i+1)+': '+format(c.value,f.kind),(i+1)+': '+format(c.value,f.kind)])];
+  if(!f.missing)options.push(['retain','Keep saved value as a conditional assumption','保留原值为条件性假设']);
+  const priorChoice=choices.get(f.key),candidateIndex=priorChoice?.action==='candidate'?f.parameter_candidates.findIndex(c=>c.candidate===priorChoice.candidate):-1;
+  const selected=priorChoice?.action==='retain'?'retain':candidateIndex>=0?String(candidateIndex):'';
+  field(row,'dependency-'+f.key,'Decision','处理方式',selected,'select',options,v=>{
+   if(v==='')choices.delete(f.key);
+   else if(v==='retain')choices.set(f.key,{field:f.key,action:'retain'});
+   else choices.set(f.key,{field:f.key,action:'candidate',candidate:f.parameter_candidates[Number(v)].candidate});
+   count();
+  });
+  row.append(button('Edit value in complete list','在完整清单中修改数值',async()=>revealParameter(f.key)));
+ }
+ box.append(button('Save these decisions and refresh review','保存本组决定并刷新核对',async()=>{
+  if(!choices.size)throw Error(tr('Choose at least one decision first.','请先选择至少一项处理方式。'));
+  if(finalReview!==review||dirty)throw Error(tr('Parameters were edited. Save and refresh the parameter list first.','参数已编辑，请先保存并刷新参数清单。'));
+  await saveAll();
+  const result=await api('resolve-dependencies',{id:current.id,revision:review.revision,review_token:review.review_token,selections:[...choices.values()]});
+  current=await api('project/'+current.id);finalReview=null;
+  await showFinalReview();
+  notify(result.saved_fields.length+tr(' decisions saved. Review the updated inputs before confirming the calculation.',' 项决定已保存。请核对更新后的输入，再确认计算。'));
+ },'primary'));
+ count();
 }
 function renderManual(screen){
  if(current.model_type==='river'){renderRiverManual(screen);return;}

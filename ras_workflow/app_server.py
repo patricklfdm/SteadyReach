@@ -67,6 +67,9 @@ def create():
                     elif route=='native':result=core.native_inputs(key,body)
                     elif route=='use-native-values':result=core.use_native_values(key,body)
                     elif route=='candidate':result=core.use_candidate(key,body)
+                    elif route=='resolve-dependencies':
+                        from .app_dependency_review import resolve
+                        result=resolve(key,body)
                     elif route=='prepare':result=core.launch(key,'prepare')
                     elif route=='automatic-prepare':
                         from .app_autoprepare import queue

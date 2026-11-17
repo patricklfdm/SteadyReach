@@ -412,6 +412,7 @@ def view(key,detail=True):
         if task['status']=='RUNNING':
             from .project_actions import process_alive
             if not process_alive(task.get('pid')):result.update(status='INTERRUPTED',errors=['The worker stopped; saved inputs and outputs remain. Retry the task.'])
+            else:result['status']='PROCESSING'
     if not detail:return result
     if result.get('job',{}).get('action')=='study' and m.get('active_study'):
         active=m['active_study'];plan=read(ROOT/active['study']['path'])
@@ -430,6 +431,11 @@ def view(key,detail=True):
             if journal.get('status') not in (None,'IN_PROGRESS'):waiting='SKIPPED'
         result['study_progress']=[dict(id=case['id'],section_count=case.get('section_count'),
             status=records.get(case['id'],{}).get('status',waiting),error=records.get(case['id'],{}).get('error')) for case in cases]
+    # Substeps may persist INPUTS_READY while the encompassing task is still
+    # running. Keep polling and avoid expensive draft reads during mutations.
+    if result['status']=='PROCESSING':
+        result.update(missing=[],native=None)
+        return result
     if m.get('catalog_attempt') and intact([m['catalog_attempt']]):result['catalog_result']=read(ROOT/m['catalog_attempt']['path'])
     if m.get('latest_study') and intact([m['latest_study']]):result['study_result']=read(ROOT/m['latest_study']['path'])
     if m.get('latest_spacing') and intact([m['latest_spacing']]):result['spacing_result']=read(ROOT/m['latest_spacing']['path'])

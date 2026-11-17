@@ -373,7 +373,7 @@ def review(m):
         fields=rows(m);native=None
         from .app_automation import preflight
         for q in preflight(m,data['geometry'])['issues']:
-            if q['blocking']:errors.append(dict(code=q['code'],en=q['message'],zh=q['zh']))
+            if q['blocking']:errors.append(dict(code=q['code'],field=q.get('field',''),en=q['message'],zh=q['zh']))
     if not automatic_settled:
         errors.append(dict(code='AUTOMATIC_INPUTS_UNSETTLED',en='Automatic values did not settle. Review conflicting dependencies before calculation.',zh='自动推导尚未稳定，请核对关联参数后再计算。'))
     packet=dict(schema_version='parameter_review_1',project_id=m['id'],revision=m['revision'],fingerprint=digest(data),

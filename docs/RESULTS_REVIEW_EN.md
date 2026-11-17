@@ -90,6 +90,16 @@ Every continuation requires a fresh full-parameter confirmation. Local terrain a
 
 If another project is processing, the independent draft opens with the reason preparation was deferred. Wait for that job to finish, then choose **Prepare an automatic draft** in the saved revision.
 
+The page stays in **Processing** while its background task is alive, including the source, geometry and parameter substeps. Progress refreshes automatically; an intermediate saved draft does not mean preparation has finished. A stopped worker is shown as interrupted with saved inputs retained.
+
+## Changed parameters after geometry edits
+
+Open **Review all parameters** after adopting a geometry revision. Identical derived values with identical ranges and source evidence are rebound automatically. If the derivation has materially changed, **Review changed dependencies together** shows each saved value, its previous basis/range, and current candidates with their conditions and ranges.
+
+Choose a current candidate, or explicitly choose **Keep saved value as a conditional assumption** after checking its applicability. Retaining an old value records the previous derivation and changes its classification to an assumption; it does not claim that the new geometry produced that value. Further geometry changes trigger another check. **Edit value in complete list** opens the ordinary editable field when neither choice fits.
+
+Click **Save these decisions and refresh review** once for the selected group. No choices are preselected. You may resolve some fields first; others continue to block computation. A stale page, changed evidence, or invalid selection rejects the whole group before saving. The page reports successful saves and refreshes the complete input review. Confirm the updated inputs separately before running HEC-RAS. No reviewer name or explanatory form is required.
+
 ## Remaining human decisions
 
 Check source applicability, datum, physical opening identity, buried geometry, effective flow paths, uncertain banks, inlet/floor/obstruction assumptions and boundary validity. Review Mapper/QGIS alignment and final report pages. User-authored source notes are retained in their original language; if Chinese construction notes occur in an English report, the report flags language review. Supply suitable English wording before an English-only external delivery. No local translator is assumed to preserve engineering meaning.

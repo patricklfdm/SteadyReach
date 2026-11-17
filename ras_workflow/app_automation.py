@@ -321,7 +321,8 @@ def preflight(m,g,include_suggestions=True):
         d=objects(m)[2]
         for key,a in d.get('answers',{}).items():
             record=a.get('candidate_record') or {}
-            if record.get('automation_context') and record['automation_context']!=dependency(m,g,key):
+            context=record.get('automation_context') or (a.get('dependency_review') or {}).get('context')
+            if context and context!=dependency(m,g,key):
                 issues.append(dict(code='DERIVED_INPUT_CHANGED',field=key,sections=[],groups=[],blocking=True,message='Dependencies changed: '+key+'. Recompute or explicitly edit this input.',zh='推导依据已变化：'+key+'；请重新采用候选或明确修改。'))
     return dict(issues=issues,blocking_count=sum(bool(q['blocking']) for q in issues),tentative_associations=tentative,
         scope='Geometry screening, not hydraulic acceptance; unresolved source semantics remain for user judgment.')
