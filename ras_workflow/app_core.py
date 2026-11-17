@@ -439,6 +439,8 @@ def view(key,detail=True):
             cases=[prepared.get(case['id'],case) for case in cases]
             if journal.get('status') not in (None,'IN_PROGRESS'):waiting='SKIPPED'
         result['study_progress']=[dict(id=case['id'],section_count=case.get('section_count'),
+            parameter_path=(case.get('changes') or [{}])[0].get('path'),
+            parameter_value=(case.get('changes') or [{}])[0].get('after'),
             status=records.get(case['id'],{}).get('status',waiting),error=records.get(case['id'],{}).get('error')) for case in cases]
     # Substeps may persist INPUTS_READY while the encompassing task is still
     # running. Keep polling and avoid expensive draft reads during mutations.
@@ -447,6 +449,9 @@ def view(key,detail=True):
         return result
     if m.get('catalog_attempt') and intact([m['catalog_attempt']]):result['catalog_result']=read(ROOT/m['catalog_attempt']['path'])
     if m.get('latest_study') and intact([m['latest_study']]):result['study_result']=read(ROOT/m['latest_study']['path'])
+    if m.get('sensitivity_suggestions'):
+        from .sensitivity_ranges import current as current_ranges
+        result['suggested_sensitivity']=current_ranges(m)
     if m.get('latest_spacing') and intact([m['latest_spacing']]):result['spacing_result']=read(ROOT/m['latest_spacing']['path'])
     if m.get('latest_coverage') and intact([m['latest_coverage']]):result['coverage_result']=read(ROOT/m['latest_coverage']['path'])
     if m.get('latest_coverage_exports') and intact([m['latest_coverage_exports']]):

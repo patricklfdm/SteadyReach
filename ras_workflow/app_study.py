@@ -16,7 +16,11 @@ def prepare(key,body):
         from .coverage_study import prepare as prepare_coverage
         return prepare_coverage(m,body)
     choices=body.get('parameters',[])
-    if not isinstance(choices,list) or not 1<=len(choices)<=3:raise ValueError('Choose 1–3 parameters (up to six variants plus baseline)')
+    range_sources=[]
+    if body.get('range_token'):
+        from .sensitivity_ranges import resolve
+        choices,range_sources=resolve(m,body)
+    if not isinstance(choices,list) or not 1<=len(choices)<=4:raise ValueError('Choose 1–4 parameters (up to eight variants plus baseline)')
     c=read(ROOT/m['active_project']);g=read((ROOT/m['active_project']).parent/c['geometry']);sc=next(s for s in c['scenarios'] if s['id']==m['scenario'])
     allowed={'scenario.channel_n','scenario.overbank_n','boundary_slopes.upstream','boundary_slopes.downstream'}
     allowed|={f'groups.{i}.depth_blocked_ft' for i in range(len(g['structure']['groups']))}
@@ -32,12 +36,13 @@ def prepare(key,body):
         seen.add(path)
         if path.startswith('scenario.') and any(r.get('manning_segments') for r in g['cross_sections']):raise ValueError('Explicit section roughness subdivisions override scenario roughness; revise those subdivisions before testing this parameter')
         if path=='boundary_slopes.upstream' and g.get('flow_regime')=='subcritical':raise ValueError('This subcritical plan does not use the upstream normal-depth boundary')
-        topic='parameter_'+str(i+1);basis='Explicit user-selected sensitivity range; assumed, not a measured confidence interval.'
+        topic='parameter_'+str(i+1);basis=v['basis'] if range_sources else 'Explicit user-selected sensitivity range; assumed, not a measured confidence interval.'
         if path.endswith('depth_blocked_ft'):
             rise=g['structure']['groups'][int(path.split('.')[1])]['rise_ft']
             if not 0<=low<high<rise:raise ValueError('Blockage depths must be nonnegative and below opening height')
             basis+=' DepthBlocked represents uniform bottom fill along the barrel, not a local inlet obstruction.'
         topics.append(dict(id=topic,measurement_action='Review site evidence and model response for '+path,evidence_status='ASSUMED_TEST_RANGE',range_basis=basis))
+        if range_sources:topics[-1].update(parameter_path=path,range_record=v['range_record'])
         for suffix,value in [('low',low),('high',high)]:
             current=sc[path.split('.')[1]] if path.startswith('scenario.') else g['boundary_slopes'][path.split('.')[1]] if path.startswith('boundary_slopes.') else g['boundaries']['downstream']['stages_ft'][int(path.split('.')[-1])] if path.startswith('boundaries.') else g['structure']['groups'][int(path.split('.')[1])].get('depth_blocked_ft')
             if value==current:continue
@@ -49,7 +54,7 @@ def prepare(key,body):
                 raise
             cases.append(dict(id=topic+'_'+suffix,topic=topic,changes=changes))
     if not cases:raise ValueError('The selected range does not change baseline inputs')
-    out=core.folder(key)/'studies'/unique_id();spec=dict(id='sensitivity',case_kind=c['case_kind'],purpose='User-selected local sensitivity comparison; not automatic design acceptance',sources=[m['summary']],measurement_topics=topics,cases=cases,delivery_enabled=False)
+    out=core.folder(key)/'studies'/unique_id();spec=dict(id='sensitivity',case_kind=c['case_kind'],purpose='User-selected local sensitivity comparison; not automatic design acceptance',sources=[m['summary']]+range_sources,measurement_topics=topics,cases=cases,delivery_enabled=False)
     save(out/'specification.json',spec);path=study.prepare(ROOT/m['active_project'],m['scenario'],out/'specification.json',out/'prepared')
     m['pending_study']=item(path);core.persist(m,'PREPARE_SENSITIVITY',dict(study=m['pending_study']))
     return dict(token=m['pending_study']['sha256'],entry=m['pending_study'],plan=read(path),warning='Each case is a real HEC-RAS run. Only the displayed ranges are tested; no interaction or convergence claim.')

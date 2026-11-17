@@ -43,9 +43,17 @@ Expand the Results revision section and create an editable revision. For models 
 
 ## Optional sensitivity with one confirmation
 
-Expand **Optional sensitivity batch**, choose channel/overbank Manning n, an applicable normal-depth slope, or a group's uniform bottom fill, and enter explicit low/high values. Select **Prepare and review batch**. Inspect each displayed change, then **Confirm displayed cases and calculate**. Editing the range clears the old proposal; the backend rejects stale confirmation.
+Expand **Optional sensitivity batch → Suggest ranges from saved inputs** after computing a baseline.
 
-The app runs the baseline and changed cases sequentially with the real solver, generates each case's reports, and compares headwater and matched-section water levels. Identical-to-baseline bounds do not create duplicate variants. The baseline GIS package is retained instead of exporting the same maps repeatedly. Ranges are explicit assumptions, not measured confidence intervals. Roughness batches are rejected when section-level Manning segments would override the selected global value. An upstream normal-depth test is rejected for a subcritical plan, which does not use that boundary. Bottom-fill depth applies along the full barrel; an inlet photograph alone does not establish that condition. Failed cases and incomplete native output remain visible; no sensitivity ranking grants engineering acceptance.
+1. Click **Suggest ranges from calculation inputs**. The app reads the sealed calculation decision and its verified sources. Previously adopted ranges are selected. Matching document ranges that were not adopted remain unselected, even when their numbers match the baseline.
+2. Select up to four parameters. Check the source, river/site, units and applicability; edit any endpoint as needed. The table shows baseline values and the range basis. Unsupported or missing ranges stay blank rather than receiving arbitrary percentages. A range outside the baseline is labelled an alternative scenario.
+3. Click **Prepare selected cases for one confirmation**. Inspect the baseline and the low/high variants together. Each variant changes one parameter; the batch does not test their combined effect. Bounds equal to the baseline do not create duplicate variants. The maximum is nine native runs.
+4. Check **I confirm these conditional ranges, their source applicability and the displayed cases**, then choose **Confirm and run selected sensitivity cases**. Keep the launcher open. Preparing ranges or cases alone does not start HEC-RAS. Editing a range clears the previous proposal; changed input/source hashes require a new preview.
+5. Watch per-case progress, then review upstream/headwater and matched-section water-level differences. Choose **Update reports and both packages** to include the verified comparisons and source records in the baseline delivery. The native model and results for each case remain in the separate study folder.
+
+The collapsed **Or enter a single range manually** form remains available. Supported parameters include channel/overbank Manning n, active normal-depth boundaries, known downstream water levels and uniform culvert bottom fill. Section-specific roughness overrides and inactive upstream boundaries are explicitly excluded. Bottom fill applies along the full barrel; an inlet photograph alone does not establish that condition.
+
+Ranges are conditional experiments, not measured confidence intervals or automatic calibration. Edited bounds retain the original reference and a separate assumption label. The workflow runs the baseline and variants sequentially with the real solver and generates case reports; it retains the baseline GIS package instead of repeating identical map exports. Failed computations or incomplete native exports remain visible. Neither a small response nor successful execution closes hydraulic QA or grants engineering acceptance.
 
 ## River section-spacing trials
 
