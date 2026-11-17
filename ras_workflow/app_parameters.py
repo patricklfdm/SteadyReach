@@ -259,6 +259,42 @@ def reviewed_draft(m):
     d.update(reviewer=None,basis='Complete displayed parameters, estimates and bank positions confirmed for a conditional local calculation; engineering acceptance is not asserted.')
     return sp,d
 
+def refresh_equivalent_candidates(m):
+    """Rebind an unchanged derivation after geometry edits, retaining its evidence."""
+    from . import app_core as core
+    sp, packet, draft, config, geometry = objects(m)
+    changes = []
+    # All substantive metadata, including ranges, sources and assumptions, must
+    # match. Only the context and candidate identifiers may have changed.
+    transient = {'candidate', 'automation_context', 'dependencies'}
+    def meaning(candidate):
+        return {key: value for key, value in candidate.items() if key not in transient}
+    for field in rows(m, context=(sp, packet, draft, config, geometry)):
+        answer = draft['answers'].get(field['key'], {})
+        prior = answer.get('candidate_record') or {}
+        if not prior.get('automation_context'):
+            continue
+        if any(answer.get(key) != prior.get(key) for key in ('value', 'evidence_class', 'basis')):
+            continue
+        current = next((candidate for candidate in field['parameter_candidates']
+                        if candidate.get('automation_context')
+                        and candidate['automation_context'] != prior['automation_context']
+                        and meaning(candidate) == meaning(prior)), None)
+        if current is None:
+            continue
+        changes.append(dict(field=field['key'], value=answer['value'],
+                            previous_candidate=prior, current_candidate=current))
+        draft['answers'][field['key']] = dict(answer, candidate_record=current, confirmed=False)
+    if changes:
+        draft['consent'] = False
+        intake.save_draft(sp, draft)
+        m['revision'] += 1
+        m.pop('pending_review', None)
+        m.pop('run_confirmation', None)
+        core.persist(m, 'REFRESH_EQUIVALENT_CANDIDATES', dict(changes=changes))
+    return changes
+
+
 def binding(m):
     sources=[item(ROOT/m['project'])]+m.get('attachments',[])+m.get('input_choices',[])
     if m.get('road_sample'):sources.append(m['road_sample'])
@@ -313,6 +349,9 @@ def review(m):
     if m.get('automatic_preparation') and not m.get('active_project') and not m.get('native_review'):
         from .app_autoprepare import fill
         automatic_settled=fill(m, owned_only=True)['dependencies_settled']
+    refreshed = []
+    if not m.get('native_review') and not m.get('active_project'):
+        refreshed = refresh_equivalent_candidates(m)
     data=binding(m)
     if m.get('native_review'):
         errors=core.check(m);fields=[];native=core.native_preview(m)
@@ -326,6 +365,7 @@ def review(m):
         errors.append(dict(code='AUTOMATIC_INPUTS_UNSETTLED',en='Automatic values did not settle. Review conflicting dependencies before calculation.',zh='自动推导尚未稳定，请核对关联参数后再计算。'))
     packet=dict(schema_version='parameter_review_1',project_id=m['id'],revision=m['revision'],fingerprint=digest(data),
         inputs=data,fields=fields,native=native,errors=errors,ready=not errors,created_utc=utc(),engineering_acceptance='NOT_ASSESSED',
+        refreshed_equivalent_fields=[change['field'] for change in refreshed],
         attention=[] if native else attention(m, fields))
     path=core.folder(m['id'])/'reviews'/unique_id()/'parameters.json';save(path,packet)
     m['pending_review']=item(path);core.persist(m,'OPEN_FINAL_PARAMETER_REVIEW',dict(review=m['pending_review']))

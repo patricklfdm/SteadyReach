@@ -84,3 +84,6 @@ QA revision previews show a saved confirmation and the proposed section count wh
 Local PDF extraction attempts up to 200 pages and 600,000 characters, with OCR on up to 40 low-text pages. The source panel displays inspected and total page counts. Partial extraction and low-text pages remain marked for original-page review. Run **Reanalyze saved material** again to update documents parsed by an older extractor. Extracted text and figures require a site, unit and datum check before values are adopted.
 
 English and Chinese reports use matching-language plot labels. Dense overview maps label a subset of sections while drawing every cutline. The section tables and profile panels retain all section identifiers.
+
+
+After boundary sensitivity completes, **Prepare QA revision suggestions** also reads verified cases bound to that exact baseline. It screens wet ends against their maximum computed water levels and reports the included study count. Geometry, flow, roughness and regime must match. The preview preserves source hashes and requires adoption followed by a fresh calculation. [Preparation and automation assessment](AUTOMATION_EN.md).

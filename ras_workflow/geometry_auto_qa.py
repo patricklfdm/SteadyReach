@@ -55,6 +55,44 @@ def extend(row,s,water,maximum):
         bank_plan_positions_preserved=bool(row.get('bank_stations_ft')),threshold_prior_wse_ft=water)
 
 
+def boundary_study_water(summary_path, summary, geometry):
+    """Read verified, same-baseline boundary cases for section extent screening."""
+    from .report_studies import collect as collect_studies
+    from .qa_locator import collect
+    studies, evidence = collect_studies(summary_path, summary)
+    water = {}
+    accepted_studies = set()
+    permitted = ('boundary_slopes.', 'boundaries.')
+    geometry_keys = ('cross_sections', 'flowlines', 'structure', 'horizontal_crs', 'vertical_datum')
+    def scenario_values(result):
+        return [{key:value for key,value in scenario.items() if key != 'parameter_source'}
+                for scenario in result['configuration']['scenarios']]
+    for study in studies:
+        if any(not change['path'].startswith(permitted)
+               for case in study['cases'] for change in case['changes']):
+            continue
+        analysis = read(ROOT/study['analysis']['path'])
+        plan = read(ROOT/analysis['study']['path'])
+        journal = read(ROOT/analysis['execution']['path'])
+        records = {case['id']:case for case in journal['cases']}
+        for case in plan['cases']:
+            case_geometry = read(ROOT/case['geometry']['path'])
+            if any(case_geometry.get(key) != geometry.get(key) for key in geometry_keys):
+                raise ValueError('Boundary coverage study geometry differs from its baseline')
+            result = read(ROOT/records[case['id']]['summary']['path'])
+            if (scenario_values(result) != scenario_values(summary)
+                or case_geometry.get('flow_regime') != geometry.get('flow_regime')):
+                raise ValueError('Boundary coverage study changes flow, roughness or flow regime')
+            for row in collect(result['hydraulics'])['rows']:
+                if row['left_excess_ft'] or row['right_excess_ft']:
+                    rs = float(row['rs'])
+                    water[rs] = max(water.get(rs, float('-inf')), row['wse_ft'])
+        accepted_studies.add(study['analysis']['path'])
+    sources = [dict(entry, role='boundary_coverage_study')
+               if entry['path'] in accepted_studies else entry for entry in evidence]
+    return water, sources if accepted_studies else []
+
+
 def prior_results(m,g):
     parent=m.get('parent_revision');water={};messages=[];sources=[]
     if not parent:return water,messages,sources,{}
@@ -70,6 +108,9 @@ def prior_results(m,g):
         from .app_outputs import validate,diagnostics as supplemented
         diagnostics=supplemented(h,validate(summary['native_supplement']))
     messages=diagnostics['issues'];sources=[parent['summary'],h['raw_hdf'],h['diagnostics']]
+    study_water,study_sources=boundary_study_water(ROOT/parent['summary']['path'],summary,old_g)
+    for rs,height in study_water.items():water[rs]=max(water.get(rs,float('-inf')),height)
+    sources+=study_sources
     return water,messages,sources,old
 
 
@@ -91,6 +132,7 @@ def propose(m,g,s,maximum=1200.,reference_screen=None):
         row.pop('terrain_review',None)
         s.stamp(row);changes.append(dict(rs=row['rs'],action='ROTATE_FROM_SPATIAL_QA',parameters=p,banks_need_confirmation=True))
     water,messages,sources,old=prior_results(m,g)
+    study_count=sum(entry.get('role')=='boundary_coverage_study' for entry in sources)
     if reference_screen:
         water={row['rs']:row['water_ft'] for row in reference_screen['sections']}
         sources.append(reference_screen['source'])
@@ -125,6 +167,6 @@ def propose(m,g,s,maximum=1200.,reference_screen=None):
     return dict(layouts=[dict(id='qa_changes',geometry=candidate,anchors=[],changes=changes,changed_sections=[i for i,r in enumerate(rows) if r['rs'] in changed],
         before_sections={str(i):copy.deepcopy(r) for i,r in enumerate(g['cross_sections']) if r['rs'] in changed},
         issues=issues,warnings=['REFERENCE_WSE_COVERAGE_SCREEN'] if reference_screen else ['PRIOR_WSE_IS_A_SCREEN_NOT_NEW_HYDRAULICS'],unresolved=unresolved,
-        reference_screen=reference_screen,
+        reference_screen=reference_screen,boundary_study_count=study_count if not reference_screen else 0,
         can_apply=bool(changes) and not any(q.get('blocking') and q['code']!='DERIVED_INPUT_CHANGED' for q in issues),basis='QA-driven bounded repair; preserved interior samples on extension; dependent values require refresh before final calculation confirmation.')],
         reference_screen=reference_screen,sources=[s.source]+sources,solver_run=False)

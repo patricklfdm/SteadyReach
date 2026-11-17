@@ -10,6 +10,40 @@ DEFAULTS = dict(window_ft=3., min_relief_ft=.5, min_slope_drop=.08,
                 center_search_fraction=.25, competing_score_ratio=.75, distance_penalty=0.)
 
 
+def channel_origin(row, stations):
+    """Locate the saved channel anchor on the full, possibly extended cutline."""
+    center = row.get('center_xy')
+    line = row.get('cutline_xy')
+    if center is None or line is None:
+        return float((stations[0] + stations[-1]) / 2), 'section_midpoint'
+    try:
+        points = np.asarray(line, dtype=float)
+        anchor = np.asarray(center, dtype=float)
+        if points.ndim != 2 or points.shape[1] != 2 or anchor.shape != (2,):
+            raise ValueError()
+        if not np.isfinite(points).all() or not np.isfinite(anchor).all():
+            raise ValueError()
+        segments = np.diff(points, axis=0)
+        lengths = np.linalg.norm(segments, axis=1)
+        total = float(lengths.sum())
+        if not np.isfinite(total) or total <= 0:
+            raise ValueError()
+        best = None
+        offset = 0.
+        for start, vector, length in zip(points, segments, lengths):
+            if length > 0:
+                fraction = float(np.clip(np.dot(anchor-start, vector)/(length*length), 0., 1.))
+                distance = float(np.linalg.norm(anchor-start-fraction*vector))
+                candidate = (distance, offset+fraction*length)
+                if best is None or candidate[0] < best[0]:
+                    best = candidate
+            offset += length
+        station = stations[0] + best[1]/total*(stations[-1]-stations[0])
+        return float(station), 'saved_channel_anchor'
+    except (ValueError, TypeError):
+        return float((stations[0] + stations[-1]) / 2), 'section_midpoint'
+
+
 def _single_scale(row, settings=None):
     p=dict(DEFAULTS)
     if settings:
@@ -25,7 +59,8 @@ def _single_scale(row, settings=None):
         if len(x)!=len(z) or len(x)<7 or not np.isfinite(x).all() or not np.isfinite(z).all() or not (np.diff(x)>0).all():raise ValueError()
     except (ValueError,KeyError,TypeError):
         result['reasons']=['INVALID_OR_NODATA_PROFILE'];return result
-    width=x[-1]-x[0];mid=(x[0]+x[-1])/2
+    width=x[-1]-x[0];mid,origin=channel_origin(row,x)
+    result.update(channel_search_origin=origin,channel_anchor_station_ft=mid)
     mask=np.abs(x-mid)<=width*p['center_search_fraction']
     indices=np.flatnonzero(mask)
     if not len(indices):result['reasons']=['NO_CHANNEL_SEARCH_SAMPLES'];return result
@@ -78,7 +113,7 @@ def propose(row, settings=None):
     if base['reasons']==['INVALID_OR_NODATA_PROFILE']:return base
     window=base['settings']['window_ft']
     scales=[_single_scale(row,dict(base['settings'],window_ft=window*f)) for f in [.5,1.,2.]]
-    result=dict(base,method='outward_slope_break_multiscale_v2',
+    result=dict(base,method='outward_slope_break_multiscale_v3',
         scale_windows_ft=[window*f for f in [.5,1.,2.]],scale_results=scales)
     reasons=[r for r in base['reasons'] if r not in ['DISTINCT_SLOPE_BREAKS_REVIEW_REQUIRED','NO_DISTINCT_BANK_ON_ONE_OR_BOTH_SIDES']]
     for side in ['left','right']:

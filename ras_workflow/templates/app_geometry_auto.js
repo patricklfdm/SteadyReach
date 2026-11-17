@@ -47,6 +47,7 @@ function renderAutoGeometry(parent){
   detail.append(el('p',tr('Basis: ','依据：')+(v.seed?.basis||'QA / DEM')));
   for(const w of v.warnings||[])detail.append(el('p',tr(w==='REFERENCE_WSE_COVERAGE_SCREEN'?'Reference water levels screen coverage. Review section correspondence, datum and floodplain flow paths; site water levels require computation.':w,symbols[w]||w),'warning'));
   detail.append(el('p',v.changed_sections.length+tr(' proposed section changes',' 条断面改动提案')+' · '+(v.unresolved?.length||0)+tr(' unresolved items',' 项仍需处理')));
+  if(v.boundary_study_count)detail.append(el('p',tr('Extent screening includes ','范围筛查已纳入 ')+v.boundary_study_count+tr(' verified boundary studies from the same baseline. Review the proposed changes before recalculating.',' 组已核验、属于同一基准模型的边界敏感性结果。请核对改动提案后再重算。'),'status'));
   if(v.reference_screen){const ref=v.reference_screen;detail.append(el('p',tr('Reference source: ','参考资料：')+(ref.source.original_name||ref.source.path)+' · '+ref.vertical_datum));table(detail,['RS',tr('Reference elevation (ft)','参考水位（ft）')],ref.points.map(p=>[p.rs,p.water_ft]));}
   if(v.seed&&!v.seed.direction_known)detail.append(el('p',tr('The arrow is inferred from surface elevations around the pin. Verify the facility, road gap and flow direction. If wrong, use the manual map tools; buried openings are not inferred.','箭头仅由坐标周围地表高程推测。请核对设施、道路间隔及上下游；不正确时使用手动地图工具，不推测埋藏涵孔。'),'warning'));
   const canvas=el('div');detail.append(canvas);const anchorsPreview=Object.fromEntries((v.anchors||[]).map(r=>[r.id,r.anchors_xy]));
