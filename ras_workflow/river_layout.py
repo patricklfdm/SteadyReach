@@ -8,6 +8,57 @@ from .banks import annotate
 from .geometry_qa import spatial_issues
 
 
+def trace(anchors, sampler):
+    """Use explicit bends when supplied. Screen two-endpoint routes at two widths."""
+    from scipy.spatial import cKDTree
+
+    weights = dict(elevation_weight=1., uphill_weight=4., height_scale_ft=10.)
+    grid = max(5., sampler.cell_ft)
+    if len(anchors) != 2:
+        return corridor_grid(anchors, 40., grid, sampler.sample, sampler.factor, weights)
+
+    chord = (anchors[1] - anchors[0]) * sampler.factor
+    length = np.linalg.norm(chord)
+    inner_width = float(np.clip(.24 * length, 80., 800.))
+    outer_width = inner_width * 1.5
+    # Both grids use the same resolution. Bound their memory and avoid treating
+    # a coarsened search across a very long reach as evidence of channel position.
+    grid = max(grid, (np.max(abs(chord)) + 2 * outer_width) / 440.)
+    if length < 6 * grid or grid > max(25., 2 * sampler.cell_ft):
+        raise ValueError('Check reach extent and add bend anchors / 请核对河段范围并补充弯道锚点')
+    narrow, _, _ = corridor_grid(anchors, inner_width, grid, sampler.sample, sampler.factor, weights)
+    line, heights, evidence = corridor_grid(anchors, outer_width, grid, sampler.sample, sampler.factor, weights)
+    shift = max(cKDTree(narrow).query(line)[0].max(), cKDTree(line).query(narrow)[0].max()) * sampler.factor
+    tolerance = max(30., 4 * grid)
+    relative = (line - anchors[0]) * sampler.factor
+    fractions = np.clip(relative @ chord / length**2, 0., 1.)
+    near_edge = np.linalg.norm(relative - fractions[:, None] * chord, axis=1).max() >= outer_width - 2 * grid
+
+    # Require two flanks with finite, higher terrain at distributed interior
+    # sections. A repeatable shortest path on a flat surface is ambiguous.
+    chain = np.r_[0., np.cumsum(np.linalg.norm(np.diff(line, axis=0), axis=1))] * sampler.factor
+    at = np.linspace(.1, .9, 17) * chain[-1]
+    def point(distances):
+        return np.column_stack([np.interp(distances, chain, column) for column in line.T])
+    centers = point(at)
+    tangent = point(at + 2 * grid) - point(at - 2 * grid)
+    normal = np.column_stack([-tangent[:, 1], tangent[:, 0]])
+    normal /= np.maximum(np.linalg.norm(normal, axis=1)[:, None], 1e-12)
+    offsets = np.linspace(.15, .75, 7) * outer_width / sampler.factor
+    bed = sampler.sample(centers)
+    sides = []
+    for sign in (-1, 1):
+        xy = centers[:, None, :] + sign * normal[:, None, :] * offsets[None, :, None]
+        z = sampler.sample(xy.reshape(-1, 2)).reshape(len(at), -1)
+        sides.append((np.isfinite(z).sum(axis=1) >= 4) & ((z >= bed[:, None] + 1.).sum(axis=1) >= 2))
+    supported = int(np.count_nonzero(sides[0] & sides[1]))
+    evidence['endpoint_search'] = dict(half_widths_ft=[inner_width, outer_width], grid_ft=float(grid),
+        path_difference_ft=float(shift), tolerance_ft=float(tolerance), touches_search_edge=bool(near_edge),
+        supported_flanks=supported, flank_checks=len(at),
+        needs_bend_anchor=bool(shift > tolerance or near_edge or supported < 12))
+    return line, heights, evidence
+
+
 def initial(m, g, c, sampler, length, maximum):
     anchors = m.get('map_picks', {}).get('river', [])
     if len(anchors) < 2:
@@ -18,8 +69,9 @@ def initial(m, g, c, sampler, length, maximum):
     path = ROOT/m['session']
     source = path.parent/'river_anchor_records'/(unique_id()+'.json')
     save(source, dict(anchors_xy=anchors,crs=sampler.crs.to_string(),basis='User-selected continuous reach, ordered upstream to downstream; excludes bridge structures',model_type='river'))
-    line, z, ev = corridor_grid(a, 40., max(5., sampler.cell_ft), sampler.sample, sampler.factor,
-                               dict(elevation_weight=1.,uphill_weight=4.,height_scale_ft=10.))
+    line, _, ev = trace(a, sampler)
+    endpoint_search = ev.get('endpoint_search') or {}
+    needs_bend = endpoint_search.get('needs_bend_anchor', False)
     chain = np.r_[0,np.cumsum(np.linalg.norm(np.diff(line,axis=0),axis=1))*sampler.factor]
     at = np.r_[np.arange(0,chain[-1],max(15.,sampler.cell_ft*3)),chain[-1]]
     line = np.column_stack([np.interp(at,chain,line[:,k]) for k in (0,1)])
@@ -41,6 +93,8 @@ def initial(m, g, c, sampler, length, maximum):
     layout=dict(id='river_layout',seed=dict(basis='Continuous terrain-screened river through saved anchors; bridge openings excluded',direction_known=True,sources=[item(source)]),
                 anchors=[dict(id='river',anchors_xy=anchors)],parameters=[dict(reach='river',proposed_spacing_ft=spacing)],geometry=candidate,
                 issues=issues,warnings=['VERIFY_BRIDGE_BOUNDARY_EFFECTS','VERIFY_SUBMERGED_CHANNEL_GEOMETRY'],
-                changed_sections=list(range(len(rows))),missing_heights=sum(v is None for r in rows for v in r['elevation_ft']),can_apply=not issues,
+                changed_sections=list(range(len(rows))),missing_heights=sum(v is None for r in rows for v in r['elevation_ft']),can_apply=not issues and not needs_bend,
                 basis='Adaptive sections and bank candidates from DEM; final user confirmation required')
+    if endpoint_search:
+        layout['endpoint_search'] = endpoint_search
     return dict(layouts=[layout],failures=[],sources=[sampler.source,item(source)],solver_run=False)

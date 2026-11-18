@@ -1,0 +1,32 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const templates = path.resolve(__dirname, '../ras_workflow/templates');
+const blocks = [];
+function el() {
+ return {value: '', append(){}, replaceChildren(){}};
+}
+const src = {sha256: 'one', path: 'sources/official.pdf'};
+const flow = {field:'c.scenarios.0.profiles.0.flow_cfs',candidate:'flow',source:src,source_locus:{pdf_page:30},hydrologic_context:{stream:'River',location:'Upper town',aep_percent:1},value:110};
+const rough = {field:'c.scenarios.0.channel_n',candidate:'rough',source:src,source_locus:{pdf_page:38},hydrologic_context:{stream:'River'},value:.05};
+const fields = [flow,rough].map(row=>({key:row.field,acquisition:{status:'FIS_ROW_SELECTED'},answer:{candidate_record:row},parameter_candidates:[row]}));
+const context = vm.createContext({current:{title:'River',intake:{fields}},el,
+ details(parent,en,cn,expanded){ blocks.push({en,cn,expanded}); return el(); },
+ tr: en=>en,field: (parent,id,en,cn,value)=>Object.assign(el(),{value}),
+ button:el,originName:String,document:{createTextNode:String}});
+vm.runInContext(fs.readFileSync(path.join(templates,'app_sources.js'),'utf8'),context);
+context.renderFisSelection(el());
+assert.equal(blocks.at(-1).expanded,false);
+assert.match(blocks.at(-1).en,/River · Upper town · 110 cfs/);
+fields[1].acquisition.status='FIS_STREAM_MISMATCH';
+context.renderFisSelection(el());
+assert.equal(blocks.at(-1).expanded,true);
+fields.forEach(field=>field.parameter_candidates=[]);
+context.renderFisSelection(el());
+assert.equal(blocks.length,2);
+const editor=fs.readFileSync(path.join(templates,'app_editor.js'),'utf8');
+vm.runInContext(editor.slice(editor.indexOf('function riverBendIndex('),editor.indexOf('function renderRiverMap(')),context);
+assert.equal(context.riverBendIndex([[0,0],[10,0]],[5,3]),1);
+assert.equal(context.riverBendIndex([[0,0],[10,0],[10,10]],[9,6]),2);
+console.log('PASS current FIS rows, scoped summary, invalidation, ordered river bends');

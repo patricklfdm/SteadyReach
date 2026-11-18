@@ -29,6 +29,8 @@ For supported text-layout tables, the parser reads the ordinary **1% Annual Chan
 3. Review the proposed roughness and origin labels. Missing roughness fields are checked for adoption. Existing roughness values require an explicit check before replacement.
 4. Click **Apply this flow and checked roughness**. The selected values and flow-source citation save together. Complete the usual full-model confirmation before calculation.
 
+The parameter list recognizes the exact FIS row you selected. Other named locations in the same discharge table and other rivers in the same roughness table remain available in the candidate list. The workflow flags a changed selection, differing values or ranges for the same location, conflicting independent evidence, or roughness for a different selected river. Reopening the draft or creating a geometry revision rechecks the current evidence.
+
 The Pagosa source regression downloads the current catalog-listed report and reproduces its North Pagosa Springs Q100 row and San Juan roughness ranges. This validates acquisition and table interpretation for that source. Other FIS layouts can require manual interpretation. Flood-study publication dates, survey dates and hydrology dates can differ. Check applicable Letters of Map Revision (LOMRs) through the linked FEMA product listing. Selecting a county report alone leaves reach applicability unresolved.
 
 ## Current automatic routes and limits

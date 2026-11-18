@@ -121,6 +121,16 @@ def apply(m,body):
     if v['mode']=='initial':m['map_picks']=dict(m.get('map_picks',{}),**{r['id']:r['anchors_xy'] for r in layout['anchors']})
     m['revision']+=1;m.pop('pending_review',None);m.pop('run_confirmation',None)
     core.persist(m,'APPLY_AUTOMATIC_GEOMETRY',dict(proposal=entry,layout=layout['id'],changed_sections=changed,confirmed_banks=list(banks),invalidated_answers=sorted(invalid)))
+    if v['mode'] == 'initial' and layout.get('endpoint_search'):
+        from .app_autoprepare import fill
+        try:
+            fill(m)
+        except (OSError, ValueError) as error:
+            message = 'River geometry saved. Retry Prepare an automatic draft to finish dependent inputs / 河道几何已保存，请点击自动准备草稿补齐关联参数。 ' + str(error)
+            m = core.model(m['id'])
+            m.setdefault('errors', []).append(message)
+            core.persist(m, 'DEPENDENT_INPUT_PREPARATION_DEFERRED', dict(error=str(error)))
+            return dict(core.view(m['id']), preparation_warning=message)
     return core.view(m['id'])
 
 

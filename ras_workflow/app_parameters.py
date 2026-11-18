@@ -360,6 +360,11 @@ def attention(m, fields, automatic=False):
             en=f'{len(uncertain)} bank pairs need interpretation: neighboring-section inference, ambiguous terrain, missing method records or changed profiles. Inspect the reasons in the bank gallery and edit positions as needed.',
             zh=f'{len(uncertain)} 组岸站需要判断：可能涉及相邻断面推定、地形歧义、缺少方法记录或剖面变化。请在岸站总览查看具体原因并修改不适用的位置。',
             fields=[field['key'] for field in uncertain]))
+    source_issues = [field['key'] for field in fields if field.get('source_conflict')]
+    if source_issues:
+        notices.append(dict(code='SOURCE_SELECTION_REVIEW',
+            en='Check the current source differences for these fields before calculating.',
+            zh='运算前请核对以下参数当前仍有差异的来源。', fields=source_issues))
     documents = snapshot(m).get('documents', [])
     incomplete = [d for d in documents if d.get('status') != 'INSPECTED' or d.get('warnings')]
     if incomplete:

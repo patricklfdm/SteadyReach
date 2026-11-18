@@ -81,9 +81,17 @@ def map_view(session_path,bounds=None):
     gray=np.clip((a.filled(low)-low)/max(high-low,1e-9)*200+30,0,255).astype('uint8')
     rgba=np.stack([gray,gray,gray,np.where(np.ma.getmaskarray(a),0,255).astype('uint8')],axis=2)
     buf=io.BytesIO();Image.fromarray(rgba).save(buf,format='PNG')
+    river_lines = []
     sections=[];section_items=[]
     if g.get('horizontal_crs'):
         transform=Transformer.from_crs(g['horizontal_crs'],crs,always_xy=True)
+        if g.get('model_type') == 'river':
+            for flowline in g.get('flowlines', []):
+                vertices = np.asarray(flowline.get('xy'), float)
+                if vertices.ndim == 2 and vertices.shape[1] == 2 and len(vertices) >= 2:
+                    xy = np.column_stack(transform.transform(*vertices.T))
+                    if np.isfinite(xy).all():
+                        river_lines.append(xy.tolist())
         for index,row in enumerate(g['cross_sections']):
             cut=row.get('cutline_xy')
             if cut:
@@ -91,7 +99,7 @@ def map_view(session_path,bounds=None):
                 if np.isfinite(xy).all():
                     sections.append(xy.tolist());section_items.append(dict(index=index,rs=row.get('rs'),cutline_xy=xy.tolist()))
     return dict(bounds=b.tolist(),crs=info['crs'],unit_to_m=unit,background=base64.b64encode(buf.getvalue()).decode(),raster=terrain['raster'],
-        sections=sections,section_items=section_items,terrain_bounds=extent.tolist(),resolution=info['resolution'],min_span=8*max(info['resolution']),max_span=4*max(extent[2:]-extent[:2]),spatial_issues=spatial_issues(g['cross_sections']),note='DEM surface only; picks are unreviewed anchors, not surveyed structure positions')
+        river_lines=river_lines,sections=sections,section_items=section_items,terrain_bounds=extent.tolist(),resolution=info['resolution'],min_span=8*max(info['resolution']),max_span=4*max(extent[2:]-extent[:2]),spatial_issues=spatial_issues(g['cross_sections']),note='DEM surface only; picks are unreviewed anchors, not surveyed structure positions')
 
 
 def configure(session_path,revision,payload):

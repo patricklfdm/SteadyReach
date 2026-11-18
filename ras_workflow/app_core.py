@@ -497,8 +497,10 @@ def view(key,detail=True):
     if m.get('session') and not m.get('native_review') and not m.get('active_project'):
         from . import intake
         result['intake']=intake.view(ROOT/m['session'])
-        from .app_parameters import rows
+        from .app_parameters import attention, rows
         result['intake']['fields']=rows(m)
+        if result.get('preparation_result'):
+            result['intake']['current_attention'] = attention(m, result['intake']['fields'])
         from .app_parameters import objects
         from .app_automation import view as automation_view
         result['automation']=automation_view(m,objects(m)[4])

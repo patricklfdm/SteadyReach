@@ -218,20 +218,84 @@ def route_for(field):
     if any(s in key for s in ('crs','datum')):return ('DEM metadata → OPUS survey control check → explicit coordinate interpretation','DEM 元数据 → OPUS 测量控制复核 → 明确坐标解释','No automatic vertical datum shift is applied.','不自动执行高程基准转换。')
     return ('Explicit parameter CSV → source text → geometry-derived / engineering-setting candidates','明确参数 CSV → 资料原文 → 几何推导／工程设置候选','Model conventions and hydraulic regime still require applicability confirmation.','模型约定及流态仍须确认适用性。')
 
+def fis_scope(candidate):
+    """Only comparable, labelled rows of the same report table can be set aside."""
+    if not candidate.get('requires_applicability_review'):
+        return None
+    locus = candidate.get('source_locus') or {}
+    context = candidate.get('hydrologic_context') or {}
+    source_hash = (candidate.get('source') or {}).get('sha256')
+    stream = context.get('stream')
+    if not source_hash or not locus.get('table_number') or not isinstance(stream, str) or not stream.strip() or stream != locus.get('stream'):
+        return None
+    location = None
+    table = (locus.get('table_title') or '').casefold()
+    if table == 'summary of discharges':
+        location = context.get('location')
+        if not isinstance(location, str) or not location.strip() or location != locus.get('location') or context.get('aep_percent') != 1:
+            return None
+    elif table != 'roughness coefficients':
+        return None
+    river_key = ' '.join(stream.casefold().split())
+    location_key = ' '.join(location.casefold().split()) if location else None
+    return (source_hash, locus['table_number'], table), (river_key, location_key)
+
+
+def selected_fis_review(field, choices, selected_streams):
+    answer = field.get('answer') or {}
+    prior = answer.get('candidate_record') or {}
+    scope = fis_scope(prior)
+    if not scope or answer.get('automatic_preparation') or prior.get('auto_eligible'):
+        return None
+    if prior not in choices or field['value'] != prior['value'] or any(
+        answer.get(key) != prior.get(key) for key in ('value', 'evidence_class', 'basis')
+    ):
+        return 'FIS_SELECTION_CHANGED'
+    table, place = scope
+    if table[2] == 'roughness coefficients' and selected_streams - {place[0]}:
+        return 'FIS_STREAM_MISMATCH'
+    for candidate in choices:
+        other = fis_scope(candidate)
+        if other and other[0] == table and other[1] != place:
+            continue
+        if any(candidate.get(key) != prior.get(key) for key in ('value', 'range', 'evidence_class')):
+            return 'CONFLICT'
+    return 'FIS_ROW_SELECTED'
+
+
 def enrich(m,fields):
     a=snapshot(m);candidates=a.get('candidates',[]);sources_ok=not a.get('sources') or intact(a['sources'])
     datum=next((f['value'] for f in fields if f['key']=='g.vertical_datum'),None)
+    streams_by_scenario = {}
+    for field in fields:
+        saved = (field.get('answer') or {}).get('candidate_record') or {}
+        scope = fis_scope(saved)
+        if scope and scope[0][2] == 'summary of discharges' and saved in candidates and field['value'] == saved['value']:
+            scenario = field['key'].partition('.profiles.')[0]
+            streams_by_scenario.setdefault(scenario, set()).add(scope[1][0])
     for f in fields:
         choices=[v for v in candidates if v['field']==f['key'] and (not v.get('datum') or v['datum']==datum)] if sources_ok else []
         f['parameter_candidates']+=choices
         different=[v for v in choices if not f['missing'] and v['value']!=f['value']]
         multi=choices and any(v['value']!=choices[0]['value'] for v in choices)
-        f['source_conflict']=bool(different or multi)
+        scenario = f['key'].rsplit('.', 1)[0]
+        fis_status = selected_fis_review(f, choices, streams_by_scenario.get(scenario, set()))
+        f['source_conflict'] = fis_status != 'FIS_ROW_SELECTED' if fis_status else bool(different or multi)
         en,zh,next_en,next_zh=route_for(f)
         tried=[dict(route=v['route'],status=v['status']) for v in a.get('attempts',[])]
         if a:tried.append(dict(route='local_document_extraction',status='PARTIAL_FAILURE' if any(d.get('status')=='EXTRACTION_FAILED' for d in a.get('documents',[])) else 'INSPECTED' if a.get('documents') else 'NO_DOCUMENTS',count=len(a.get('documents',[])),failed=sum(d.get('status')=='EXTRACTION_FAILED' for d in a.get('documents',[])),scope='Shared source discovery; not a separate Internet search for this field'))
         if f.get('parameter_candidates'):tried.append(dict(route='parameter_candidate_evaluation',status='CANDIDATE',count=len(f['parameter_candidates'])))
-        f['acquisition']=dict(route=dict(en=en,zh=zh),next=dict(en=next_en,zh=next_zh),status='SOURCE_CHANGED' if not sources_ok else 'CONFLICT' if f['source_conflict'] else 'CANDIDATE' if choices else 'NO_EXTRACTED_VALUE' if a else 'NOT_ATTEMPTED',attempted=bool(a),attempts=tried,field_value_extracted=bool(choices),candidate_sources=[v.get('source') for v in choices],automatic_methods_evaluated=['explicit_source_values','terrain_or_geometry_proposals'],manual_decision_required=f['missing'] or f['source_conflict'])
+        if not sources_ok:
+            status = 'SOURCE_CHANGED'
+        elif fis_status:
+            status = fis_status
+        elif f['source_conflict']:
+            status = 'CONFLICT'
+        elif choices:
+            status = 'CANDIDATE'
+        else:
+            status = 'NO_EXTRACTED_VALUE' if a else 'NOT_ATTEMPTED'
+        f['acquisition']=dict(route=dict(en=en,zh=zh),next=dict(en=next_en,zh=next_zh),status=status,attempted=bool(a),attempts=tried,field_value_extracted=bool(choices),candidate_sources=[v.get('source') for v in choices],automatic_methods_evaluated=['explicit_source_values','terrain_or_geometry_proposals'],manual_decision_required=f['missing'] or f['source_conflict'])
     return fields
 
 def overlay(m,map_data):
