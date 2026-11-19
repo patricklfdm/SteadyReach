@@ -22,13 +22,28 @@ def proposal_id(proposal):
     return digest({k:v for k,v in proposal.items() if k!='id'})
 
 
-def propose(geometry, answers, scope='inferred', *, locked=None):
+def matches_terrain_candidate(row):
+    """Only reconsider the actual DEM candidate, never an unclassified saved pair."""
+    method = row.get('bank_candidates') or {}
+    if method.get('evidence_class') not in ('inferred','terrain_derived') or not method.get('selected_indices'):
+        return False
+    if not method.get('method','').startswith(('reach_bank_dynamic_programming_', 'outward_slope_break_')):
+        return False
+    samples = row.get('station_ft') or []
+    indices = method['selected_indices']
+    if len(indices)!=2 or not all(type(i) is int and 0<=i<len(samples) for i in indices):
+        return False
+    return [samples[i] for i in indices] == row.get('bank_stations_ft')
+
+
+def propose(geometry, answers, scope='inferred', *, locked=None, consider_terrain=False):
     if scope not in ('inferred','attention'):
         raise ValueError('Unknown bank proposal scope')
     from .bank_reach import propose_reach
     review=inventory(geometry,answers)
     targets={r['index'] for r in review['sections'] if r['needs_attention'] and
-             (scope=='attention' or set(r['categories']) & {'inferred','missing'})}
+             (scope=='attention' or set(r['categories']) & {'inferred','missing'} or
+              consider_terrain and matches_terrain_candidate(geometry['cross_sections'][r['index']]))}
     faces=geometry.get('structure') or {}
     blocked={i for issue in spatial_issues(geometry['cross_sections']) for i in issue['sections']}
     exclusions=[]
@@ -49,7 +64,19 @@ def propose(geometry, answers, scope='inferred', *, locked=None):
         shifts=[b-a for a,b in zip(old,values)] if old and len(old)==2 and all(finite(v) for v in old) and values else None
         stable=(method.get('confidence')=='MEDIUM' and method.get('evidence_class')=='inferred'
                 and method.get('reasons')==['DISTINCT_SLOPE_BREAKS_REVIEW_REQUIRED'])
-        changes.append(dict(index=i,rs=row['rs'],reach_id=row.get('reach_id'),before_ft=old,proposed_ft=values,
+        consensus = method.get('continuity',{})
+        sides = consensus.get('side_evidence',{})
+        # Permit staging a near-channel pair despite competing *outer* breaks only
+        # when three scales, both neighboring controls and the reach ranking agree.
+        near_control = 0 < i < len(geometry['cross_sections'])-1 and all(
+            geometry['cross_sections'][j].get('bank_stations_ft') and geometry['cross_sections'][j].get('reach_id')==row.get('reach_id')
+            for j in (i-1,i+1))
+        consensus_pair = bool(near_control and consensus.get('source')=='local_slope_breaks'
+            and not consensus.get('weight_sensitive') and len(sides)==2 and all(v['distinct'] for v in sides.values())
+            and set(method.get('reasons',[])) <= {'DISTINCT_SLOPE_BREAKS_REVIEW_REQUIRED','COMPARE_INNER_SHOULDER_AND_VALLEY_WALL',
+                'COMPETING_LEFT_BANKS','COMPETING_RIGHT_BANKS','REACH_CONTINUITY_CHANGED_LOCAL_CHOICE'})
+        stable = stable or consensus_pair
+        changes.append(dict(staging_basis='MULTISCALE_NEIGHBOR_AGREEMENT' if consensus_pair else None,index=i,rs=row['rs'],reach_id=row.get('reach_id'),before_ft=old,proposed_ft=values,
             bank_indices=indices,shift_ft=shifts,changed=changed,recommended=bool(stable and changed),
             confidence=method.get('confidence','UNRESOLVED'),reasons=method.get('reasons',[]),
             basis=method.get('basis'),basis_zh=method.get('basis_zh'),method=method,

@@ -417,6 +417,9 @@ def review(m):
         inputs=data,fields=fields,native=native,errors=errors,ready=not errors,created_utc=utc(),engineering_acceptance='NOT_ASSESSED',
         refreshed_equivalent_fields=[change['field'] for change in refreshed],
         attention=[] if native else attention(m, fields))
+    if m.get('model_type')=='river' and not native:
+        from .river_review import key_inputs
+        packet['key_inputs'] = key_inputs(fields)
     path=core.folder(m['id'])/'reviews'/unique_id()/'parameters.json';save(path,packet)
     m['pending_review']=item(path);core.persist(m,'OPEN_FINAL_PARAMETER_REVIEW',dict(review=m['pending_review']))
     return dict(**packet,review_token=m['pending_review']['sha256'],path=rel(path))

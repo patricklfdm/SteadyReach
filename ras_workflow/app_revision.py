@@ -150,7 +150,9 @@ def compare(m,summary):
             exceeds_review_threshold=bool(maximum and abs(maximum['change'])>THRESHOLDS['sensitivity_hw_ft'])))
     if not profiles:
         return dict(status='COMPARISON_INCOMPATIBLE',rows=[],error='No matching profiles')
-    return dict(status='COMPARISON_NOT_ACCEPTANCE',parent=parent,rows=rows,cross_sections=sections,profiles=profiles,input_context=input_context,
+    from .river_review import overbank_changes
+    overbanks = overbank_changes(old,summary,locations) if current.get('model_type')=='river' else None
+    return dict(status='COMPARISON_NOT_ACCEPTANCE',parent=parent,rows=rows,cross_sections=sections,profiles=profiles,input_context=input_context,overbank_changes=overbanks,
         threshold_ft=THRESHOLDS['sensitivity_hw_ft'],
         unmatched_previous_profiles=sorted(a.keys()-new_water.keys()),
         unmatched_current_profiles=sorted(new_water.keys()-a.keys()),

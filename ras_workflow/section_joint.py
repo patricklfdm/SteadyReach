@@ -129,7 +129,7 @@ def _select(options):
     return chosen,trials
 
 
-def repair(geometry,sampler,water,maximum,protected=(),allow_rotation=True):
+def repair(geometry,sampler,water,maximum,protected=(),allow_rotation=True,rotation_locks=(),prior_stages=None):
     from .geometry_auto_qa import extend,terrain_owned
     rows=geometry['cross_sections']
     lines={r['id']:r['xy'] for r in geometry.get('flowlines',[])}
@@ -148,6 +148,11 @@ def repair(geometry,sampler,water,maximum,protected=(),allow_rotation=True):
     original_crossings={i:flow_crossing(row['cutline_xy'],lines[row['reach_id']])
         for i,row in enumerate(rows) if len(row.get('cutline_xy',[]))==2 and row.get('reach_id') in lines}
     active={i for i,row in enumerate(rows) if row['rs'] in water and min(row['elevation_ft'][0],row['elevation_ft'][-1])<=water[row['rs']]}
+    from .section_direction import assess, cost as direction_cost
+    observations = assess(geometry) if allow_rotation and geometry.get('model_type') == 'river' else []
+    directions = {v['index']: v for v in observations}
+    active.update(i for i, v in directions.items() if v['status'] == 'SKEW_SUPPORTED_AT_TWO_SCALES'
+                  and i not in rotation_locks and i not in protected)
     active.update(i for issue in initial for i in issue['sections'])
     # Include sections obstructing straight extensions and their immediate neighbors.
     for i in list(active):
@@ -163,9 +168,11 @@ def repair(geometry,sampler,water,maximum,protected=(),allow_rotation=True):
     for i in sorted(active):
         row=rows[i]
         width=row['station_ft'][-1]-row['station_ft'][0]
-        level=water.get(row['rs'])
+        wet_stage=water.get(row['rs'])
+        level=wet_stage
         uncovered=level is not None and min(row['elevation_ft'][0],row['elevation_ft'][-1])<=level
-        choices=[dict(row=copy.deepcopy(row),record=None,cost=(int(uncovered),0.,0.))]
+        direction = directions.get(i, {}) if i not in rotation_locks else {}
+        choices=[dict(row=copy.deepcopy(row),record=None,cost=(int(uncovered),direction_cost(direction, 0.),0.))]
         reasons=Counter()
         position=original_crossings.get(i)
         eligible=i not in protected and terrain_owned(row,sampler) and len(row.get('cutline_xy',[]))==2
@@ -173,10 +180,11 @@ def repair(geometry,sampler,water,maximum,protected=(),allow_rotation=True):
             eligible=False
             reasons['ORIGINAL_FLOWLINE_CROSSING_REQUIRES_REVIEW']+=1
         subdivided=any(row.get(k) for k in ('manning_segments','ineffective_left','ineffective_right'))
-        angles=ANGLES if allow_rotation and eligible and not subdivided and position is not None else [0.]
+        angles=ANGLES if allow_rotation and i not in rotation_locks and eligible and not subdivided and position is not None else [0.]
         nearby=[original_crossings[j] for j in (i-1,i+1) if j in original_crossings and original_crossings[j] is not None and rows[j].get('reach_id')==row.get('reach_id')]
         span=min([abs(v-position)/2 for v in nearby]+[math.inf]) if position is not None else 0.
         for angle in angles:
+            level = (prior_stages or {}).get(row['rs'], wet_stage) if angle and wet_stage is None else wet_stage
             if not eligible:
                 reasons['PROTECTED_OR_NON_TERRAIN_SECTION']+=1
                 break
@@ -209,6 +217,9 @@ def repair(geometry,sampler,water,maximum,protected=(),allow_rotation=True):
                         record=dict(extension,action='EXTEND_WET_ENDS',rotation_deg=0.)
                 else:
                     reasons[extension['status']]+=1
+                    if wet_stage is None and angle:
+                        reasons['ROTATION_TRUNCATES_PREVIOUSLY_DRY_SECTION']+=1
+                        continue
             if record is None:
                 continue
             if position is not None:
@@ -222,7 +233,10 @@ def repair(geometry,sampler,water,maximum,protected=(),allow_rotation=True):
             still_wet=level is not None and min(candidate['elevation_ft'][0],candidate['elevation_ft'][-1])<=level
             record.update(rs=row['rs'],threshold_prior_wse_ft=level,screen_covered=not still_wet)
             added=candidate['station_ft'][-1]-candidate['station_ft'][0]-width
-            choices.append(dict(row=candidate,record=record,cost=(int(still_wet),abs(angle),max(0.,added)/maximum)))
+            if angle and direction.get('status') == 'SKEW_SUPPORTED_AT_TWO_SCALES':
+                record.update(direction_evidence=direction,
+                              remaining_skew_deg=round(abs(direction['normal_offset_deg']-angle),3))
+            choices.append(dict(row=candidate,record=record,cost=(int(still_wet),abs(angle)+direction_cost(direction, angle),max(0.,added)/maximum)))
         options[i]=choices
         attempts.append(dict(index=i,rs=row['rs'],candidate_count=len(choices),rejected=dict(reasons)))
     chosen,search=_select(options)
@@ -240,5 +254,5 @@ def repair(geometry,sampler,water,maximum,protected=(),allow_rotation=True):
             unresolved.append(dict(rs=row['rs'],code='NO_COMPATIBLE_DRY_EXTENT',action='Inspect the bounded candidates, flow paths and available DEM coverage.'))
     return dict(geometry=result,changes=changes,unresolved=unresolved,
                 search=dict(method='joint_section_direction_coverage_v1',angles_deg=ANGLES if allow_rotation else [0.],maximum_width_ft=maximum,
-                    max_search_nodes=MAX_SEARCH_NODES,attempts=attempts,components=search,
+                    max_search_nodes=MAX_SEARCH_NODES,attempts=attempts,components=search,**({'directions':observations} if observations else {}),
                     limitation='Coverage and intersection screening using prior/reference water levels. Rotated sections are resampled and need new banks and hydraulic calculation.'))

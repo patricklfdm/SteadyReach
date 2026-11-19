@@ -59,6 +59,20 @@ function renderAutoGeometry(parent){
   for(const w of v.warnings||[])detail.append(el('p',tr(w==='REFERENCE_WSE_COVERAGE_SCREEN'?'Reference water levels screen coverage. Review section correspondence, datum and floodplain flow paths; site water levels require computation.':w,symbols[w]||w),'warning'));
   detail.append(el('p',v.changed_sections.length+tr(' proposed section changes',' 条断面改动提案')+' · '+(v.unresolved?.length||0)+tr(' unresolved items',' 项仍需处理')));
   showEndpointSearch(detail,v.endpoint_search);
+  const directions=v.joint_search?.directions||[];
+  if(directions.length){
+   const label={FOLLOWS_CHANNEL:['Aligned','顺应流向'],TURN_FOLLOWS_CHANNEL:['Turn follows the river','随河道自然转弯'],BEND_SCALE_AMBIGUOUS:['Flow direction varies with scale','不同范围的流向有分歧'],SKEW_SUPPORTED_AT_TWO_SCALES:['Oblique at both scales','两种范围均显示斜切'],NO_UNIQUE_CROSSING:['No unique centerline crossing','与河线没有唯一交点'],INSPECT_CROSSING:['Inspect the crossing','核对河线交点']};
+   const flagged=directions.filter(r=>!['FOLLOWS_CHANNEL','TURN_FOLLOWS_CHANNEL'].includes(r.status));
+   const panel=details(detail,'Section directions ('+flagged.length+' to inspect)','断面方向（'+flagged.length+' 条需看图）');
+   table(panel,['RS',tr('Interpretation','判读'),tr('Original local / wider offset (°)','原断面局部／较远流向法线偏角（°）'),tr('Rotation proposed (°)','建议转角（°）')],directions.map(r=>[r.rs,tr(...(label[r.status]||[r.status,r.status])),[r.normal_offset_deg??'—',r.wide_offset_deg??'—'].join(' / '),v.changes?.find(c=>c.rs===r.rs)?.rotation_deg||0]));
+  }
+  if(v.lateral_option_count)detail.append(el('p',v.lateral_option_count+tr(' conditional floodplain extensions are available in the alternative layout.',' 项漫滩延伸可在备选布置中核对。'),'status'));
+  const paths=[...(v.changes||[]),...(v.unresolved||[])].filter(c=>c.terrain_connection);
+  if(paths.length){
+   const panel=details(detail,'Floodplain paths across neighboring sections','相邻断面的漫滩路径');
+   table(panel,['RS',tr('Adjacent RS','相邻 RS'),tr('Side','侧'),tr('Connected at lower / interpolated stage','较低／插值水位下地形低地连通')],paths.map(r=>[r.rs,r.neighbor_rs,r.side,['at_lower_stage','at_interpolated_stage'].map(k=>r.terrain_connection[k]===true?tr('Yes','是'):r.terrain_connection[k]===false?tr('No','否'):'—').join(' / ')]));
+   panel.append(el('p',tr('This screen follows adjacent low DEM cells. Check obstructions and whether the route carries flow.','此检查追踪相邻低地像元。请核对障碍物及实际过流能力。')));
+  }
   if(v.joint_search){
    const search=v.joint_search,rotations=(v.changes||[]).filter(change=>change.rotation_deg),limited=(search.components||[]).some(component=>component.search_limit_reached);
    detail.append(el('p',tr('Directions and widths were checked together across neighboring sections. ','已联合核查相邻断面的方向和宽度。')+rotations.length+tr(' sections were resampled from the DEM and need bank confirmation.',' 条断面已从 DEM 重新采样，需要确认岸站。'),'status'));
@@ -66,7 +80,7 @@ function renderAutoGeometry(parent){
    if((search.components||[]).some(component=>component.status==='NO_COMPATIBLE_CANDIDATE'))detail.append(el('p',tr('Some section groups have no compatible combination within the search bounds. Review the retained geometry and remaining issues.','部分断面组在搜索范围内未找到兼容组合，请检查保留的几何及剩余问题。'),'warning'));
    const searchDetails=details(detail,'Direction and extent search details','方向与范围搜索详情');
    table(searchDetails,['RS',tr('Rotation (degrees)','转角（度）'),tr('Added left / right (ft)','左／右延伸（ft）'),tr('Original samples','原采样点')],(v.changes||[]).map(change=>[change.rs,change.rotation_deg||0,(change.left_added_ft||0).toFixed(1)+' / '+(change.right_added_ft||0).toFixed(1),change.old_points_preserved?tr('Preserved','保留'):tr('Resampled from DEM','从 DEM 重新采样')]));
-   searchDetails.append(el('small',tr('Rotations are bounded to ±30 degrees. The search prioritizes coverage, then small rotations and added width. Review flow direction and floodplain connections before adoption.','转角限制在 ±30 度内，依次优先满足覆盖、减小转角和增加宽度。采用前需核对流向及漫滩连通关系。')));
+   searchDetails.append(el('small',tr('Rotations are bounded to ±30 degrees. The search prioritizes coverage, then weighs rotation against supported channel skew and added width. Review flow direction and floodplain connections before adoption.','转角限制在 ±30 度内，优先满足覆盖，兼顾有依据的局部斜切、旋转幅度及增加宽度。采用前需核对流向及漫滩连通关系。')));
   }
   if(v.boundary_study_count)detail.append(el('p',tr('Extent screening includes ','范围筛查已纳入 ')+v.boundary_study_count+tr(' verified boundary studies from the same baseline. Review the proposed changes before recalculating.',' 组已核验、属于同一基准模型的边界敏感性结果。请核对改动提案后再重算。'),'status'));
   if(v.reference_screen){const ref=v.reference_screen;detail.append(el('p',tr('Reference source: ','参考资料：')+(ref.source.original_name||ref.source.path)+' · '+ref.vertical_datum));table(detail,['RS',tr('Reference elevation (ft)','参考水位（ft）')],ref.points.map(p=>[p.rs,p.water_ft]));}
@@ -83,6 +97,8 @@ function renderAutoGeometry(parent){
    const candidate=r.bank_stations_ft||r.bank_candidates?.selected_indices?.map(j=>r.station_ft[j]);const grid=el('div',undefined,'grid');p.append(grid);
    const left=field(grid,'auto-bank-left-'+i,'Left bank station (ft)','左岸站距（ft）',candidate?.[0]??'','number'),right=field(grid,'auto-bank-right-'+i,'Right bank station (ft)','右岸站距（ft）',candidate?.[1]??'','number');pairs.set(i,[left,right]);
    const chart=document.createElementNS('http://www.w3.org/2000/svg','svg');chart.setAttribute('viewBox','0 0 700 230');chart.classList.add('chart');chart.setAttribute('aria-label','RS '+r.rs+' profile');p.append(chart);
+   const evidence=r.bank_candidates?.continuity?.side_evidence;
+   if(evidence)table(p,[tr('Bank','岸别'),tr('Selected / competing station (ft)','候选／竞争岸站（ft）'),tr('Supporting scales (of 3)','支持的尺度（共 3 个）')],Object.entries(evidence).map(([side,e])=>[side==='left'?tr('Left','左岸'):tr('Right','右岸'),[e.selected_ft,e.alternate_ft].map(x=>Number.isFinite(x)?x.toFixed(1):'—').join(' / '),e.scale_support]));
    const info=el('p',(r.bank_candidates?.reasons||[]).join('; '),'muted');p.append(info);
    const draw=()=>{chart.replaceChildren();const x=r.station_ft,z=r.elevation_ft,before=v.before_sections?.[i],change=v.changes?.filter(c=>c.rs===r.rs).at(-1),water=change?.threshold_reference_wse_ft??change?.threshold_prior_wse_ft,levels=[...z,...(before?.elevation_ft||[]),...(Number.isFinite(water)?[water]:[])],lo=Math.min(...levels),hi=Math.max(...levels),pt=(a,b)=>[40+(a-x[0])/(x.at(-1)-x[0])*630,190-(b-lo)/Math.max(1,hi-lo)*160];
     profileGrid(chart,x,lo,hi,[40,670,30,190]);

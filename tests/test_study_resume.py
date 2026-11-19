@@ -40,6 +40,7 @@ class StudyResumeTests(unittest.TestCase):
             return result,journal,verified.call_count,recover.call_count
 
     def setUp(self):
+        (ROOT/'status').mkdir(exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(prefix='test_resume_', dir=ROOT/'status')
         self.previous = dict(id='baseline',status='COMPUTED',summary={'path':'summary','sha256':'old'},errors=[],finished_utc='original')
 

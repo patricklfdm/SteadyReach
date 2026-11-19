@@ -13,6 +13,10 @@ function renderRevisionComparison(parent,comparison){
   box.append(el('p',tr('Comparison needs attention. ','对比需要处理。')+(comparison.error||comparison.status),'warning'));
   return;
  }
+ const old=comparison.diagnostics?.previous,now=comparison.diagnostics?.current;
+ if(old?.status==='VERIFIED'&&now?.status==='VERIFIED'&&(now.counts?.WET_SECTION_EDGE||0)>(old.counts?.WET_SECTION_EDGE||0)){
+  box.append(el('p',tr('More section ends are wet after this revision. Check the new locations against the previous calculation before selecting this geometry.','修订后的湿端增加。选用本版几何前，请对照前次计算核查新增湿端位置。'),'warning'));
+ }
  const context=comparison.input_context;
  if(context?.status==='VERIFIED'){
   const geometry=context.geometry;
@@ -27,6 +31,14 @@ function renderRevisionComparison(parent,comparison){
   if(geometry.unverified_centers)box.append(el('p',geometry.unverified_centers+tr(' section centers lack verified geographic correspondence.',' 条断面中心缺少可核验的地理对应。'),'warning'));
    if(geometry.unverified_bank_pairs)box.append(el('p',geometry.unverified_bank_pairs+tr(' bank pairs lack comparable map positions.',' 组岸站缺少可核验的平面位置对应。'),'warning'));
  }else box.append(el('p',tr('Input/location correspondence is unavailable: ','输入／位置对应尚不可用：')+(context?.error||tr('No sealed geometry snapshots.','缺少封存几何快照。')),'warning'));
+ if(comparison.overbank_changes){
+  const group=details(box,'Q100 left and right floodplain flow shares','Q100 左右漫滩流量占比变化');
+  const share=comparison.overbank_changes;
+  if(share.rows.length){
+   const pair=values=>values.map(v=>v.toFixed(2)).join(' / ');
+   table(group,['RS',tr('Previous L / R (%)','上次 左／右（%）'),tr('Current L / R (%)','本次 左／右（%）'),tr('Change (percentage points)','变化（百分点）')],share.rows.map(r=>[r.station,pair(r.previous_percent),pair(r.current_percent),pair(r.delta_points)]));
+  }else group.append(el('p',tr('No comparable native shares at verified common centers.','相同中心位置缺少可比较的原生漫滩流量占比。'),'muted'));
+ }
  const labels={upstream_wse_ft:tr('Upstream WSE (ft)','上游水位（ft）'),downstream_wse_ft:tr('Downstream WSE (ft)','下游水位（ft）'),
   max_channel_velocity_fts:tr('Maximum channel velocity (ft/s)','最大主槽流速（ft/s）'),max_channel_froude:tr('Maximum channel Froude number','最大主槽弗劳德数'),
   headwater_wse_ft:tr('Headwater WSE (ft)','进口上游水位（ft）'),tailwater_wse_ft:tr('Tailwater WSE (ft)','出口下游水位（ft）'),
@@ -50,7 +62,6 @@ function renderRevisionComparison(parent,comparison){
   table(sections,[tr('Profile','工况'),'RS',tr('Previous WSE (ft)','上次水位（ft）'),tr('Current WSE (ft)','本次水位（ft）'),'Δ ft'],
    comparison.cross_sections.map(row=>[row.profile,row.station,format(row.previous),format(row.current),format(row.change)]));
  }
- const old= comparison.diagnostics?.previous,now=comparison.diagnostics?.current;
  if(old?.status==='VERIFIED'&&now?.status==='VERIFIED'){
   table(box,[tr('Diagnostic coverage','诊断覆盖'),tr('Previous','上次'),tr('Current','本次')],[
    [tr('Native warning coverage','原生警告覆盖'),old.warning_coverage,now.warning_coverage],

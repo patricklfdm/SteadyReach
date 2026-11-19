@@ -10,6 +10,7 @@ from ras_workflow.common import ROOT, item, read, save
 
 class SpacingCycleRunTests(unittest.TestCase):
     def setUp(self):
+        (ROOT/'status').mkdir(exist_ok=True)
         self.temp=tempfile.TemporaryDirectory(prefix='test_spacing_cycle_',dir=ROOT/'status')
         self.addCleanup(self.temp.cleanup)
         self.folder=Path(self.temp.name);self.sp=self.folder/'study.json';self.rp=self.folder/'review.json'

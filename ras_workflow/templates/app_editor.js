@@ -55,6 +55,11 @@ function renderFinalReview(){
  else{
   const assumptions=review.fields.filter(f=>!f.missing&&['assumed','inferred'].includes(f.evidence_class));screen.append(el('p',`${review.fields.length} `+tr('input fields · ','项输入 · ')+assumptions.length+tr(' marked estimates/assumptions.','项标为估计／假设。'),'status'));
   if(assumptions.length){const a=details(screen,'Estimates / assumptions ('+assumptions.length+')','估计／假设（'+assumptions.length+'）',false);parameterTable(a,assumptions);}
+  if(review.key_inputs?.length){
+   const box=details(screen,'Which inputs need a decision?','哪些关键输入需要判断？',true);
+   const labels={MISSING:['Missing','缺失'],BASIS_MISSING:['Locate the input source','补查输入来源'],OTHER_CANDIDATES:['Compare alternatives','比较其他候选'],CHECK_APPLICABILITY:['Check applicability','核对适用性'],SOURCE_RECORDED:['Basis available','已有依据']};
+   table(box,[tr('Input','输入'),tr('Current value','当前值'),tr('Review','复核'),tr('Evidence and alternatives','依据及候选')],review.key_inputs.map(r=>[tr(r.label.en,r.label.zh),format(r.value)+' '+(r.unit||''),tr(...labels[r.priority]),[r.basis,...r.sources.map(s=>s.path.split(/[\\/]/).pop()),Array.isArray(r.adopted_range)?r.adopted_range.join(' – '):'',r.alternatives.length?tr('Other candidates: ','其他候选：')+r.alternatives.map(v=>format(v)).join(', '):''].filter(Boolean).join(' · ')]));
+  }
   renderPreparationAttention(screen,review.attention);
   renderParameterNavigator(screen,review.fields);
   const fields=details(screen,'Complete editable parameter list','完整可修改参数清单',false);

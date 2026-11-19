@@ -11,6 +11,7 @@
 - [Troubleshooting / 常见问题](TROUBLESHOOTING_EN.md)
 - [Limitations / 限制](LIMITATIONS_EN.md)
 
+- [River section directions, banks, floodplain paths and operator counts](RIVER_REVIEW_EN.md)
 - [Results, revisions and sensitivity](RESULTS_REVIEW_EN.md)
 
 - [Automatic DEM layout, consolidated preview and QA repair](DEM_AUTOMATION_EN.md)

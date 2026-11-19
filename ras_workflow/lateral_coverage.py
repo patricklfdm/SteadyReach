@@ -77,8 +77,14 @@ def screen(geometry, old, readings, sampler, maximum):
                     if last_low is not None and j>last_low+1 and heights[j-1]>=stage:
                         dry=j;break
             if last_low is None:continue
+            from .floodplain_path import corridor
+            neighbor = next(r for r in rows if r['rs']==near and r.get('reach_id')==row.get('reach_id'))
+            evidence = corridor(row,neighbor,side,sampler,(stage,readings[near][0]),float(offsets[dry] if dry is not None else limit))
+            flag['terrain_connection'] = evidence
             if dry is None:
                 flags.append(dict(flag,code='LOW_OUTER_GROUND_NO_DRY_LIMIT'));continue
+            if not evidence.get('at_interpolated_stage'):
+                flags.append(dict(flag,code='OUTER_PATH_REQUIRES_SITE_EVIDENCE'));continue
             distances=offsets[1:dry+1];elevations=heights[1:dry+1]
             if len(x)+len(distances)>500:
                 flags.append(dict(flag,code='LATERAL_SAMPLE_LIMIT'));continue

@@ -8,7 +8,7 @@ from .banks import propose, channel_origin
 from .common import digest, finite
 
 SETTINGS = dict(window_ft=6., center_search_fraction=.1, distance_penalty=1.)
-METHOD = 'reach_bank_dynamic_programming_v2'
+METHOD = 'reach_bank_dynamic_programming_v3'
 
 
 def _pair(row, indices, cost, source='local_slope_breaks'):
@@ -166,6 +166,33 @@ def propose_reach(geometry, locked=None):
             reasons = list(local[index]['reasons'])
             alternatives=[q for opt in options[index] for q in opt.get('hillside_comparisons',[])]
             if alternatives:reasons.append('COMPARE_INNER_SHOULDER_AND_VALLEY_WALL')
+            # A stable path may still hide an almost equally supported bank on one side.
+            # Compare constrained alternatives with both selected neighbors held fixed.
+            next_cost = []
+            near = [(position-1,index-1),(position+1,index+1)]
+            for candidate in options[index]:
+                score = candidate['cost']
+                for at, adjacent in near:
+                    if 0 <= at < len(segment):
+                        neighbor = options[adjacent][selected[1][at]]
+                        distance = math.dist(rows[index]['center_xy'],rows[adjacent]['center_xy'])*factor
+                        score += _transition(candidate,neighbor,distance)
+                next_cost.append((score,candidate))
+            winner_cost = next(s for s,c in next_cost if c is value)
+            side_evidence = {}
+            for side_index, side in enumerate(('left','right')):
+                competitors = [(s,c) for s,c in next_cost if c['indices'][side_index]!=value['indices'][side_index]]
+                match = next((b for b in local[index][side] if b['index']==value['indices'][side_index]),{})
+                gap = None
+                alternate = None
+                if competitors:
+                    score,alt = min(competitors,key=lambda pair:pair[0])
+                    gap = round(score-winner_cost,4)
+                    alternate = alt['stations'][side_index]
+                support = match.get('scale_support',0)
+                side_evidence[side]=dict(selected_ft=value['stations'][side_index],alternate_ft=alternate,
+                                         conditional_cost_margin=gap,scale_support=support,
+                                         distinct=support==3 and (gap is None or gap>=1.))
             if local[index].get('selected_indices')!=value['indices']:
                 reasons.append('REACH_CONTINUITY_CHANGED_LOCAL_CHOICE')
                 summary['changed_local_choices'].append(index)
@@ -183,7 +210,7 @@ def propose_reach(geometry, locked=None):
                 reasons=list(dict.fromkeys(reasons)), reach_inputs_hash=input_hash,
                 continuity=dict(weight=1.,tested_weights=[.5,1.,2.],segment_rs=[rows[i]['rs'] for i in segment],
                     source=value['source'],interpolation_neighbors=value.get('neighbors',[]),
-                    selected_local_cost=value['cost'], weight_sensitive=sensitive,
+                    selected_local_cost=value['cost'], weight_sensitive=sensitive, side_evidence=side_evidence,
                     hillslope_candidates=list({(q['side'],q['outer_ft'],q['inner_ft']):q for q in alternatives}.values())),
                 basis='Morphological candidates ranked jointly along the reach using slope breaks, scale support and a soft bank-continuity cost. Saved user banks act as fixed controls. Isolated missing interior pairs may use labelled neighbor interpolation. Inspect local splits, terraces and uncertain banks.',
                 basis_zh='结合坡折、多尺度支持和岸线连续性，对全河段候选共同排序。已存人工岸站作为固定控制；孤立缺失的内部断面可采用带标注的邻断面插值。请核对局部分汊、阶地及不确定岸站。')

@@ -130,6 +130,14 @@ def create():
                         if not path.is_dir() or not path.is_relative_to(core.folder(key)):raise ValueError('Choose this project\'s output folder')
                         os.startfile(path);result={'opened':rel(path)}
                     else:return self.send(404,dict(error='Unknown action'))
+                from .operator_log import classify, record
+                counts = classify(route,body)
+                if counts is not None:
+                    try:
+                        record(core.folder(m['id'] if route=='create' else result['id'] if route=='revision' else key),route,counts,
+                               'workflow_page' if self.headers.get('X-SteadyReach-Client')=='page' else 'local_api')
+                    except OSError as error:
+                        result=dict(result,operation_log_warning=str(error))
                 self.send(200,result)
             except Exception as e:self.send(409,dict(error=str(e)))
     server=ThreadingHTTPServer(('127.0.0.1',0),Handler);server.daemon_threads=True

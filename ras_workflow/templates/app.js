@@ -16,7 +16,7 @@ async function saveAll(){
 }
 
 function notify(text='',error=false){$('#notice').hidden=!text;$('#notice').textContent=text;$('#notice').className=error?'error':'';}
-async function api(route,body){const r=await fetch(route,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Workflow-Token':token},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw Error(data.error||r.status);return data;}
+async function api(route,body){const r=await fetch(route,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Workflow-Token':token,'X-SteadyReach-Client':'page'},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw Error(data.error||r.status);return data;}
 async function task(fn,label=tr('Working','正在处理'),source=null){
  if(busy)return;busy=true;const prior=new Map([...document.querySelectorAll('button,input,select,textarea')].map(b=>[b,b.disabled]));
  const working=label+'…',old=source?.textContent;notify(working);document.body.setAttribute('aria-busy','true');prior.forEach((v,b)=>b.disabled=true);if(source){source.textContent=working;source.classList.add('working');}

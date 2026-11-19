@@ -30,7 +30,11 @@ function atlasMap(parent,row,lookup,crs){
 
 function renderResultAtlas(parent){
  const box=guidanceTarget(details(parent,'Computed section review / warning locations','计算断面复核／警告定位'),'atlas'),output=el('div');box.append(output);
- const id=current.id,hash=current.summary.sha256;let loading=false,loaded=false;
+ const id=current.id,hash=current.summary.sha256;let loading=false,loaded=false,pendingSection=null,visitSection=null;
+ box.addEventListener('steadyreach-inspect-section',event=>{
+  pendingSection=event.detail;
+  if(visitSection)visitSection();else void load();
+ });
  async function load(){
   if(loading||loaded)return;loading=true;output.setAttribute('aria-busy','true');output.replaceChildren(el('p',tr('Reading verified native sections, water levels and warning locations…','正在读取已核验原生断面、水位及警告位置…'),'status'));
   try{const data=await api('qa-atlas',{id,summary_hash:hash});if(!output.isConnected||current?.id!==id||current.summary?.sha256!==hash)return;loaded=true;render(data);}
@@ -49,6 +53,12 @@ function renderResultAtlas(parent){
   const search=field(controls,'atlas-search','RS or warning code','断面编号或警告代码',''),count=el('p','', 'status'),list=el('div');output.append(count,list);
   const lookup=new Map(data.sections.map(r=>[r.section_id,r])),nodes=new Map();
   const navigate=target=>{profile.value=target.profile;scope.value='all';search.value='';draw();const node=nodes.get(target.section_id);node.parentElement.open=true;node.scrollIntoView({block:'start',behavior:'smooth'});notify(tr('Opened computed RS ','已打开计算断面 RS ')+target.rs);};
+  visitSection=()=>{
+   if(!pendingSection)return;
+   const target=data.sections.find(row=>(!pendingSection.profile||row.profile===pendingSection.profile)&&Number(row.rs)===Number(pendingSection.rs));
+   pendingSection=null;
+   if(target)navigate(target);else notify(tr('Station or profile was not found in this calculation.','本次计算中没有找到该断面或工况。'));
+  };
   function draw(){list.replaceChildren();nodes.clear();const rows=atlasSelected(data.sections,profile.value,scope.value,search.value.trim());count.textContent=rows.length+tr(' matching sections. Expand one to see its native message, profile and neighbors.',' 条匹配断面；展开即可查看原生信息、剖面及邻近断面。');
    for(const row of rows){const panel=details(list,row.profile+' · RS '+row.rs+' · '+row.issues.length+' messages',row.profile+' · RS '+row.rs+' · '+row.issues.length+' 条信息');nodes.set(row.section_id,panel);let drawn=false;
     const detail=()=>{if(drawn||!panel.parentElement.open)return;drawn=true;
@@ -67,7 +77,7 @@ function renderResultAtlas(parent){
     };panel.parentElement.addEventListener('toggle',detail);detail();
    }
   }
-  profile.onchange=draw;scope.onchange=draw;search.oninput=draw;draw();
+  profile.onchange=draw;scope.onchange=draw;search.oninput=draw;draw();visitSection();
  }
  box.parentElement.addEventListener('toggle',()=>{if(box.parentElement.open)void load();});if(box.parentElement.open)void load();
 }

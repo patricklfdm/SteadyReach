@@ -15,7 +15,11 @@ def protected(geometry, answers):
         answer = answers.get(row['field'], {})
         manual = bool(answer) and not any(answer.get(k) for k in
             ('automatic_preparation', 'inherited_spacing_bank'))
-        if manual or not set(row['categories']) & {'inferred', 'missing'}:
+        native = geometry['cross_sections'][row['index']]
+        explicit = (native.get('terrain_review') or {}).get('identity') in (
+            'LOCAL_SELECTION_NO_ENGINEERING_REVIEW', 'BATCH_MORPHOLOGY_SELECTION_NO_ENGINEERING_REVIEW')
+        reconsider = geometry.get('model_type')=='river' and banks.matches_terrain_candidate(native)
+        if explicit or manual or (not reconsider and not set(row['categories']) & {'inferred', 'missing'}):
             fixed.add(identity(row))
     return fixed
 
@@ -23,7 +27,7 @@ def protected(geometry, answers):
 def prepare(geometry, draft, preserved=()):
     fixed = set(preserved) | protected(geometry, draft['answers'])
     indices = {i for i, row in enumerate(geometry['cross_sections']) if identity(row) in fixed}
-    proposal = banks.propose(geometry, draft['answers'], 'inferred', locked=indices)
+    proposal = banks.propose(geometry, draft['answers'], 'inferred', locked=indices, consider_terrain=geometry.get('model_type')=='river')
     proposal.update(input_hash=banks.context(geometry, draft), created_utc=utc(),
                     selection_mode='AUTOMATIC_EDITABLE_DRAFT')
     proposal['id'] = banks.proposal_id(proposal)

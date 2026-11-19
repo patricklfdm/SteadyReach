@@ -11,6 +11,7 @@
 - [Troubleshooting / 常见问题](TROUBLESHOOTING_CN.md)
 - [Limitations / 限制](LIMITATIONS_CN.md)
 
+- [河道断面方向、岸站、漫滩过流路径和实际操作次数](RIVER_REVIEW_CN.md)
 - [结果、修订与敏感性](RESULTS_REVIEW_CN.md)
 
 - [DEM 自动布置、集中预览及 QA 修正](DEM_AUTOMATION_CN.md)

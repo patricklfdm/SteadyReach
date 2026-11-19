@@ -268,6 +268,8 @@ def preflight(m,g,include_suggestions=True):
     """Early checks work with partial inputs. No full input form is required."""
     from .geometry_qa import spatial_issues
     rows=g.get('cross_sections',[]);us,ds=faces(g);issues=[dict(q,blocking=True,message=q['code'],zh='断面线相交或无效') for q in spatial_issues(rows)]
+    from .section_direction import crossing_issues
+    issues.extend(crossing_issues(g))
     mapped,errors=resolve(m,g)
     for e in errors:issues.append(dict(code='STALE_OPENING_MAPPING',sections=[],groups=[e['group']],blocking=True,message=e['message'],zh='洞口测点关联已变化，请重新核对'))
     tentative=False

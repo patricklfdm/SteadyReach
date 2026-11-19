@@ -1,5 +1,7 @@
 # 结果复核、独立修订与可选敏感性
 
+[河道 Q100 敏感性、分组警告和操作计数](RIVER_REVIEW_CN.md)
+
 [English](RESULTS_REVIEW_EN.md) | **简体中文** | [用户手册](USER_GUIDE_CN.md)
 
 ## 加密工况的岸站判读记录

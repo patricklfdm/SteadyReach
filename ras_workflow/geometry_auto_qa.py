@@ -139,7 +139,23 @@ def propose(m,g,s,maximum=1200.,reference_screen=None):
             if rs in water and (not prior or any(row.get(k)!=prior.get(k) for k in keys)):
                 water.pop(rs)
                 unresolved.append(dict(rs=rs,code='PRIOR_WSE_GEOMETRY_CHANGED_OR_PROTECTED',action='Confirm current geometry and compute before using prior WSE'))
-    joint=repair(g,s,water,maximum,protected)
+    from .section_direction import rotation_controls
+    answers = {}
+    if m.get('session') and m.get('parent_revision') and g.get('model_type')=='river':
+        from .app_parameters import objects
+        answers = objects(m)[2]['answers']
+    stages = {}
+    if old and m.get('parent_revision') and not reference_screen and g.get('model_type')=='river':
+        from .qa import verified_profiles
+        h = read(ROOT/m['parent_revision']['summary']['path'])['hydraulics']
+        current = {float(r['rs']):r for r in rows}
+        for profile in verified_profiles(h).values():
+            for rs, level in profile.items():
+                rs = float(rs)
+                if rs in old and rs in current and all(old[rs].get(k)==current[rs].get(k)
+                    for k in ('center_xy','cutline_xy','station_ft','elevation_ft')):
+                    stages[rs] = max(level, stages.get(rs,level))
+    joint=repair(g,s,water,maximum,protected,rotation_locks=rotation_controls(rows, answers),prior_stages=stages)
     candidate=joint['geometry'];rows=candidate['cross_sections'];changes=joint['changes'];unresolved+=joint['unresolved']
     if reference_screen:
         for change in changes:
@@ -166,6 +182,7 @@ def propose(m,g,s,maximum=1200.,reference_screen=None):
         alternative,extensions,flags=screen(g,old,readings,s,maximum)
         layouts[0]['unresolved'].extend(flags)
         if extensions:
+            layouts[0]['lateral_option_count'] = len(extensions)
             changed_rs={change['rs'] for change in extensions}
             indices=[i for i,row in enumerate(g['cross_sections']) if row['rs'] in changed_rs]
             blockers=preflight(m,alternative)['issues']

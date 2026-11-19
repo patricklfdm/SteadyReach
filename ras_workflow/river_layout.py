@@ -107,12 +107,15 @@ def initial(m, g, c, sampler, length, maximum):
     repaired=propose(m,candidate,sampler,maximum)
     best=repaired['layouts'][0]
     candidate=best['geometry'];rows=candidate['cross_sections'];annotate(candidate)
-    issues=spatial_issues(rows)
+    from .section_direction import crossing_issues
+    issues=spatial_issues(rows)+crossing_issues(candidate)
     layout=dict(id='river_layout',seed=dict(basis='Continuous terrain-screened river through saved anchors; bridge openings excluded',direction_known=True,sources=[item(source)]),
                 anchors=[dict(id='river',anchors_xy=anchors)],parameters=[dict(reach='river',proposed_spacing_ft=spacing)],geometry=candidate,
                 issues=issues,warnings=['VERIFY_BRIDGE_BOUNDARY_EFFECTS','VERIFY_SUBMERGED_CHANNEL_GEOMETRY'],
                 changed_sections=list(range(len(rows))),missing_heights=sum(v is None for r in rows for v in r['elevation_ft']),can_apply=not issues and not needs_bend,
                 basis='Adaptive sections and bank candidates from DEM; final user confirmation required')
+    layout['joint_search'] = best.get('joint_search', {})
+    layout['changes'] = best.get('changes', [])
     if sources:
         layout['public_reach']={key:public[key] for key in ('river','upstream_crossing','downstream_crossing','length_m','buffer_m','inset_m')}
         layout['seed'].update(basis=basis,sources=sources+[item(source)])

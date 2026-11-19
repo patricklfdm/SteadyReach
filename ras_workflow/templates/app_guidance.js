@@ -24,6 +24,35 @@ function renderGuidance(parent){
    content.replaceChildren();
    content.append(el('p',tr('Suggested work order, not a risk score. Opening a tool does not accept a change or start the solver.','以下为建议处理顺序，不是风险评分。打开工具不代表接受修改，也不会启动求解器。')),
     el('p',(data.issue_count??'—')+tr(' diagnostic records · ',' 条诊断记录 · ')+data.verified_study_count+tr(' authenticated studies for this calculation.',' 项已核验且属于本次计算的试算。'),'status'));
+   if(data.operator_actions){
+    const log=data.operator_actions,counts=log.counts;
+    const panel=details(content,'Recorded operations for this project edition','本项目版本的实际操作记录');
+    panel.append(el('p',log.recorded_requests+tr(' successful workflow requests. Background tasks, reads and polling are excluded.',' 次成功操作请求。后台任务、读取和轮询均不计入。')));
+    if(data.operator_lineage?.editions.length>1){
+     const history=data.operator_lineage;
+     panel.append(el('p',tr('This branch, including ancestor activity before each revision: ','本分支及各祖先版本在派生前的记录合计：')+history.recorded_requests+tr(' successful requests. ',' 次成功请求。')+(history.complete?'':tr('Earlier history is partial.','早期操作历史不完整。'))));
+    }
+    if(log.coverage!=='FROM_CREATION')panel.append(el('p',tr('This count covers recorded requests only. Earlier actions or previous editions may have their own history.','此处仅汇总已记录的请求。更早操作或其他版本有各自的历史。'),'warning'));
+    table(panel,[tr('Action','操作'),tr('Count','次数')],[[tr('Submitted hydraulic or geometry fields','手动提交水力或几何数值字段'),counts.manual_hydraulic_fields||0],[tr('Named reach selections','河段范围选择'),counts.reach_selections||0],[tr('Decision requests','决定请求'),counts.decision_requests||0],[tr('Compute confirmations (included above)','其中运算确认'),counts.compute_consents||0],[tr('Bank pairs submitted','提交岸站对'),counts.bank_pairs_submitted||0],[tr('Manual geometry preview entries','手动几何预览条目'),counts.section_adjustments_submitted||0],[tr('Map point saves','地图选点保存'),counts.map_save_requests||0]]);
+   }
+   if(data.local_problems?.length){
+    const panel=details(content,'Issues grouped by section and profile','按河段和工况集中复核',true);
+    for(const issue of data.local_problems){
+     const title=tr(issue.title.en,issue.title.zh)+' · '+(issue.profile||'—')+' · '+(issue.stations.length?'RS '+issue.stations[0]+(issue.stations.length>1?' – '+issue.stations.at(-1):''):tr('Unlocated','位置未绑定'));
+     const card=details(panel,title,title);
+     for(const rs of issue.stations){
+      card.append(button('Profile and neighbors · RS '+rs,'剖面和邻近断面 · RS '+rs,()=>{
+       openGuidanceTool('atlas');
+       document.getElementById('qa-tool-atlas').dispatchEvent(new CustomEvent('steadyreach-inspect-section',{detail:{rs,profile:issue.profile}}));
+      }));
+     }
+     card.append(el('p',tr(issue.explanation.en,issue.explanation.zh)),el('p',issue.records+tr(' records',' 条记录')+' · '+issue.codes.join(', ')),button('Review this issue','查看这组问题',()=>openGuidanceTool(issue.target)));
+    }
+   }
+   if(data.parameter_response?.length){
+    const panel=details(content,'Where did the tested inputs change water levels?','已测试参数影响了哪些断面的水位？',true);
+    table(panel,[tr('Case and profile','工况'),tr('Tested parameter','测试参数'),tr('Peak signed change (ft)','最大有符号变化（ft）'),tr('Stations above screening threshold','超过筛查值的断面')],data.parameter_response.map(r=>[r.case+' · '+r.profile,r.paths.map(sensitivityParameterLabel).join(' + '),'RS '+r.peak_rs+' · '+r.signed_peak_ft.toFixed(3),r.affected.length+' / '+r.compared+' ('+r.threshold_ft+' ft) · '+r.affected.map(a=>a.rs).join(', ')]));
+   }
    for(const [index,row]of data.actions.entries()){
     const title=(index+1)+'. '+tr(row.title.en,row.title.zh);
     const item=details(content,title,title,index===0);

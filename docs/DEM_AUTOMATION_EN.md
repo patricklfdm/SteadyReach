@@ -2,6 +2,8 @@
 
 **English** | [简体中文](DEM_AUTOMATION_CN.md) | [No-model guide](NO_MODEL_GUIDE_EN.md)
 
+[Inspect section angles, bank alternatives and floodplain paths](RIVER_REVIEW_EN.md)
+
 **Starting with one coordinate.** Choose **River reach (bridges excluded)** and supply the project title and location. Leave unknown numbers empty. The app searches for a directed USGS river, nearby mapped road crossings and a DEM covering the candidate bends and cross sections. Open **Automatic DEM layout / QA repair**. At a crossing, choose the intended reach by its two road names. Generate the preview, check the river and banks against the imagery, then adopt it. The parameter page shows populated values, sources, estimates and any missing inputs together. One final confirmation starts HEC-RAS. [River instructions](RIVER_REACH_EN.md)
 
 **Automatic-draft route.** The model page can stage an eligible initial layout or bounded QA correction together with dependent input estimates. Exterior end sections with unresolved bank morphology are tested at wider coverage while preserving intersection and NoData checks. Other uncertainty remains visible. Profile grids and numeric bank stations support the final inspection. [One-confirmation procedure](AUTOMATION_EN.md).

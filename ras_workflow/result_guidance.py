@@ -29,7 +29,7 @@ def organize(model, summary, diagnostics, studies, evidence_errors=()):
         rows = list(rows)
         assigned.update(i['id'] for i in rows)
         actions.append(dict(id=key, target=target, title=title, explanation=explanation, mode=mode,
-            issue_ids=[i['id'] for i in rows], records=len(rows),
+            issue_ids=[i['id'] for i in rows], issue_records=[{k:i.get(k) for k in ('id','code','profile','station')} for i in rows], records=len(rows),
             codes=dict(Counter(i['code'] for i in rows)),
             locations=sorted({(str(i.get('profile') or ''), str(i.get('station') or '')) for i in rows}), **extra))
 
@@ -169,5 +169,19 @@ def collect(key, body):
         if analysis.get('status') == 'INCOMPLETE' or analysis.get('failed_cases'):
             errors.append(field + ': earlier batch has incomplete cases; it does not establish a completed comparison.')
     result = organize(m, summary, diagnostics, studies, errors)
+    from .app_core import folder
+    from .operator_log import inventory,lineage
+    result['operator_actions'] = inventory(folder(key))
+    result['operator_lineage'] = lineage(m)
+    if m.get('model_type')=='river':
+        from .river_review import local_problems,response
+        from .revision_inputs import bound_inputs
+        try:
+            _,geometry,geometry_sources = bound_inputs(summary)
+            sources += geometry_sources
+            result['local_problems'] = local_problems(result['actions'],[r['rs'] for r in geometry['cross_sections']])
+        except (ValueError,KeyError,OSError) as error:
+            result['source_errors'].append(str(error))
+        result['parameter_response']=response(studies)
     result.update(summary=m['summary'], sources=[m['summary']]+sources)
     return result
