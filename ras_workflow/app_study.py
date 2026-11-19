@@ -14,6 +14,12 @@ def prepare_model(m,body):
     if body.get('revision')!=m['revision']:raise ValueError('Project changed; reload')
     if not m.get('active_project') or not m.get('summary') or not intact([m['summary']]):raise ValueError('Compute a baseline before preparing a sensitivity batch')
     if m.get('native_review'):raise ValueError('This batch editor currently supports workflow-built geometry only')
+    if body.get('kind')=='observed_event':
+        from .observed_event import prepare as prepare_event
+        return prepare_event(m,body)
+    if body.get('kind')=='river_geometry':
+        from .river_comparison import prepare as compare_geometries
+        return compare_geometries(m,body)
     if body.get('kind')=='spacing':
         from .section_spacing import prepare as prepare_spacing
         return prepare_spacing(m,body)
@@ -87,6 +93,13 @@ def confirmation(m,entry):
     if plan.get('analysis_kind')=='section_spacing' and (plan.get('status')=='NO_ELIGIBLE_INTERVALS' or len(plan.get('cases',[]))!=3):raise ValueError('No complete nested spacing cases to confirm; review the excluded intervals')
     review=dict(study_sha256=sha(path),decision='APPROVE_CONDITIONAL_STUDY',policy=core.POLICY,confirmed=True,reviewer=None,
         basis='Displayed sensitivity cases confirmed for local computation; no named engineering approval.',approved_case_kind=plan['case_kind'],engineering_acceptance='NOT_ASSESSED',created_utc=utc())
+    if plan.get('analysis_kind')=='river_observed_event':
+        from .river_observations import current
+        packet=current(m)
+        if not packet or packet['source']!=plan['event']['observations']:raise ValueError('The reviewed observation table changed; prepare the event again')
+        review['basis']='Confirmed the displayed event date, observed discharge and downstream boundary for an independent event computation.'
+    if plan.get('analysis_kind')=='river_geometry_comparison':
+        review['basis']='Displayed fixed-direction extension and rotation-enabled geometry and bank candidates confirmed for two independent Q100 calculations with the original hydraulic inputs.'
     if plan.get('coverage_policy'):
         from .spacing_cycle import policy
         policy(plan)
@@ -108,9 +121,12 @@ def execute(key):
     result=study.run(active['study']['path'],active['review']['path'])
     path=(ROOT/active['study']['path']).parent/'analysis.json'
     entry=item(path)
-    result_field={'section_spacing':'latest_spacing','coverage_repair':'latest_coverage'}.get(result.get('analysis_kind'),'latest_study')
+    result_field={'section_spacing':'latest_spacing','coverage_repair':'latest_coverage','river_geometry_comparison':'latest_geometry_comparison','river_observed_event':'latest_observed_event'}.get(result.get('analysis_kind'),'latest_study')
     m.update(status='RESULTS_READY',phase='STUDY_FINISHED',errors=[])
     m[result_field]=entry
+    if result.get('analysis_kind')=='river_observed_event' and result['status']!='INCOMPLETE':
+        history=m.setdefault('observed_event_history',[])
+        if entry not in history:history.append(entry)
     if result.get('analysis_kind')=='coverage_repair':
         if result['status']!='INCOMPLETE':
             m.update(status='PROCESSING',phase='COVERAGE_EXPORTS')
@@ -120,7 +136,7 @@ def execute(key):
             exports=read(ROOT/m['latest_coverage_exports']['path'])
             if exports['delivery']['status']=='READY_FOR_REVIEW':m.pop('pending_study',None)
         m.update(status='RESULTS_READY',phase='STUDY_FINISHED')
-    else:
+    elif result['status']!='INCOMPLETE' or result.get('analysis_kind') not in ('river_geometry_comparison','river_observed_event'):
         m.pop('pending_study',None)
     m['exports_need_refresh']=True
     core.persist(m,'SENSITIVITY_FINISHED',dict(status=result['status'],analysis=entry))

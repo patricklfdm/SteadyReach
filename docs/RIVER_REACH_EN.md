@@ -2,6 +2,8 @@
 
 **English** | [简体中文](RIVER_REACH_CN.md) | [Home](../README.md)
 
+After the first calculation, see [compare geometry and check field observations](RIVER_COMPARISON_EN.md).
+
 ### From a pin to a conditional Q100 draft
 
 The public route uses named, downstream-directed USGS NHD flowlines and Census TIGER road centerlines. Near a crossing it offers the adjoining reaches by name. If these sources disagree with the site or omit a crossing, use the manual map controls. The default inward setback is up to 40 m. Check channel identity, intervening structures and possible bridge backwater. A road-line intersection is a cartographic candidate.

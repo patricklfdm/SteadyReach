@@ -95,7 +95,13 @@ function renderCandidateBatch(parent,retained=new Map()){
  controls.append(button('Select unique missing candidates','选中缺项的唯一候选',async()=>{for(const f of pending){const choices=f.parameter_candidates;const unique=choices.length&&choices.every(c=>JSON.stringify(c.value)===JSON.stringify(choices[0].value)&&c.evidence_class===choices[0].evidence_class);if(unique){selections.set(f.key,choices[0]);selects.get(f.key).value='0';selects.get(f.key).dispatchEvent(new Event('change'));}}count();notify(tr('Selections prepared. Inspect their conditions before applying.','选择已准备，请检查适用条件后集中采用。'));}),button('Clear selections','清空选择',async()=>{selections.clear();selects.forEach(s=>{s.value='';s.dispatchEvent(new Event('change'));});count();}));
  const buckets=new Map();for(const f of all){const name=f.key.includes('.groups.')?tr('Opening group ','涵孔组 ')+(Number(f.key.split('.')[3])+1):f.key.startsWith('g.cross_sections.')?tr('Section lengths and coefficients','断面流程长度及系数'):f.key.includes('.road.')?tr('Road crest','路顶'):tr('Flow, boundaries and model settings','流量、边界与模型设置');if(!buckets.has(name))buckets.set(name,details(box,name,name,false));const dest=buckets.get(name),row=el('section',undefined,'parameter');dest.append(row);
   row.append(el('strong',tr(f.label.en,f.label.zh)),el('p',tr('Saved: ','已保存：')+(format(f.value,f.kind)||'—')+' · '+originName(f.evidence_class)));
-  const options=[['',f.missing?'Leave unresolved':'Keep saved value',f.missing?'暂不采用':'保留已保存值'],...f.parameter_candidates.map((c,i)=>[String(i),format(c.value,f.kind)+' · '+originName(c.evidence_class),format(c.value,f.kind)+' · '+originName(c.evidence_class)])];
+  if(f.missing)dest.closest('details').dataset.hasMissing='true';
+  const options=[['',f.missing?'Leave unresolved':'Keep saved value',f.missing?'暂不采用':'保留已保存值'],...f.parameter_candidates.map((c,i)=>{
+   const basis=tr(c.condition?.en||c.basis,c.condition?.zh||c.basis)||'';
+   const limit=110,source=f.parameter_candidates.length>1&&basis?' · '+basis.slice(0,limit)+(basis.length>limit?'…':''):'';
+   const caption=format(c.value,f.kind)+' · '+originName(c.evidence_class)+source;
+   return [String(i),caption,caption];
+  })];
   const prior=retained.get(f.key),matched=prior?f.parameter_candidates.findIndex(c=>sameCandidate(c,prior)):-1;
   if(prior&&matched<0)options.push(['stale',tr('Previous choice needs review','先前选择需重新核对')+' · '+format(prior.value,f.kind),tr('Previous choice needs review','先前选择需重新核对')+' · '+format(prior.value,f.kind)]);
   const info=el('p',prior&&matched<0?tr('Inputs changed. Your previous choice is retained for comparison. Choose a current candidate or clear it before saving.','输入依据已变化，先前选择保留供比较。请选当前候选或清除此项后保存。'):tr('Select a candidate to see its formula / condition.','选择候选后显示公式／条件。'),prior&&matched<0?'warning':'muted');

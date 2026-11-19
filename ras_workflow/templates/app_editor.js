@@ -47,6 +47,16 @@ function renderFinalReview(){
  el('p',tr('Nothing has been solved yet. Edit any field; changes cancel this confirmation. No name, reason, or signature is required.','尚未开始求解。可以修改任意字段，修改后本次确认会失效。无需姓名、理由或签名。')),
  button('← Back to preparation','← 返回准备页面',async()=>{await save();finalReview=null;await open(current.id);}));
  const state=el('p',review.ready?tr('Technical input checks passed. Assumptions remain conditional.','必要输入检查通过。假设仍属于条件性输入。'):tr('Fill the items below, then refresh this list. The solver is paused.','请补齐下列项目并刷新清单，求解器处于等待状态。'),review.ready?'status':'warning');state.id='review-state';screen.append(state);
+ if(!review.ready&&current.intake?.fields.some(f=>f.missing&&f.parameter_candidates?.length)){
+  screen.append(button('Choose source candidates for missing inputs','集中选择缺项的资料候选',async()=>{
+   await save();finalReview=null;await open(current.id);
+   const panel=document.querySelector('details[data-candidate-batch]');
+   if(!panel)return;
+   for(let p=panel;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;
+   panel.querySelectorAll('details[data-has-missing]').forEach(d=>d.open=true);
+   panel.scrollIntoView({block:'start'});
+  }));
+ }
  if(review.errors.length){const ul=el('ul');const remaining=review.errors.length>8?details(screen,'All remaining input checks','其余输入检查',false):null;const restList=el('ul');remaining?.append(restList);for(const [index,e] of review.errors.entries()){const f=review.fields.find(f=>f.key===e.field),li=el('li',typeof e==='string'?e:(f?tr(f.label.en,f.label.zh)+': ':'')+tr(e.en,e.zh));if(f)li.append(button('Go to field','定位此项',async()=>{const input=document.getElementById('input-'+f.key);let parent=input?.parentElement;while(parent){if(parent.tagName==='DETAILS')parent.open=true;parent=parent.parentElement;}input?.scrollIntoView({block:'center'});input?.focus();}));if(index<8)ul.append(li);else restList.append(li);}screen.append(ul);}
  if(review.refreshed_equivalent_fields?.length)screen.append(el('p',review.refreshed_equivalent_fields.length+tr(' unchanged derived values were rebound to the current geometry. Values, ranges and sources are listed below.',' 项数值及依据均相同的推导值已自动关联当前几何。请在下方核对数值、范围和来源。'),'status'));
  renderDependencyReview(screen,review);

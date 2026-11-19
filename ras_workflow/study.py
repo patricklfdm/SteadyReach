@@ -161,10 +161,10 @@ def run_case(sp, study, rp, review, case, journal, journal_path, timeout):
     from .cli import execute
     dest = (ROOT/case['draft']['path']).parent; c = read(ROOT/case['draft']['path'])
     geometry_hash=case['geometry']['sha256']
-    if study.get('analysis_kind') in ('section_spacing','coverage_repair'):
+    if study.get('analysis_kind') in ('section_spacing','coverage_repair','river_geometry_comparison'):
         from .section_spacing import confirm_geometry
         geometry=confirm_geometry(read(ROOT/case['geometry']['path']),item(rp),
-                basis=review['basis'] if study.get('analysis_kind')=='coverage_repair' else None)
+                basis=review['basis'] if study.get('analysis_kind') in ('coverage_repair','river_geometry_comparison') else None)
         target=dest/'geometry.confirmed.json'
         if target.exists() and read(target)!=geometry:raise ValueError('Confirmed spacing geometry changed')
         if not target.exists():save(target,geometry)
@@ -239,6 +239,14 @@ def run_fixed(sp, study, rp, review, timeout):
             run_case(sp, study, rp, review, case, journal, journal_path, timeout)
         journal.update(status='COMPUTED' if all(r['status'] == 'COMPUTED' for r in journal['cases']) else 'INCOMPLETE', finished_utc=utc())
         save(journal_path, journal)
+    if study.get('analysis_kind') in ('river_geometry_comparison','river_observed_event'):
+        if study['analysis_kind']=='river_geometry_comparison':
+            from .river_comparison import analyze as analyze_river
+        else:
+            from .observed_event import analyze as analyze_river
+        result=analyze_river(sp,study,rp,journal)
+        save(folder/'analysis.json',result)
+        return result
     return analyze(sp, rp)
 
 

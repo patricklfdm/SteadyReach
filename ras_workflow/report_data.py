@@ -123,17 +123,20 @@ def collect(summary_path, comparisons=()):
             actual=compare(comp['sources'][0]['path'],comp['sources'][1]['path'],Path(tmp)/'comparison.json')
         if comp!=actual:raise ValueError('Comparison values differ from native outputs')
         compared.append(comp);sources+=[entry]+comp['sources']
-    studies=[]
+    studies=[];river_checks={}
     if h.get('model_type') == 'river':
         from .report_studies import collect as collect_studies
         studies, study_sources = collect_studies(summary_path, s)
         sources += study_sources
+        from .river_review_report import collect as collect_river_checks
+        river_checks,check_sources=collect_river_checks(summary_path,s)
+        sources+=check_sources
     revision=None
     if s['configuration'].get('revision_origin'):
         from .app_revision import compare as compare_revision
         revision=compare_revision(dict(parent_revision=s['configuration']['revision_origin']),s)
         sources+=revision.get('sources',[])
-    return dict(studies=studies, revision_comparison=revision,schema_version='readable_report_data_1.0',created_utc=utc(),summary=s,sections=rows,
+    return dict(studies=studies, river_checks=river_checks, revision_comparison=revision,schema_version='readable_report_data_1.0',created_utc=utc(),summary=s,sections=rows,
         geometry=geometry,map_geometry=map_geometry,geometry_source=geometry_source,raster_source=raster_source,diagnostics=diagnostics,
         language_review=language_review,native_supplement=supplement,comparisons=compared,reference_comparisons=references,native_inputs=native_inputs,native_input_error=native_input_error,
         sources=sources,report_generation_is_solver_run=False)

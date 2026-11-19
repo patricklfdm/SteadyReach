@@ -419,7 +419,10 @@ def worker(record):
     return 0 if job['status']=='FINISHED' else 1
 
 def report_refresh_binding(m):
-    return {key:m.get(key) for key in ('summary','latest_study','latest_spacing','latest_coverage','latest_coverage_exports')}
+    binding={key:m.get(key) for key in ('summary','latest_study','latest_spacing','latest_coverage','latest_coverage_exports')}
+    for key in ('river_observations','observed_event_history','latest_geometry_comparison'):
+        if m.get(key):binding[key]=m[key]
+    return binding
 
 
 def current_refreshed_reports(m):
@@ -494,6 +497,20 @@ def view(key,detail=True):
     if m.get('sensitivity_suggestions'):
         from .sensitivity_ranges import current as current_ranges
         result['suggested_sensitivity']=current_ranges(m)
+    if m.get('river_observations'):
+        from .river_observations import current as current_observations
+        result['observation_review']=current_observations(m)
+        result['observed_events']=[]
+        for ref in m.get('observed_event_history',[]):
+            if not intact([ref]):continue
+            event=read(ROOT/ref['path'])
+            if result['observation_review'] and event.get('baseline')==m['summary'] and event['observations']==result['observation_review']['source'] and intact([event['study'],event['review'],event['execution'],event['summary']]):
+                result['observed_events'].append(event)
+    if m.get('latest_geometry_comparison') and intact([m['latest_geometry_comparison']]):
+        comparison=read(ROOT/m['latest_geometry_comparison']['path'])
+        evidence=[comparison['study'],comparison['review']]+list(comparison.get('summaries',{}).values())
+        if comparison.get('table'):evidence.append(comparison['table'])
+        if intact(evidence):result['geometry_comparison']=comparison
     if m.get('latest_spacing') and intact([m['latest_spacing']]):result['spacing_result']=read(ROOT/m['latest_spacing']['path'])
     if m.get('latest_coverage') and intact([m['latest_coverage']]):result['coverage_result']=read(ROOT/m['latest_coverage']['path'])
     if m.get('latest_coverage_exports') and intact([m['latest_coverage_exports']]):

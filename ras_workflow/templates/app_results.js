@@ -76,6 +76,7 @@ function renderRevisionComparison(parent,comparison){
 }
 
 function renderResultTools(parent){
+ if(current.model_type==='river'&&!current.native_review){renderRiverComparison(parent);renderRiverObservations(parent);}
  renderNextReview(parent);
  renderCheckBatch(parent);
  renderResultAtlas(parent);

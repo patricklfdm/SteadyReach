@@ -253,6 +253,22 @@ def build(data, plots, folder, language='en', detail='full', details=None):
             for fig in plots['comparisons']:picture(fig,'Verified comparison of matched sections','同源核验后的匹配断面水位差对比')
     else:p('No verified sensitivity or refinement comparison is attached. Numerical convergence and a sensitivity envelope are not established here.',
            '本报告未附可核验的敏感性或加密对比，因此不声称已验证数值收敛或建立敏感性包络。')
+    checks=data.get('river_checks') or {}
+    if checks.get('comparison'):
+        d.add_heading(tr('Geometry alternatives at the same discharge','同流量下的几何方案比选'),2)
+        table(d,[tr('Case','工况'),tr('Wet sections','湿端断面数'),tr('Cleared ends','消除湿端数'),tr('New wet ends (RS / side)','新增湿端（断面与左右侧）')],
+            [[tr('Fixed direction','固定方向') if name=='fixed' else tr('Rotation allowed','允许旋转'),str(checks['comparison'][name]['wet_sections']),str(checks['comparison'][name]['cleared_wet_ends']),', '.join(checks['new_ends'][name]) or '—'] for name in ('fixed','rotated')],[1.5,1.2,1.2,2.7])
+    if checks.get('screen'):
+        d.add_heading(tr('Field measurements and event coverage','实测资料与事件覆盖'),2)
+        for row in checks['screen']:
+            loc=row['location'];position=('RS '+loc['rs']+', '+num(loc['distance_m'],1)+' m') if loc else '—'
+            p(row['event']+' / '+row['date']+' · '+row['role']+' · '+position+' · '+str(row.get('observed_datum') or '—')+' / '+row['model_datum'],
+              row['event']+' / '+row['date']+' · '+row['role']+' · '+position+' · '+str(row.get('observed_datum') or '—')+' / '+row['model_datum'])
+            if row['issues']:p('Screening: '+', '.join(row['issues']), '初筛项目：'+', '.join(row['issues']))
+        comparisons=[r for r in checks['events']+checks['screen'] if r['residual_ft'] is not None]
+        if comparisons:
+            table(d,[tr('Event','事件'),'RS',tr('Observed ft','实测 ft'),tr('Computed ft','计算 ft'),tr('Residual ft','偏差 ft')],[[r['event'],r['location']['rs'],num(r['observed_ft'],3),num(r['model_ft'],3),num(r['residual_ft'],3)] for r in comparisons],[2.2,.8,1.2,1.2,1.2])
+        else:p('The current data provide no matched independent residual. Review section location, event discharge and elevation datum.','当前资料尚无可匹配的独立偏差。请核对断面位置、事件流量和高程基准。')
     if full:
         if g:
             from .physical_geometry import screen

@@ -13,7 +13,7 @@
 1. 下载本仓库 ZIP 并解压到可写目录，或 clone 仓库。活动计算建议使用本地磁盘，避免 OneDrive／网络同步目录。
 2. 安装 **HEC-RAS 7.0.1**；需要可编辑 GIS 和展示图时安装 **QGIS 3.44 LTR**。参阅[安装说明](docs/WINDOWS_SETUP_CN.md)，此适配器不能直接假定兼容更新的 HEC-RAS 版本。
 3. 双击 **start_workflow.cmd**。首次运行会准备本地 Python 和依赖，按提示选择 QGIS 路径；保持启动窗口打开。
-4. 先试用内附的 [Phelps Brook 公开示例](examples/phelps_brook/README.zh-CN.md)，自己的地点参阅[没有现成模型时的指南](docs/NO_MODEL_GUIDE_CN.md)。
+4. 两桥之间的河段请走[纯河道流程](docs/RIVER_REACH_CN.md)。涵洞可先用 [Phelps Brook 示例](examples/phelps_brook/README.zh-CN.md)，或参考[新建涵洞指南](docs/NO_MODEL_GUIDE_CN.md)。
 5. 集中检查全部参数，修改数值或假设，明确确认后才启动真实求解。在结果页打开报告及 **Minimal／Complete** 交付目录。
 
 [用户手册](docs/USER_GUIDE_CN.md) · [安装与修复](docs/WINDOWS_SETUP_CN.md) · [常见问题](docs/TROUBLESHOOTING_CN.md) · [适用范围与限制](docs/LIMITATIONS_CN.md)

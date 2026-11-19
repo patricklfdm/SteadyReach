@@ -13,7 +13,7 @@ For a new model, import the available material and check the crossing and terrai
 1. Download this repository as a ZIP and extract it into a writable folder, or clone it. Avoid OneDrive/network folders for active calculations.
 2. Install **HEC-RAS 7.0.1** and, for editable maps and exhibits, **QGIS 3.44 LTR**. See [installation](docs/WINDOWS_SETUP_EN.md); newer HEC-RAS versions are not automatically interchangeable with this adapter.
 3. Double-click **start_workflow.cmd**. On first use it prepares local Python and required packages; follow the setup prompts for QGIS. Keep the console open.
-4. Try the included [Phelps Brook example](examples/phelps_brook/README.md), or follow the [no-existing-model guide](docs/NO_MODEL_GUIDE_EN.md) for your own crossing.
+4. For a river between two bridges, follow [the river walkthrough](docs/RIVER_REACH_EN.md). For a culvert, try the [Phelps Brook example](examples/phelps_brook/README.md) or the [crossing guide](docs/NO_MODEL_GUIDE_EN.md).
 5. Review all parameters, correct values or assumptions, and explicitly confirm before the real solver starts. Open the reports and **Minimal / Complete** folders from Results.
 
 [User manual](docs/USER_GUIDE_EN.md) · [Installation and repair](docs/WINDOWS_SETUP_EN.md) · [Troubleshooting](docs/TROUBLESHOOTING_EN.md) · [Scope and limitations](docs/LIMITATIONS_EN.md)

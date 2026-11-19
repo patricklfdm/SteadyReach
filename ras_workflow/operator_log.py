@@ -10,7 +10,7 @@ def classify(route, body):
     confirmations = {'revision','start','study-start','checks-start','geometry/auto-apply','geometry/repair-apply',
                      'geometry/bank-proposal-apply','resolve-dependencies','candidate','use-native-values'}
     requests = {'create','prepare','automatic-prepare','acquire','analyze','attach','catalog-import','native',
-                'sources/folder','sources/survey','sources/points','opening-associations','review','next-review',
+                'sources/folder','sources/survey','sources/points','river-observations','opening-associations','review','next-review',
                 'study-prepare','checks-prepare','study-suggest','revision','report','delivery','native-export','native-outputs',
                 'geometry/auto-prepare','geometry/repair-preview','geometry/banks','geometry/generate','geometry/picks',
                 'geometry/bank-proposal-prepare','save'}
