@@ -124,7 +124,15 @@ def diagnostics(h,supplement):
     if supplement['warnings']:
         for row in supplement['warnings']['records']:
             evidence=dict(native_message=row['text'],export=supplement['warnings']['source'],first_line=row['first_line'],last_line=row['last_line'])
-            code='NATIVE_MULTIPLE_CRITICAL_DEPTH' if 'multiple critical depths' in row['text'].lower() else row['code']
+            code=row['code']
+            message=row['text'].lower()
+            if 'multiple critical depths' in message:
+                code='NATIVE_MULTIPLE_CRITICAL_DEPTH'
+            elif code=='NATIVE_UNCLASSIFIED_MESSAGE':
+                if 'extended vertically during the critical depth calculations' in message:
+                    code='NATIVE_VERTICAL_EXTENSION_CRITICAL_SEARCH'
+                elif 'parabolic search method failed to converge on critical depth' in message:
+                    code='NATIVE_CRITICAL_SEARCH_METHOD_CHANGE'
             d['issues'].append(dict(id=digest(row)[:16],code=code,profile=row['profile'],station=row['station'],severity=row['severity'],review_status='OPEN',evidence=evidence,
                 recommended_action='Inspect this native message with the section, flow paths and model assumptions. Imported evidence does not close hydraulic QA.'))
     for row in supplement.get('display_differences',[]):
@@ -179,13 +187,23 @@ def retry(key):
     status=revised['automatic_native_outputs'];m['native_export_attempt']=status
     if status['status'] not in ('COMPLETE','COMPLETE_WITH_DIFFERENCES'):
         m.update(status='RESULTS_READY',phase='DONE',errors=[]);core.persist(m,'NATIVE_EXPORT_UNAVAILABLE',status);return
+    from . import app_next_review
+    auto_field=app_next_review.pending_automatic_field(m)
+    if auto_field:
+        # Keep all evidence and drafts. Only the obsolete, automatically proposed
+        # scope can be replaced; manual or confirmed scopes stay with their owner.
+        m.pop(auto_field)
     revised.update(parent_summary=summary_entry,edition_created_utc=utc());save(out/'summary.json',revised)
     m.update(summary=item(out/'summary.json'),revision=m['revision']+1,exports_need_refresh=True)
     m['previous_delivery']=m.get('latest_delivery') or m.get('previous_delivery') or (read(ROOT/m['engine_state']).get('delivery') if m.get('engine_state') else None)
     m.pop('latest_reports',None);m.pop('latest_delivery',None)
     core.persist(m,'AUTOMATIC_NATIVE_EXPORT',status)
     # One click updates reports and both packages; no second user action required.
-    core.regenerate(key,'delivery')
+    try:
+        core.regenerate(key,'delivery')
+    finally:
+        if auto_field:
+            app_next_review.execute(key)
 
 
 def receive(key,body):

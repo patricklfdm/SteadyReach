@@ -24,6 +24,8 @@ ISSUES={
  'NATIVE_WET_SECTION_EDGE':('Native warning: low section end','原生警告：断面端点偏低','Inspect the actual terrain and connected flow paths beyond the section; do not raise ground to suppress the warning.','检查断面外实际地形及连通过流路径，不为消除警告抬高地面。'),
  'NATIVE_DIVIDED_FLOW':('Native warning: divided flow','原生警告：分隔水流','Check whether separated wet areas connect along the reach and whether the one-dimensional representation is appropriate.','判断分隔湿区沿河段是否连通，以及一维表达是否适用。'),
  'NATIVE_CONVEYANCE_CHANGE':('Native warning: abrupt conveyance change','原生警告：输水能力突变','Review section spacing, contraction/expansion geometry, banks and ineffective areas.','复核断面间距、收缩扩散几何、岸站及非有效流区。'),
+ 'NATIVE_VERTICAL_EXTENSION_CRITICAL_SEARCH':('Section extended vertically during critical-depth search','临界水深搜索时断面被竖向延伸','Inspect both ends of the surveyed or DEM profile and the computed water surface.','核对实测或 DEM 剖面两端高程及计算水位。'),
+ 'NATIVE_CRITICAL_SEARCH_METHOD_CHANGE':('Critical-depth search switched methods','临界水深搜索切换算法','Inspect the section and critical-depth output. HEC-RAS reports trying the slice/secant search after the parabolic search.','复核断面及临界水深输出。HEC-RAS 提示抛物线搜索未收敛，转而尝试切片／割线法。'),
  'NATIVE_MULTIPLE_CRITICAL_DEPTH':('Native note: multiple critical depths','原生提示：多个临界水深','Inspect the native profile and section shape; this note alone is not proof of a hydraulic jump or critical-depth fallback.','结合原生水面线和断面形状复核；此提示本身不证明出现水跃或临界水深回退。')}
 
 

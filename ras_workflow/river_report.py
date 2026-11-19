@@ -100,8 +100,8 @@ def build(data, plots, folder, language='en', detail='full', details=None):
       '需确认河槽测量及现状河床、流量适用性、糙率、边界影响和断面间距敏感性。一维恒定流模型不能还原洪水随时间变化过程或二维漫滩流速场。')
     coverage_studies=[study for study in data.get('studies',[]) if study.get('coverage')]
     studies=[study for study in data.get('studies',[]) if not study.get('coverage')]
-    d.add_heading(tr('Completed sensitivity tests','已完成的敏感性测试'),1)
     if studies:
+        d.add_heading(tr('Completed sensitivity tests','已完成的敏感性测试'),1)
         sensitivity=[]
         for study_index,study in enumerate(studies,1):
             for comparison in study['comparisons']:

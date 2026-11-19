@@ -111,7 +111,7 @@ function bankReviewReason(code){
  const names={MISSING_OR_INVALID_BANKS:['Missing or invalid banks','岸站缺失或无效'],INFERRED_SPACING_BANKS_REQUIRE_REVIEW:['Banks inherited from adjacent sections','岸站由相邻断面推定'],STALE_BANK_PROFILE_CONTEXT:['Bank derivation belongs to an earlier profile','岸站依据属于旧剖面'],BANK_METHOD_NOT_RECORDED:['Bank interpretation method is not recorded','未记录岸站判读方法'],SCALE_SENSITIVE_BANKS:['Banks vary with smoothing scale','岸站随平滑尺度变化'],COMPETING_LEFT_BANKS:['Multiple plausible left banks','左岸有多个候选'],COMPETING_RIGHT_BANKS:['Multiple plausible right banks','右岸有多个候选'],ASYMMETRIC_BANK_RELIEF:['Asymmetric bank relief','两岸高差不对称'],CONTINUITY_WEIGHT_SENSITIVE:['Reach continuity weights change the choice','沿程连续性权重影响选择'],REACH_CONTINUITY_CHANGED_LOCAL_CHOICE:['Reach-wide selection changed the local choice','沿程选择改变了局部候选'],NO_SCALE_STABLE_BANK_PAIR:['No stable pair across scales','不同尺度下无稳定岸站对'],WEAK_LOCAL_BANK_EVIDENCE:['Weak local bank evidence','局部岸站依据较弱'],BANK_WIDTH_DISCONTINUITY:['Abrupt bank-width change','岸宽沿程突变'],INTERPOLATED_BANKS_REQUIRE_LOCAL_REVIEW:['Banks interpolated from neighboring sections','岸站从相邻断面插值'],LOW_OUTER_TERRAIN_OR_MULTIPLE_CHANNELS:['Low outer terrain or multiple channels','外侧低地或多河槽'],DISTINCT_SLOPE_BREAKS_REVIEW_REQUIRED:['Distinct terrain slope breaks; review applicability','坡折较明确，仍需判断适用性']};
  return names[code]?tr(...names[code]):code;
 }
-function bankVisible(filter,review,selected){return selected||filter==='all'||filter==='attention'&&review?.needs_attention||(review?.categories||[]).includes(filter);}
+function bankVisible(filter,review,selected){return selected||filter==='all'||filter==='attention'&&review?.needs_attention||Boolean(review?.terrain_focus&&filter==='focus-'+review.terrain_focus.focus)||(review?.categories||[]).includes(filter);}
 
 function renderBankBatch(parent,review){
  review=structuredClone(review);
@@ -122,8 +122,10 @@ function renderBankBatch(parent,review){
  const assessments=new Map((inventory?.sections||[]).map(row=>[row.index,row]));
  if(inventory)box.append(el('p',inventory.section_count+tr(' sections · ',' 条断面 · ')+inventory.attention_count+tr(' with unresolved interpretation flags. Saved values are retained.',' 条含未解决的判读提示；已保存数值保持不变。'),'status'));
  if(inventory?.reach_summary_status==='STALE')box.append(el('p',tr('An older reach summary has a different section layout. This list uses current section identities instead of old array indices.','旧河段摘要与当前断面布置不一致；本清单按当前断面身份整理，不沿用旧数组索引。'),'warning'));
+ const focusFilters=[['left','Left bank','左岸'],['right','Right bank','右岸'],['both','Both banks','两岸'],['pair','Review pair together','整组复核']]
+  .filter(([key])=>inventory?.focus_counts?.[key]).map(([key,en,zh])=>['focus-'+key,en+' ('+inventory.focus_counts[key]+')',zh+'（'+inventory.focus_counts[key]+'）']);
  const filter=field(box,'bank-review-filter','Show sections','显示断面',inventory?.attention_count?'attention':'all','select',[
- ['attention','Needs interpretation','有判读提示'],['inferred','Inferred from neighbors','相邻断面推定'],['ambiguous','Ambiguous terrain','地形判读歧义'],['missing','Missing / invalid banks','岸站缺失／无效'],['all','All sections','全部断面']]);
+ ['attention','Needs interpretation','有判读提示'],...focusFilters,['inferred','Inferred from neighbors','相邻断面推定'],['ambiguous','Ambiguous terrain','地形判读歧义'],['missing','Missing / invalid banks','岸站缺失／无效'],['all','All sections','全部断面']]);
  const visible=el('p','', 'status');box.append(visible);
  const cards=new Map(),picks=new Map(),selected=new Set(),feedback=el('p','', 'status');box.append(feedback);
  function showFilter(){let count=0;for(const [i,card] of cards){card.hidden=!bankVisible(filter.value,assessments.get(i),selected.has(i));if(!card.hidden)count++;}visible.textContent=count+tr(' of ',' / ')+review.sections.length+tr(' sections shown. Pending changes stay visible.',' 条断面可见；待保存更改始终保留显示。');}
@@ -141,6 +143,27 @@ function renderBankBatch(parent,review){
   const actions=el('div',undefined,'actions');d.append(actions);const left=button('Pick left bank','选择左岸',async()=>{side=side===0?null:0;draw();}),right=button('Pick right bank','选择右岸',async()=>{side=side===1?null:1;draw();});actions.append(left,right);
   const numbers=bankNumberInputs(d,'batch-bank-'+i,row,()=>bank,pair=>{bank.splice(0,2,...pair);selected.add(i);use.checked=true;count();draw();});
   const note=el('p');d.append(note,el('small',(assessment?.reasons||row.bank_candidates?.reasons||[]).map(bankReviewReason).join(' · ')));
+  if(assessment?.terrain_focus){
+   const focus=assessment.terrain_focus;
+   const evidence=details(d,'Compare terrain bank candidates','比较地形岸站候选');
+   evidence.append(el('p',tr('Smoothing windows (ft): ','平滑窗口（ft）：')+focus.windows_ft.join(' / ')));
+   for(const [k,label] of ['left','right'].entries()){
+    const info=focus.sides[label], name=k===0?tr('Left bank','左岸'):tr('Right bank','右岸');
+    const leaders=info.leading_ft.map(v=>Number.isFinite(v)?v.toFixed(1):'—');
+    evidence.append(el('p',name+' · '+tr('Leading station (ft): ','各窗口首选岸站（ft）：')+leaders.join(' / ')));
+    for(const choice of info.options.filter(v=>v.station_ft!==info.saved_ft)){
+     const caption=name+' '+choice.station_ft+' ft';
+     const btn=button(caption,caption,async()=>{
+      const candidate=bank.slice();candidate[k]=choice.index;
+      if(!bankPairReady(row,candidate))throw Error(tr('Select an interior sample for the opposite bank and check the bank order.','请为另一侧选择内部样点，并检查左右岸顺序。'));
+      bank[k]=choice.index;selected.add(i);use.checked=true;count();draw();
+      notify('RS '+row.rs+' · '+caption+tr(' staged for batch save.',' 已加入待保存清单。'));
+     });
+     const windows=choice.leading_windows_ft.concat(choice.competing_windows_ft);
+     btn.title=tr('Terrain windows (ft): ','地形窗口（ft）：')+windows.join(', ');evidence.append(btn);
+    }
+   }
+  }
   d.parentElement.addEventListener('toggle',()=>{if(d.parentElement.open)draw();});
   function draw(){numbers.sync();if(!d.parentElement.open)return;svg.replaceChildren();const finite=z.filter(Number.isFinite);if(!finite.length)return;const lo=Math.min(...finite),hi=Math.max(...finite),xy=j=>[45+(x[j]-x[0])/Math.max(1,x.at(-1)-x[0])*620,175-(z[j]-lo)/Math.max(1,hi-lo)*145];profileGrid(svg,x,lo,hi,[45,665,30,175]);numbers.sync();svgEl(svg,'polyline',{points:z.map((v,j)=>Number.isFinite(v)?xy(j).join(','):'').join(' '),fill:'none',stroke:'#6e5334','stroke-width':2});z.forEach((v,j)=>{if(!Number.isFinite(v))return;const [cx,cy]=xy(j),c=svgEl(svg,'circle',{cx,cy,r:bank.includes(j)?5:2.5,fill:bank.includes(j)?'#b55c16':'#286954'});c.onclick=()=>{if(side===null)return;bank[side]=j;selected.add(i);use.checked=true;count();draw();};});left.setAttribute('aria-pressed',String(side===0));right.setAttribute('aria-pressed',String(side===1));note.textContent=tr('Left / right: ','左／右：')+bank.map(j=>x[j]?.toFixed(3)??'—').join(' / ')+' ft'+(side===null?'':tr(' · click the profile',' · 请点击剖面'));
   }draw();

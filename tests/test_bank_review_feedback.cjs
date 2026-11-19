@@ -7,6 +7,11 @@ assert.equal(context.bankVisible('missing',{categories:['inferred']},false),fals
 assert.equal(context.bankVisible('missing',{categories:['inferred']},true),true,'pending changes must never be hidden');
 assert.equal(context.bankVisible('all',undefined,false),true,'all sections remain available');
 assert.equal(context.bankReviewReason('INFERRED_SPACING_BANKS_REQUIRE_REVIEW'),'Banks inherited from adjacent sections');
+const onlyLeft={terrain_focus:{focus:'left'},needs_attention:true};
+assert.equal(context.bankVisible('focus-left',onlyLeft,false),true);
+assert.equal(context.bankVisible('focus-right',onlyLeft,false),false);
+assert.equal(context.bankVisible('focus-right',onlyLeft,true),true);
+assert.equal(context.bankVisible('focus-left',undefined,false),false);
 context.tr=(en,zh)=>zh;
 assert.equal(context.bankReviewReason('INFERRED_SPACING_BANKS_REQUIRE_REVIEW'),'岸站由相邻断面推定');
 assert.equal(context.bankReviewReason('FUTURE_REASON'),'FUTURE_REASON');

@@ -110,6 +110,20 @@ def execute(key):
     return record
 
 
+def pending_automatic_field(model):
+    """Identify an untouched automatic preview that may be regenerated for a new edition."""
+    record = current(model)
+    if not record or record.get('status') != 'PREVIEW_READY' or not record.get('preview'):
+        return None
+    if record.get('joint_revision') and record['joint_revision'].get('status') != 'DRAFT_READY':
+        return None
+    fields = {'coverage': 'pending_study', 'checks': 'pending_check_batch'}
+    field = fields.get(record.get('action'))
+    if field and model.get(field) == record['preview']:
+        return field
+    return None
+
+
 def current(model):
     entry = model.get('automatic_next_review')
     if not entry or not intact([entry]):

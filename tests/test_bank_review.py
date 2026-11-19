@@ -24,6 +24,35 @@ class BankReviewTests(unittest.TestCase):
         self.assertEqual([(v['index'],v['rs']) for v in r['sections']],[(0,300.),(1,200.),(2,100.)])
         self.assertEqual(r['attention_count'],0)
 
+    def test_bound_scales_identify_one_side_keep_geometry_and_reject_stale_samples(self):
+        g=self.make()
+        row=g['cross_sections'][0]
+        x,z=row['station_ft'],row['elevation_ft']
+        def peak(station,score):
+            i=x.index(station)
+            return dict(index=i, station_ft=x[i], elevation_ft=z[i], score=score)
+        windows=[3.,6.,12.]
+        method=dict(profile_context=bank_review.profile_context(row), confidence='LOW',
+                    reasons=['SCALE_SENSITIVE_BANKS'], settings={'window_ft':6.},
+                    scale_windows_ft=windows, scale_results=[
+                        dict(settings={'window_ft':w,'competing_score_ratio':.75},
+                             left=[] if w==12 else [peak(30.,5.),peak(20.,4.)],
+                             right=[peak(80.,4.)]) for w in windows])
+        row['bank_candidates']=method
+        before=copy.deepcopy(g)
+        inventory=bank_review.inventory(g)
+        focus=inventory['sections'][0]['terrain_focus']
+        self.assertEqual(g,before)
+        self.assertEqual(inventory['focus_counts'],{'left':1})
+        self.assertEqual(focus['sides']['left']['leading_ft'],[30.,30.,None])
+        self.assertEqual(focus['sides']['right']['reasons'],[])
+        self.assertEqual([v['station_ft'] for v in focus['sides']['left']['options']],[20.,30.])
+        method['reach_inputs_hash']='old reach'
+        self.assertFalse(bank_review.inventory(g)['focus_counts'])
+        del method['reach_inputs_hash']
+        method['scale_results'][0]['right'][0]['elevation_ft']+=1
+        self.assertFalse(bank_review.inventory(g)['focus_counts'])
+
     def test_legacy_spacing_rows_are_flagged_without_candidate_metadata(self):
         g=self.make();row=g['cross_sections'][1];row.pop('bank_candidates')
         row['spacing_assumptions']={'bank_basis':'Mean adjacent bank fractions'}

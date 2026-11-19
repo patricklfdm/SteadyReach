@@ -48,7 +48,7 @@ def main(request):
     cs.setFormat(cf);contours.setLabeling(QgsVectorLayerSimpleLabeling(cs));contours.setLabelsEnabled(True)
     model=[];gpkg=gis/'Model_layers.gpkg';sp=cfg['spatial']
     styles={'river':('#0077aa','0.65'),'cross_sections':('#8b2395','0.45'),'structures':('#ff8500','1.0')}
-    display={'river':'Model flow path','cross_sections':'Cross sections','banks':'Reviewed bank stations','structures':'Native culvert section'}
+    display={'river':'Model flow path','cross_sections':'Cross sections','banks':'Model bank stations','structures':'Native culvert section'}
     for name,features in sp['layers'].items():
         if name=='structures' and not features:continue
         kind='Point' if name=='banks' else 'LineString';v=QgsVectorLayer(kind,display[name],'memory');v.setCrs(project.crs())

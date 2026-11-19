@@ -96,9 +96,9 @@ def capture(controller, project, pid, output, profiles):
         if len(found)!=1:raise ValueError('Native export menu changed: '+label)
         post(parent,wc.WM_COMMAND,found[0]);trace.append(dict(action='menu',label=label,id=found[0]))
 
-    def clipboard_table(parent,header):
+    def owned_clipboard(copy):
         sequence=clip.GetClipboardSequenceNumber()
-        menu(parent,'Copy to Clipboard (Data and Headings)')
+        copy()
         wait(lambda:clip.GetClipboardSequenceNumber()!=sequence,'clipboard was not updated by HEC-RAS')
         def read_clipboard():
             try:clip.OpenClipboard()
@@ -112,7 +112,10 @@ def capture(controller, project, pid, output, profiles):
                 if not clip.IsClipboardFormatAvailable(wc.CF_UNICODETEXT):return None
                 return clip.GetClipboardData(wc.CF_UNICODETEXT)
             finally:clip.CloseClipboard()
-        text=wait(read_clipboard,'native clipboard remains busy')
+        return wait(read_clipboard,'native clipboard remains busy')
+
+    def clipboard_table(parent,header):
+        text=owned_clipboard(lambda:menu(parent,'Copy to Clipboard (Data and Headings)'))
         if not text.startswith(header+'\r\n') and not text.startswith(header+'\n'):raise ValueError('Copied table is stale or belongs to another group/profile')
         return text
 
@@ -162,20 +165,40 @@ def capture(controller, project, pid, output, profiles):
         warning=wait(lambda:window('Errors Warnings and Notes for Plan : '+short),'warning window')
         select(warning,2,title,[title]);select(warning,8,river,['(All Rivers)',river]);select(warning,9,reach,['(All Reaches)',reach])
         select(warning,3,'(All Profiles)',['(All Profiles)']+[p['id'] for p in profiles])
-        button=control(warning,7,'ThunderRT6CommandButton')
-        if wg.GetWindowText(button)!='File ...':raise ValueError('Native File export control changed')
-        post(button,wc.BM_CLICK)
-        dialog=wait(lambda:window('Enter/Select Output File'),'native File save dialog')
-        edit=control(dialog,1001,'Edit');path=output/'warnings.txt'
-        if path.exists():raise ValueError('Refusing to overwrite a prior native export')
-        send(edit,wc.WM_SETTEXT,0,str(path.resolve()));post(dialog,wc.WM_COMMAND,1)
-        wait(lambda:path.exists() and (not wg.IsWindow(dialog) or not wg.IsWindowVisible(dialog)),'native warning file')
-        text=path.read_text(encoding='utf-8-sig')
         from .native_warnings import parse
-        parsed=parse(text)
+        path=output/'warnings.txt'
+        if path.exists():raise ValueError('Refusing to overwrite a prior native export')
+        buttons=[]
+        def warning_button(handle,_):
+            if wg.GetClassName(handle)=='ThunderRT6CommandButton' and wg.IsWindowVisible(handle) and wg.IsWindowEnabled(handle):
+                guard(handle)
+                buttons.append((wg.GetWindowText(handle).replace('&','').strip(),handle))
+        wg.EnumChildWindows(warning,warning_button,None)
+        trace.append(dict(action='warning_buttons',labels=[label for label,_ in buttons]))
+        clipboard_buttons=[handle for label,handle in buttons if label in ('Clipboard','Copy to Clipboard')]
+        parsed=None
+        if len(clipboard_buttons)==1:
+            try:
+                text=owned_clipboard(lambda:post(clipboard_buttons[0],wc.BM_CLICK))
+                parsed=parse(text,short)
+            except (ValueError, TimeoutError) as error:
+                trace.append(dict(action='warning_clipboard_unavailable',error=str(error)))
+            else:
+                method='Clipboard'
+                path.write_text(text,encoding='utf-8',newline='')
+        if parsed is None:
+            button=control(warning,7,'ThunderRT6CommandButton')
+            if wg.GetWindowText(button)!='File ...':raise ValueError('Native File export control changed')
+            post(button,wc.BM_CLICK)
+            dialog=wait(lambda:window('Enter/Select Output File'),'native File save dialog')
+            edit=control(dialog,1001,'Edit')
+            send(edit,wc.WM_SETTEXT,0,str(path.resolve()));post(dialog,wc.WM_COMMAND,1)
+            wait(lambda:path.exists() and (not wg.IsWindow(dialog) or not wg.IsWindowVisible(dialog)),'native warning file')
+            parsed=parse(path.read_text(encoding='utf-8-sig'))
+            method='File'
         if parsed['plan_label']!=short:raise ValueError('Warning export plan mismatch')
         files.append(item(path,'automatic_native_warning_export'))
-        trace.append(dict(action='warning_export',river=river,reach=reach,all_profiles=True,plan=title,counts=parsed['counts'],file=files[-1]))
+        trace.append(dict(action='warning_export',method=method,river=river,reach=reach,all_profiles=True,plan=title,counts=parsed['counts'],file=files[-1]))
         post(warning,wc.WM_CLOSE)
         if not intact(sources):raise ValueError('Native input/output changed during export')
         result.update(status='EXPORTED_PENDING_CROSSCHECK',group_tables=len(groups)*len(profiles),warning_scope='ALL_COMPUTED_PROFILES_VERIFIED_SINGLE_REACH',warning_counts=parsed['counts'])

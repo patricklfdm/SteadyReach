@@ -74,7 +74,25 @@ def inventory(geometry, answers=None):
         summary_status='CURRENT' if saved.get('input_hash')==signature(geometry,set(saved.get('locked_indices',[]))) else 'STALE'
     else:
         summary_status='STALE'
-    return dict(schema_version='bank_review_1.0',section_count=len(rows),sections=rows,
+    from .bank_focus import scale_focus
+    focus_counts = Counter()
+    for row, assessment in zip(sections, rows):
+        if not assessment['needs_attention']:
+            continue
+        method = row.get('bank_candidates') or {}
+        context = method.get('profile_context')
+        if context and context != assessment['profile_context']:
+            continue
+        if method.get('reach_inputs_hash'):
+            bound = summary_status == 'CURRENT' and method['reach_inputs_hash'] == saved.get('input_hash')
+        else:
+            bound = context == assessment['profile_context']
+        if bound:
+            focus = scale_focus(row, assessment)
+            if focus:
+                assessment['terrain_focus'] = focus
+                focus_counts[focus['focus']] += 1
+    return dict(focus_counts=dict(focus_counts), schema_version='bank_review_1.0',section_count=len(rows),sections=rows,
         priority_indices=[r['index'] for r in sorted(rows,key=lambda r:(r['priority'],r['index'])) if r['needs_attention']],
         attention_count=sum(r['needs_attention'] for r in rows),
         category_counts=dict(Counter(c for r in rows for c in r['categories'])),

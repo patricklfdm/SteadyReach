@@ -32,6 +32,16 @@ class NextReviewTests(unittest.TestCase):
         save(self.root/'preview.json',dict(source_inputs=[],evidence=[self.model['summary']],sources=[self.model['summary']]))
         self.preview=item(self.root/'preview.json')
 
+    def test_new_result_edition_preserves_manual_confirmed_and_edited_draft_scopes(self):
+        model=dict(pending_study=self.preview)
+        base=dict(status='PREVIEW_READY', action='coverage', preview=self.preview)
+        with patch.object(next_review,'current',return_value=base):
+            self.assertEqual(next_review.pending_automatic_field(model),'pending_study')
+            self.assertIsNone(next_review.pending_automatic_field(dict(pending_study={'path':'manual'})))
+        for changed in (dict(status='CONFIRMED_SEPARATELY'),dict(joint_revision={'status':'EDITED_REVISION'})):
+            with patch.object(next_review,'current',return_value=dict(base,**changed)):
+                self.assertIsNone(next_review.pending_automatic_field(model))
+
     def proposal(self,changes=1):
         return dict(entry=self.preview,preview=dict(changes=[{}]*changes,unresolved=[]),
                     plan=dict(status='REVIEW_REQUIRED',maximum_calculations=9))

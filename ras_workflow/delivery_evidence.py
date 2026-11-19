@@ -69,6 +69,16 @@ def preserve_imagery_records(acquired,full):
                 if source.stat().st_size!=e['size_bytes'] or sha(source)!=e['sha256']:
                     raise ValueError('Cached imagery acquisition record changed')
                 copy_file(source,destination)
+            # A larger mosaic may have been justified by a second live query.
+            # Carry that query forward when this edition reuses the same map.
+            query_dir=Path(full)/'Evidence/ImageryQuery'
+            if not query_dir.exists():
+                for e in read(path)['files']:
+                    if e['path'].startswith('Evidence/ImageryQuery/'):
+                        source=safe_path(path.parent,e['path'])
+                        if not source.is_relative_to(path.parent/'Evidence/ImageryQuery') or sha(source)!=e['sha256']:
+                            raise ValueError('Cached imagery selection evidence changed')
+                        copy_file(source,query_dir/source.relative_to(path.parent/'Evidence/ImageryQuery'))
             # Preserve each receipt traversed; prior packages need not be retained.
             for i,pair in enumerate(receipts):
                 for role,e in pair.items():copy_file(ROOT/e['path'],Path(full)/'Evidence/ImageryReuse'/str(i)/(role+'.json'))

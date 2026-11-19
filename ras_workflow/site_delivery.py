@@ -156,18 +156,20 @@ def cached_imagery(package,crs,bounds,allow_new_extent=False):
     """Reuse only an intact prior NAIP mosaic for the identical map extent."""
     package=safe_path(ROOT,package);verify(package)
     receipt=package/'Evidence/imagery.json';r=read(receipt)
+    inherited_coverage=r.get('coverage')
+    prior_bounds=r.get('requested_map_bounds')
     if r.get('method')=='REUSED_VERIFIED_OFFLINE_MOSAIC':r=r['acquisition']
     if r.get('status')!='READY_FOR_MAP_REVIEW':raise ValueError('Previous imagery has no verified acquisition record')
     same_crs=CRS.from_user_input(r['requested_crs']).equals(crs,ignore_axis_order=True)
     tolerance=max(bounds[2]-bounds[0],bounds[3]-bounds[1])*1e-8
-    same_extent=all(abs(a-b)<=tolerance for a,b in zip(bounds,r['requested_bounds']))
+    same_extent=all(abs(a-b)<=tolerance for a,b in zip(bounds,prior_bounds or r['requested_bounds']))
     raster=package/'GIS/Aerial.tif'
     if not raster.is_file() or sha(raster)!=r['raster']['sha256']:raise ValueError('Previous mosaic differs from its acquisition hash')
     if not same_crs or not same_extent:
         if allow_new_extent:return None
         raise ValueError('Previous imagery extent or CRS differs; acquire imagery for the revised extent')
     return dict(method='REUSED_VERIFIED_OFFLINE_MOSAIC',acquisition=r,source=r['source'],raster=item(raster),
-                previous_receipt=item(receipt),previous_manifest=item(package/'PACKAGE_MANIFEST.json'),network_requests=0)
+                requested_map_bounds=list(bounds),coverage=inherited_coverage or 'MATCHING_MAP_EXTENT',previous_receipt=item(receipt),previous_manifest=item(package/'PACKAGE_MANIFEST.json'),network_requests=0)
 
 
 def generate(summary_path,output,reuse_package=None,refresh_imagery_extent=False):
@@ -233,7 +235,7 @@ def generate(summary_path,output,reuse_package=None,refresh_imagery_extent=False
         save(full/'Evidence/delivery_settings.json',settings)
         from . import __version__
         save(full/'Evidence/delivery_generator.json',dict(version=__version__,created_utc=utc(),
-            code=[item(Path(__file__).parent/name) for name in ['site_delivery.py','delivery_evidence.py','delivery_spatial.py','qgis_runtime.py','qgis_delivery_worker.py','map_raster.py','imagery.py']]))
+            code=[item(Path(__file__).parent/name) for name in ['site_delivery.py','delivery_evidence.py','delivery_spatial.py','qgis_runtime.py','qgis_delivery_worker.py','map_raster.py','imagery.py','imagery_recovery.py']]))
         copy_file(run/'manifest.json',full/'Evidence/run_manifest.original.json')
         # Preserve exact input snapshots; original paths in logs are historical locators.
         total=0;limit=int(settings.get('max_complete_bytes',1_500_000_000))
@@ -279,12 +281,32 @@ def generate(summary_path,output,reuse_package=None,refresh_imagery_extent=False
             image_settings=settings.get('imagery',{});image=None
             if image_settings.get('mode')=='usgs_naip':
                 acquired=cached_imagery(reuse_package,crs,bounds,allow_new_extent=refresh_imagery_extent) if reuse_package else None
-                if acquired:
-                    preserve_imagery_records(acquired,full)
-                else:
+                from . import imagery_recovery
+                evidence=full/'Evidence/Imagery'
+                previous_query=run.parent/'delivery/Complete/Evidence/Imagery'
+                query=None
+                if not acquired and previous_query!=evidence:
+                    query=previous_query
+                    acquired=imagery_recovery.lookup(query,crs,bounds)
+                if not acquired:
                     from .imagery import acquire as acquire_imagery
-                    acquired=acquire_imagery(crs,bounds,full/'Evidence/Imagery',
-                        image_settings.get('max_download_bytes',40_000_000),image_settings.get('max_pixels',1600))
+                    try:
+                        acquired=acquire_imagery(crs,bounds,evidence,
+                            image_settings.get('max_download_bytes',40_000_000),image_settings.get('max_pixels',1600))
+                    except OSError:
+                        query=evidence
+                        acquired=imagery_recovery.lookup(query,crs,bounds)
+                        if not acquired:raise
+                if acquired.get('previous_manifest'):
+                    if query and acquired.get('coverage')=='COMPLETE_CONTAINMENT_MATCHING_LIVE_CATALOG':
+                        query_copy=full/'Evidence/ImageryQuery'
+                        if query==evidence:
+                            evidence.rename(query_copy)
+                        else:
+                            for name in ('acquisition.json','catalog.json','catalog.json.request.json','export.json','export.json.request.json','service.json','service.json.request.json'):
+                                copy_file(query/name,query_copy/name)
+                        acquired['live_query']=item(query_copy/'acquisition.json')
+                    preserve_imagery_records(acquired,full)
                 image=full/'GIS/Aerial.tif';copy_file(ROOT/acquired['raster']['path'],image)
                 image_settings=dict(image_settings,source=acquired['source'])
                 save(full/'Evidence/imagery.json',acquired)
@@ -330,7 +352,8 @@ def generate(summary_path,output,reuse_package=None,refresh_imagery_extent=False
             +'For recomputation, copy the folder first. Open the saved plan in Steady Flow Analysis and Compute; review warnings. Recalculation creates additional files.\n'
             +'Evidence records retain original workspace paths as historical provenance; copied inputs are under Inputs with their original relative structure. In Complete, Evidence/ReportSources/index.json maps report and sensitivity source paths to their exact packaged files. Reused imagery acquisition records remain under Evidence/Imagery.\n\n'
             +'简体中文\n用 HEC-RAS 7.0.1 打开 HEC_RAS 下的工程；有地图时进入 RAS Mapper。Graph 为展示 PDF；完整包另含可编辑 GIS、详细报告、输入及证据。\n'
-            +'保持目录完整。重新计算前先复制文件夹，再打开恒定流方案计算并复核警告。结构参数仍为条件性资料，水力 QA 待复核，不能据此认定设计合格。\n'
+            +'保持目录完整。重新计算前先复制文件夹，再打开恒定流方案计算并复核警告。请核对本次模型的输入依据和水力 QA 状态。\n'
+            +f"输入充分性 {result['input_adequacy']}；水力 QA {result['hydraulic_qa']}；工程验收 NOT_ASSESSED。\n"
             +'两个包来自同一个运行。地图是地形和模型位置展示，不是已验证的洪泛范围。\n')
         for folder in [full,minimal]:(folder/'READ_ME.txt').write_text(text,encoding='utf-8-sig')
         comparison=('PACKAGE COMPARISON / 交付包比较\n\nBoth: native inputs/results, runtime, opening instructions; when mapped: Terrain, CRS, offline imagery (if available), contour SHP and English exhibit.\n'

@@ -6,7 +6,7 @@ export's actual extent. No screenshots, guessed years or local datum shifts.
 import json
 import math
 import time
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 import numpy as np
 import rasterio
@@ -146,7 +146,8 @@ def acquire(crs, bounds, output, max_download_bytes=40_000_000, max_pixels=1600)
                 'Requested pixel spacing is not source accuracy; imagery is not a culvert survey',
                 'Source years may differ from terrain and surveyed hydraulic geometry'])
     except Exception as e:
-        state.update(status='FAILED',error=str(e));raise
+        transport=isinstance(e,(URLError,TimeoutError,ConnectionError)) and (not isinstance(e,HTTPError) or e.code in (400,404,410,429,500,502,503,504))
+        state.update(status='FAILED',error=str(e),pixel_transfer_failed=transport and (folder/'export.json.request.json').is_file());raise
     finally:
         state.update(finished_utc=utc(),download_bytes=max_download_bytes-remaining,requests=receipts,failed_requests=failures)
         save(folder/'acquisition.json',state)
