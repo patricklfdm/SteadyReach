@@ -154,10 +154,24 @@ def propose(m,g,s,maximum=1200.,reference_screen=None):
     for row in rows:
         if row['rs'] not in changed and original[row['rs']].get('terrain_review'):row['terrain_review']=original[row['rs']]['terrain_review']
     issues=preflight(m,candidate)['issues']
-    return dict(layouts=[dict(id='qa_changes',geometry=candidate,anchors=[],changes=changes,changed_sections=[i for i,r in enumerate(rows) if r['rs'] in changed],
+    layouts=[dict(id='qa_changes',geometry=candidate,anchors=[],changes=changes,changed_sections=[i for i,r in enumerate(rows) if r['rs'] in changed],
         before_sections={str(i):copy.deepcopy(r) for i,r in enumerate(g['cross_sections']) if r['rs'] in changed},
         issues=issues,warnings=['REFERENCE_WSE_COVERAGE_SCREEN'] if reference_screen else ['PRIOR_WSE_IS_A_SCREEN_NOT_NEW_HYDRAULICS'],unresolved=unresolved,
         reference_screen=reference_screen,boundary_study_count=study_count if not reference_screen else 0,
         joint_search=joint['search'],
-        can_apply=bool(changes) and not any(q.get('blocking') and q['code']!='DERIVED_INPUT_CHANGED' for q in issues),basis='QA-driven bounded repair; preserved interior samples on extension; dependent values require refresh before final calculation confirmation.')],
-        reference_screen=reference_screen,sources=[s.source]+sources,solver_run=False)
+        can_apply=bool(changes) and not any(q.get('blocking') and q['code']!='DERIVED_INPUT_CHANGED' for q in issues),basis='QA-driven bounded repair; preserved interior samples on extension; dependent values require refresh before final calculation confirmation.')]
+    if m.get('parent_revision') and g.get('model_type')=='river' and not reference_screen and old:
+        from .lateral_coverage import hydraulic_context,screen
+        readings=hydraulic_context(read(ROOT/m['parent_revision']['summary']['path']))
+        alternative,extensions,flags=screen(g,old,readings,s,maximum)
+        layouts[0]['unresolved'].extend(flags)
+        if extensions:
+            changed_rs={change['rs'] for change in extensions}
+            indices=[i for i,row in enumerate(g['cross_sections']) if row['rs'] in changed_rs]
+            blockers=preflight(m,alternative)['issues']
+            layouts.append(dict(id='lateral_coverage',geometry=alternative,anchors=[],changes=extensions,
+                changed_sections=indices,before_sections={str(i):g['cross_sections'][i] for i in indices},
+                issues=blockers,unresolved=flags,requires_lateral_review=True,warnings=['VERIFY_LATERAL_CONNECTIVITY'],
+                can_apply=not any(v.get('blocking') and v['code']!='DERIVED_INPUT_CHANGED' for v in blockers),
+                basis='A dry end borders lower ground alongside a wider, actively flowing neighboring overbank. Conditional alternative; review continuity and effectiveness before using it.'))
+    return dict(layouts=layouts,reference_screen=reference_screen,sources=[s.source]+sources,solver_run=False)

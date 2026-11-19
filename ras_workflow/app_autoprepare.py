@@ -139,12 +139,14 @@ def execute(key):
     from . import app_geometry_auto
     # With only endpoints the physical channel has not been identified through bends.
     # Build that preview after parameter refresh so it reopens with a current signature.
-    preview_route = not g['cross_sections'] and g.get('model_type') == 'river' and len(m.get('map_picks', {}).get('river', [])) == 2
+    river_picks=m.get('map_picks', {}).get('river', [])
+    preview_route = not g['cross_sections'] and g.get('model_type') == 'river' and (
+        len(river_picks)==2 or (not river_picks and m.get('public_reach')))
     progress(m, 'Preparing DEM geometry / 准备 DEM 几何')
     try:
         proposal = None if preview_route else app_geometry_auto.prepare(m, dict(
             mode='qa' if g['cross_sections'] else 'initial', **m.get('automatic_options', {})))
-        usable = [v for v in proposal['layouts'] if v['can_apply']] if proposal else []
+        usable = [v for v in proposal['layouts'] if v['can_apply'] and not v.get('requires_lateral_review')] if proposal else []
         if usable:
             layout = usable[0]
             app_geometry_auto.apply(m, dict(proposal_id=proposal['id'], token=proposal['token'],

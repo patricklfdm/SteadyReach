@@ -55,11 +55,15 @@ def verify_native(hdf, expected, profiles):
         if 'manning_by_section' in expected:
             info=h["Geometry/Cross Sections/Manning's n Info"][:];values=h["Geometry/Cross Sections/Manning's n Values"][:]
             if len(info)!=len(expected['manning_by_section']):raise ValueError('Manning section count mismatch')
-            for (start,count),wanted in zip(info,expected['manning_by_section']):
+            for index, ((start,count),wanted) in enumerate(zip(info,expected['manning_by_section'])):
                 actual=values[start:start+count]
                 wanted=np.asarray(wanted)
                 if actual.shape!=wanted.shape:raise ValueError('Manning subdivision readback shape mismatch')
-                if not np.allclose(actual[:,0],wanted[:,0],rtol=0,atol=.00051):raise ValueError('Manning station readback mismatch')
+                # Model.g01 writes stations to three decimals. HEC-RAS stores
+                # those parsed card values as float32 in its plan HDF.
+                written = np.asarray([f'{station:.3f}' for station in wanted[:, 0]], dtype=actual.dtype)
+                if not np.array_equal(actual[:, 0], written):
+                    raise ValueError('Manning station readback mismatch at RS ' + attrs[index]['RS'].decode().strip())
                 if not np.allclose(actual[:,1],wanted[:,1],rtol=0,atol=1e-7):raise ValueError('Manning coefficient readback mismatch')
         elif 'channel_n' in expected:
             rough=h["Geometry/Cross Sections/Manning's n Values"][:,1]

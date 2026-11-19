@@ -143,6 +143,14 @@ def proposals(m,c,g):
             if slopes and all(v>0 for v in slopes):
                 val=round(sum(slopes)/len(slopes),6)
                 add('g.boundary_slopes.'+reach,val,'Positive exterior bed slopes as a normal-depth energy-slope proxy; range is the sampled adjacent slopes, not a confidence interval. Check boundary distance and sensitivity.','以外部河段正坡降近似正常水深能坡；范围为相邻段坡降，不是置信区间。须检查边界距离及敏感性。',range_=[round(min(slopes),6),round(max(slopes),6)])
+            elif g.get('model_type')=='river' and factor and len(xs)>=9:
+                from .river_boundary import trend
+                record=trend(xs,reach,bed,dist)
+                if record:
+                    add('g.boundary_slopes.'+reach,record['slope'],
+                        'Conditional normal-depth proxy. The nearest bed intervals are flat or adverse. Longer exterior DEM windows show net fall. Compare known stage/backwater and test the displayed range.',
+                        '近端河床局部平坦或倒坡。较长外部地形窗口总体下落，暂以稳健趋势近似正常水深能坡；须核对已知水位、壅水和敏感性。',range_=record['range'])
+                    out['g.boundary_slopes.'+reach][-1]['slope_evidence']=record
     from .app_automation import derived, dependency
     for key, choices in derived(m,g).items():
         if key.endswith('.reach_lengths_ft') or '.groups.' in key:out[key]=choices
@@ -321,6 +329,7 @@ def binding(m):
     if m.get('road_sample'):sources.append(m['road_sample'])
     if m.get('source_analysis'):sources.append(m['source_analysis'])
     if m.get('terrain',{}).get('raster'):sources.append(m['terrain']['raster'])
+    if m.get('public_reach'):sources.append(m['public_reach'])
     if m.get('native_review'):
         p=read(ROOT/m['native_review']);sources+=[item(ROOT/m['native_review'])]+list(p['files'].values())
         data=dict(native=p)

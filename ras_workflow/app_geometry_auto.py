@@ -36,6 +36,8 @@ def prepare(m,body):
         if g['cross_sections']:raise ValueError('Initial automatic layout applies to an empty draft; existing sections use QA suggestions')
         if g.get('model_type')=='river':
             from .river_layout import initial
+            if 'reach_option' in body:
+                m=dict(m,reach_option=body['reach_option'])
         else:
             from .terrain_auto import initial
         proposal=initial(m,g,c,s,length,maximum)
@@ -66,6 +68,8 @@ def apply(m,body):
     layouts=[x for x in v['layouts'] if x['id']==body.get('layout_id')]
     if len(layouts)!=1 or not layouts[0]['can_apply']:raise ValueError('Choose a candidate without blocking geometry conflicts')
     layout=layouts[0];sp,p,d,c,old=params.objects(m);g=copy.deepcopy(layout['geometry']);changed=layout['changed_sections']
+    if layout.get('requires_lateral_review') and body.get('accept_lateral_review') is not True:
+        raise ValueError('Review floodplain connectivity before adopting the lateral extension / 请先核对外侧漫滩连通条件')
     if v['mode']=='qa':
         selected=body.get('section_indices',changed)
         if not isinstance(selected,list) or not selected or any(type(i)!=int or i not in changed for i in selected) or len(set(selected))!=len(selected):raise ValueError('Choose current proposed section changes')
@@ -121,7 +125,7 @@ def apply(m,body):
     if v['mode']=='initial':m['map_picks']=dict(m.get('map_picks',{}),**{r['id']:r['anchors_xy'] for r in layout['anchors']})
     m['revision']+=1;m.pop('pending_review',None);m.pop('run_confirmation',None)
     core.persist(m,'APPLY_AUTOMATIC_GEOMETRY',dict(proposal=entry,layout=layout['id'],changed_sections=changed,confirmed_banks=list(banks),invalidated_answers=sorted(invalid)))
-    if v['mode'] == 'initial' and layout.get('endpoint_search'):
+    if v['mode'] == 'initial' and g.get('model_type') == 'river':
         from .app_autoprepare import fill
         try:
             fill(m)

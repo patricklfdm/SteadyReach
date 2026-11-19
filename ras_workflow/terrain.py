@@ -80,6 +80,9 @@ def candidates(path,c,folder):
         if offset>=data.get('total',len(products)):break
         if not batch or offset>1000:raise ValueError('Unbounded/inconsistent catalog paging')
     if not products:raise ValueError('No products intersect acquisition AOI')
+    if t.get('required_survey'):
+        products=[p for p in products if survey_key(p['downloadURL'])==t['required_survey']]
+        if not products:raise ValueError('No adjoining products from the working DEM survey')
     selected=t.get('selected_source_ids')
     if selected:
         products=[p for p in products if p['sourceId'] in selected]
@@ -109,6 +112,34 @@ def local_info(path,c,folder):
             limitations=['External surface only; cannot identify buried culvert inverts','Input metadata inherited explicitly from project configuration'])
     save(folder/'terrain.json',result);return result
 
+def survey_key(url):
+    parts=Path(urllib.parse.urlsplit(url).path).parts
+    return parts[parts.index('Projects')+1] if 'Projects' in parts and parts.index('Projects')+1<len(parts) else None
+
+
+def mosaic(files,bbox):
+    crs=CRS.from_wkt(files[0]['source_crs']).to_2d()
+    if not crs.is_projected:raise ValueError('USGS source needs a projected CRS')
+    bounds=transform_bounds(4326,crs,*bbox,densify_pts=21)
+    resolution=1./crs.axis_info[0].unit_conversion_factor
+    width=math.ceil((bounds[2]-bounds[0])/resolution);height=math.ceil((bounds[3]-bounds[1])/resolution)
+    transform=from_origin(bounds[0],bounds[3],resolution,resolution)
+    dest=np.full((height,width),np.nan,dtype='float32');overlap=0
+    for source in files:
+        with rasterio.open(ROOT/source['source']['path']) as src:
+            native=CRS.from_user_input(src.crs).to_2d()
+            if not native.is_projected or max(src.res)*native.axis_info[0].unit_conversion_factor>1.05:
+                raise ValueError('1m dataset disagrees with actual resolution; review required')
+            if native.datum!=crs.datum:raise ValueError('DEM horizontal datums differ; review product selection')
+            temp=np.full_like(dest,np.nan)
+            reproject(rasterio.band(src,1),temp,src_transform=src.transform,src_crs=native.to_wkt(),src_nodata=src.nodata,
+                dst_transform=transform,dst_crs=crs,dst_nodata=np.nan,resampling=Resampling.bilinear)
+            valid=np.isfinite(temp);missing=~np.isfinite(dest)
+            overlap+=int((valid & ~missing).sum())
+            dest[missing & valid]=temp[missing & valid]
+    return dest,crs,transform,overlap
+
+
 def acquire(path,c,folder):
     t=c.get('terrain',{})
     if t.get('mode')=='not_applicable':
@@ -116,12 +147,15 @@ def acquire(path,c,folder):
         save(folder/'terrain.json',result);return result
     if t.get('mode')=='local':return local_info(path,c,folder)
     if t.get('mode')!='usgs':raise ValueError('Unknown terrain mode')
-    catalog=candidates(path,c,folder/'catalog');budget=t['max_download_bytes'];remaining=budget;files=[]
+    catalog=candidates(path,c,folder/'catalog');budget=t['max_download_bytes'];remaining=budget;network_bytes=0
+    groups={};best_fraction=-1.;best=None
     for p in catalog['products']:
         url=p['downloadURL'];suffix=Path(urllib.parse.urlparse(url).path).suffix.lower()
         if suffix not in ['.tif','.tiff']:raise ValueError('Only actual GeoTIFF products supported; no archive guessed')
         cache=ROOT/'data/workflow_cache'/hashlib.sha256(url.encode()).hexdigest()[:20]/Path(urllib.parse.urlparse(url).path).name
+        cached=cache.is_file() and cache.with_name(cache.name+'.request.json').is_file()
         receipt=fetch(url,cache,remaining);remaining-=receipt['size_bytes']
+        if not cached:network_bytes+=receipt['size_bytes']
         if remaining<0:raise ValueError('Aggregate selection exceeds configured download budget')
         metadata=None
         if p.get('metaUrl'):
@@ -130,43 +164,31 @@ def acquire(path,c,folder):
             except Exception as e:metadata=dict(status='FAILED',error=str(e),url=p['metaUrl'])
         with rasterio.open(cache) as src:
             if not src.crs or src.count!=1:raise ValueError('Unsupported/missing GeoTIFF CRS or bands')
-            files.append(dict(product_id=p['sourceId'],title=p['title'],url=url,source=item(cache,'USGS_original_DEM'),metadata=metadata,
+            product=dict(product_id=p['sourceId'],title=p['title'],url=url,source=item(cache,'USGS_original_DEM'),metadata=metadata,
                 source_crs=src.crs.to_wkt(),resolution=list(src.res),bounds=list(src.bounds),nodata=src.nodata,
                 publication_date=p.get('publicationDate'),last_updated=p.get('lastUpdated'),
-                catalog_description=p.get('body'),vertical_datum='unreviewed',vertical_unit='unreviewed'))
-            # A bounding box alone is not coverage evidence: inspect every native AOI cell.
-            from rasterio.windows import from_bounds
-            b=transform_bounds(4326,src.crs,*catalog['bbox'],densify_pts=21)
-            win=from_bounds(*b,src.transform).round_offsets().round_lengths()
-            values=src.read(1,window=win,boundless=True,masked=True)
-            if values.size and not np.ma.getmaskarray(values).any() and np.isfinite(values.data).all():
-                files=files[-1:] # A single complete newer tile supersedes earlier partial products; no mixed-epoch seam.
-                break
-    # Preserve the first actual product's horizontal datum and projected CRS.
-    # WGS84 is the query coordinate system, not authority to change a DEM datum.
-    crs=CRS.from_wkt(files[0]['source_crs']);crs=crs.sub_crs_list[0] if crs.is_compound else crs.to_2d()
-    if not crs.is_projected:raise ValueError('USGS source needs a projected CRS')
-    bounds=transform_bounds(4326,crs,*catalog['bbox'],densify_pts=21)
-    resolution=1.0/crs.axis_info[0].unit_conversion_factor # one meter in native horizontal units
-    width=math.ceil((bounds[2]-bounds[0])/resolution);height=math.ceil((bounds[3]-bounds[1])/resolution)
-    transform=from_origin(bounds[0],bounds[3],resolution,resolution);dest=np.full((height,width),np.nan,dtype='float32');overlap=0
-    for source in files:
-        with rasterio.open(ROOT/source['source']['path']) as src:
-            native=CRS.from_wkt(src.crs.to_wkt());native=native.sub_crs_list[0] if native.is_compound else native.to_2d()
-            factor=native.axis_info[0].unit_conversion_factor
-            if not native.is_projected or max(src.res)*factor>1.05:raise ValueError('1m dataset disagrees with actual resolution; review required')
-            if native.datum!=crs.datum:raise ValueError('Selected USGS products have different horizontal datums; explicit review required')
-            temp=np.full_like(dest,np.nan)
-            reproject(rasterio.band(src,1),temp,src_transform=src.transform,src_crs=native.to_wkt(),src_nodata=src.nodata,
-                dst_transform=transform,dst_crs=crs,dst_nodata=np.nan,resampling=Resampling.bilinear)
-            valid=np.isfinite(temp);overlap+=int((valid & np.isfinite(dest)).sum());dest[np.isnan(dest)&valid]=temp[np.isnan(dest)&valid]
+                catalog_description=p.get('body'),vertical_datum='unreviewed',vertical_unit='unreviewed')
+        group='user_selection' if t.get('selected_source_ids') else survey_key(url) or url
+        group_files=groups.setdefault(group,[]);group_files.append(product)
+        # Prefer one complete tile; otherwise only combine adjoining products
+        # from the same named survey until the actual working grid is complete.
+        options=[[product],list(group_files)] if len(group_files)>1 else [[product]]
+        for files in options:
+            grid=mosaic(files,catalog['bbox'])
+            fraction=float(np.isfinite(grid[0]).mean())
+            if fraction>best_fraction:
+                best_fraction=fraction;best=(files,grid)
+            if fraction==1.:break
+        if best_fraction==1.:break
+    if best is None:raise ValueError('No compatible USGS raster products')
+    files,(dest,crs,transform,overlap)=best;height,width=dest.shape
     valid=np.isfinite(dest)
     if not valid.any():raise ValueError('Downloaded raster has no valid AOI cells')
     out=folder/'terrain_aoi.tif'
     with rasterio.open(out,'w',driver='GTiff',height=height,width=width,count=1,dtype='float32',crs=crs,transform=transform,nodata=np.nan,compress='deflate') as d:
         d.write(dest,1);d.update_tags(VERTICAL_DATUM='UNREVIEWED',VERTICAL_UNIT='UNREVIEWED',PROVENANCE='USGS standard 1m; bilinear horizontal projection/crop; no vertical transformation')
     result=dict(status='READY_EXPLORATORY' if valid.all() else 'PARTIAL_COVERAGE',mode='usgs',bbox=catalog['bbox'],
-        raster=item(out,'working_DEM'),products=files,download_bytes=budget-remaining,valid_fraction=float(valid.mean()),
+        raster=item(out,'working_DEM'),products=files,download_bytes=budget-remaining,new_dem_download_bytes=network_bytes,valid_fraction=float(valid.mean()),
         nodata_pixels=int((~valid).sum()),overlapping_valid_cells=overlap,crs_wkt=crs.to_wkt(),resolution_m=1,
         horizontal_datum_policy='Retain original product datum; no automatic datum conversion',
         vertical_unit='UNREVIEWED',vertical_datum='UNREVIEWED',

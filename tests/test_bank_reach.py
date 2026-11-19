@@ -70,6 +70,17 @@ class ReachBanks(unittest.TestCase):
         third=bank_reach.signature(g,{2});g['cross_sections'][2]['bank_stations_ft']=[25.,75.]
         self.assertNotEqual(third,bank_reach.signature(g,{2}))
 
+    def test_nearer_supported_shoulder_outranks_remote_valley_wall(self):
+        row=geometry()['cross_sections'][0]
+        choice=local(20,95)
+        choice['right'][0].update(relief_ft=90.,score=2.)
+        choice['right'].append(dict(index=65,station_ft=65.,relief_ft=3.,score=1.,scale_support=3))
+        pairs=bank_reach._options(row,choice,False)
+        self.assertEqual(min(pairs,key=lambda p:p['cost'])['indices'],[20,65])
+        self.assertEqual(pairs[0]['hillside_comparisons'][0]['inner_ft'],65.)
+        choice['right'][1]['scale_support']=1
+        self.assertFalse(bank_reach._options(row,choice,False)[0]['hillside_comparisons'])
+
     def test_missing_profile_is_unresolved(self):
         g=geometry();g['cross_sections'][1].pop('station_ft')
         result,summary=bank_reach.propose_reach(g,[])

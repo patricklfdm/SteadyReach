@@ -2,6 +2,8 @@
 
 **English** | [简体中文](DEM_AUTOMATION_CN.md) | [No-model guide](NO_MODEL_GUIDE_EN.md)
 
+**Starting with one coordinate.** Choose **River reach (bridges excluded)** and supply the project title and location. Leave unknown numbers empty. The app searches for a directed USGS river, nearby mapped road crossings and a DEM covering the candidate bends and cross sections. Open **Automatic DEM layout / QA repair**. At a crossing, choose the intended reach by its two road names. Generate the preview, check the river and banks against the imagery, then adopt it. The parameter page shows populated values, sources, estimates and any missing inputs together. One final confirmation starts HEC-RAS. [River instructions](RIVER_REACH_EN.md)
+
 **Automatic-draft route.** The model page can stage an eligible initial layout or bounded QA correction together with dependent input estimates. Exterior end sections with unresolved bank morphology are tested at wider coverage while preserving intersection and NoData checks. Other uncertainty remains visible. Profile grids and numeric bank stations support the final inspection. [One-confirmation procedure](AUTOMATION_EN.md).
 
 Use **Automatic DEM layout / QA repair** on the Model page. The program prepares a map and profiles for one consolidated decision. It does not run HEC-RAS while proposing or adopting geometry. No reviewer name, signature or reason field is required.
@@ -60,7 +62,7 @@ For completed continuous river models, the Results page can prepare two DEM refi
 
 ## Automatic cached DEM coverage
 
-Before preparing an automatic draft, the app checks saved reach anchors or current cutlines against the requested width. When the working crop is too small, it attempts to expand from verified cached USGS originals, with no additional download. The automatic route is limited to a 2,000 m radius and 16 million cells. It preserves the old grid and every old cell; matching existing section sample records retain their old evidence and are rebound to the expanded raster. Geometry, banks, units and datum do not change during this coverage step.
+Before preparing an automatic draft, the app checks saved reach anchors or current cutlines against the requested width. When the working crop is too small, it attempts to expand from verified cached USGS originals first. For an uncovered edge it can request adjacent tiles from the same survey within the configured DEM allowance, check their vertical metadata and retain the original cells. The automatic route is limited to a 2,000 m radius and 16 million cells. It preserves the old grid and every old cell; matching existing section sample records retain their old evidence and are rebound to the expanded raster. Geometry, banks, units and datum do not change during this coverage step.
 
 The preparation summary reports the new radius or the exact coverage problem. Missing adjacent tiles, differing datums and excessive extents retain the current terrain and require a focused action. No location or reach is invented to make expansion succeed. This bounds the geometry search, not the floodplain or a hydraulic boundary. The separate manual extent and preview tools remain available.
 

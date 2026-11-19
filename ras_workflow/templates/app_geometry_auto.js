@@ -2,6 +2,16 @@
 function renderAutoGeometry(parent){
  const isInitial=!current.intake?.section_count,project=current.id;
  const box=details(parent,'Automatic DEM layout / QA repair','自动提出 DEM 布置／QA 修正',isInitial||!!current.parent_revision);
+ const reach=current.reach_proposal;
+ let reachChoice=null;
+ if(isInitial && reach && !(current.map_picks?.river?.length)){
+  if(reach.status==='CANDIDATE')box.append(el('p',reach.river+' · '+reach.upstream_crossing+' → '+reach.downstream_crossing+' · '+Math.round(reach.length_m)+' m. '+tr('Mapped endpoints and bends are ready for preview. Review the road crossings, direction and terrain coverage on the map.','端点和弯点候选已就绪。请在地图上核对道路交叉位置、流向和地形范围。'),'status'));
+  else if(reach.status==='CHOOSE_REACH'){
+   box.append(el('p',tr('The pin is at a crossing. Choose which adjoining reach to model. The program will place the endpoints and bends.','定位点靠近道路交叉口。请选择要分析的相邻河段，程序将布置端点与弯点。')));
+   const options=[['','Choose a reach','请选择河段'],...reach.options.map((r,i)=>{const label=r.upstream_crossing+' → '+r.downstream_crossing+' · '+Math.round(r.length_m)+' m';return [String(i),label,label];})];
+   reachChoice=field(box,'mapped-reach-option','Study reach','研究河段','','select',options);
+  }else box.append(el('p',tr('Public reach search needs a map selection. ','公开河网未能确定河段，请在地图上选择。 ')+reach.reason,'warning'));
+ }
  box.append(el('p',tr('The program proposes reach anchors, section locations and widths. Review the map, uncertain banks and remaining issues together. This step never runs the solver or changes the original completed project.','程序提出外部锚点、断面位置与范围。在同一处核对地图、不确定岸站及剩余问题；此步骤不启动求解器，也不修改原已完成项目。')));
  const settings=details(box,'Optional search bounds (editable)','可选：搜索范围（可修改）');
  const length=field(settings,'auto-reach-length','Exterior search length per side (ft)','每侧外部河段搜索长度（ft）',400,'number');
@@ -10,7 +20,7 @@ function renderAutoGeometry(parent){
  settings.append(el('small',tr('Search limits are algorithm controls, not accepted model limits or flood extents. Initial widths use terrain relief, not a calculated water level.','搜索上限是算法控制值，不是已确认的模型边界或洪水范围。初始宽度采用地形起伏筛查，不是计算水位。')));
  const note=el('p','', 'status'),out=el('div');box.append(note,out);let proposal=null,layout=null;
  async function request(action,body={}){if(current.id!==project)throw Error('Project changed');if(action!=='status')await saveAll();return api('geometry/auto-'+action,{id:project,revision:current.revision,...body});}
- const clear=()=>{proposal=null;out.replaceChildren();note.textContent=tr('Search bounds changed; generate a fresh proposal.','搜索范围已修改，请重新生成提案。');};length.oninput=clear;width.oninput=clear;
+ const clear=()=>{proposal=null;out.replaceChildren();note.textContent=tr('Search bounds changed; generate a fresh proposal.','搜索范围已修改，请重新生成提案。');};length.oninput=clear;width.oninput=clear;if(reachChoice)reachChoice.onchange=clear;
  let referenceEnabled=null,referencePairs=null,referenceSource=null,referenceDatum=null;
  if(!isInitial&&current.model_type==='river'){
   const reference=details(box,'Check extent against reference water levels','按参考水位检查断面范围');
@@ -27,6 +37,7 @@ function renderAutoGeometry(parent){
   note.textContent=tr('Reading real DEM and checking candidate geometry…','正在读取真实 DEM 并检查候选几何…');out.replaceChildren();
   try{
    const body={mode:isInitial?'initial':'qa',reach_length_ft:Number(length.value),maximum_width_ft:Number(width.value)};
+   if(reachChoice){if(reachChoice.value==='')throw Error(tr('Choose a mapped reach first.','请先选择研究河段。'));body.reach_option=Number(reachChoice.value);}
    if(referenceEnabled?.checked){
     const lines=referencePairs.value.trim().split(/\r?\n/).filter(v=>v.trim());
     const points=lines.map(line=>{const pair=line.trim().split(/[,，\s]+/).map(Number);if(pair.length!==2||!pair.every(Number.isFinite))throw Error(tr('Each line needs an RS and a water elevation in ft.','每行填写断面 RS 和参考水位（ft）两个数值。'));return {rs:pair[0],water_ft:pair[1]};});
@@ -86,11 +97,15 @@ function renderAutoGeometry(parent){
   if(v.issues?.length){const checks=details(detail,'Remaining geometry checks','剩余几何检查',true);table(checks,['Code','Sections'],v.issues.map(q=>[q.code,(q.sections||[]).map(i=>rows[i]?.rs).join(', ')]));}
   if(v.unresolved?.length){const remaining=details(detail,'Other unresolved QA / decisions','其他未解决 QA／判断',false);table(remaining,['RS','Issue',tr('Action','处理')],v.unresolved.map(q=>[q.rs,q.code||q.status,q.action||tr('Inspect terrain/domain or supply more evidence.','检查地形／模型范围或补充依据。')]));}
   detail.append(el('p',tr('Adoption preserves the prior run. Only the displayed proposal is adopted; unresolved QA stays open. The complete parameter review follows, and computation requires its separate run confirmation.','采用后保留原运行，仅保存本次显示的提案，未解决 QA 继续保留。随后进入完整参数核对，确认运行后才求解。'),'muted'));
-  const confirm=check(detail,'I checked direction, extent, changes and the displayed bank candidates (including uncertainty).','我已核对方向、范围、改动及显示的岸站候选（包括不确定性）。',false,on=>apply.disabled=!on||!v.can_apply);
+  if(v.requires_lateral_review){
+   detail.append(el('p',tr('Lower terrain beyond a dry edge can be disconnected from the floodplain. Review the aerial image and intervening high ground before including it in a conditional trial.','当前干端外侧还有低地。请结合航片及中间高地，判断是否可作为连通漫滩的条件性试算。'),'warning'));
+   table(detail,['RS',tr('Side','侧'),tr('Neighbor RS','相邻断面'),tr('Overbank share here / there','本断面／邻断面漫滩流量占比'),tr('Extension (ft)','延伸长度（ft）')],v.changes.map(c=>[c.rs,c.side,c.neighbor_rs,(100*c.share).toFixed(1)+'% / '+(100*c.neighbor_share).toFixed(1)+'%',Math.round(c.left_added_ft+c.right_added_ft)]));
+  }
+  const confirm=check(detail,v.requires_lateral_review?'I reviewed floodplain connectivity and accept these extensions for a conditional comparison.':'I checked direction, extent, changes and the displayed bank candidates (including uncertainty).',v.requires_lateral_review?'我已核对漫滩连通性，接受将这些延伸用于条件性对比。':'我已核对方向、范围、改动及显示的岸站候选（包括不确定性）。',false,on=>apply.disabled=!on||!v.can_apply);
   const apply=button('Adopt and review calculation inputs','采用并核对运算参数',async()=>{
    if(!confirm.checked||!proposal)throw Error(tr('Confirm the current preview first.','请先确认当前预览。'));
-   const banks={};for(const[i,[l,r]]of pairs){if(!selected.has(i)||l.value===''||r.value==='')continue;const pair=[Number(l.value),Number(r.value)],row=rows[i];const inferred=row.bank_stations_ft||row.bank_candidates?.selected_indices?.map(j=>row.station_ft[j]);if(!v.endpoint_search||!inferred||pair.some((value,j)=>value!==inferred[j]))banks[i]=pair;}
-   const saved=await request('apply',{proposal_id:proposal.id,token:proposal.token,layout_id:v.id,confirmed:true,confirm_banks:true,banks,section_indices:[...selected]});
+   const banks={};for(const[i,[l,r]]of pairs){if(!selected.has(i)||l.value===''||r.value==='')continue;const pair=[Number(l.value),Number(r.value)],row=rows[i];const inferred=row.bank_stations_ft||row.bank_candidates?.selected_indices?.map(j=>row.station_ft[j]);if((!v.endpoint_search&&!v.public_reach)||!inferred||pair.some((value,j)=>value!==inferred[j]))banks[i]=pair;}
+   const saved=await request('apply',{proposal_id:proposal.id,token:proposal.token,layout_id:v.id,confirmed:true,confirm_banks:true,accept_lateral_review:!!v.requires_lateral_review,banks,section_indices:[...selected]});
    await open(project);if(saved?.preparation_warning){notify(saved.preparation_warning,true);return;}notify(tr('Geometry saved in this draft. Check the full inputs before computing.','几何已保存到此草稿，请在计算前核对完整参数。'));await showFinalReview();
   },'primary');apply.disabled=true;detail.append(apply);
  }

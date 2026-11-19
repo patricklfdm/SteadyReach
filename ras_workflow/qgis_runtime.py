@@ -23,9 +23,15 @@ def environment(root=None, tools_config=None):
     return q,env
 
 
-def run(request,log_folder,timeout=240):
+def run(request,log_folder,timeout=1200):
     q,env=environment();folder=Path(log_folder)
-    with (folder/'qgis_stdout.log').open('wb') as out,(folder/'qgis_stderr.log').open('wb') as err:
-        r=subprocess.run([str(q/'bin/python3.exe'),str(ROOT/'ras_workflow/qgis_delivery_worker.py'),str(request)],
-            env=env,cwd=ROOT,stdout=out,stderr=err,timeout=timeout,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+    progress=folder/'qgis_stdout.log'
+    try:
+        with progress.open('wb') as out,(folder/'qgis_stderr.log').open('wb') as err:
+            r=subprocess.run([str(q/'bin/python3.exe'),str(ROOT/'ras_workflow/qgis_delivery_worker.py'),str(request)],
+                env=env,cwd=ROOT,stdout=out,stderr=err,timeout=timeout,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+    except subprocess.TimeoutExpired as exc:
+        stages=progress.read_text(encoding='utf-8',errors='replace').splitlines()
+        stage=stages[-1] if stages else 'QGIS startup'
+        raise RuntimeError(f'QGIS export exceeded {timeout:g} s during {stage}. The computed HEC-RAS results are available.') from exc
     if r.returncode:raise RuntimeError('QGIS export failed; inspect qgis_stderr.log')

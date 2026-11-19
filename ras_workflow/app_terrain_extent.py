@@ -14,6 +14,10 @@ from .common import ROOT, digest, finite, intact, item, lock, read, rel, save, u
 from .terrain import bbox_for
 
 
+class CoverageGap(ValueError):
+    """The verified cached source tiles cannot fill the requested working grid."""
+
+
 def expand_cached(previous, configuration, radius, destination, maximum_cells=None):
     if not finite(radius) or not 50 <= radius <= 5000:
         raise ValueError('Use a DEM radius of 50–5000 m / DEM 范围半径须为 50–5000 米')
@@ -57,7 +61,7 @@ def expand_cached(previous, configuration, radius, destination, maximum_cells=No
         original = old.read(1, masked=True).astype('float32').filled(np.nan)
         values[-top:old.height-top, -left:old.width-left] = original
         if not np.isfinite(values).all():
-            raise ValueError('Cached originals do not fully cover this radius. Choose a smaller radius or obtain adjoining DEM tiles. / 已缓存原始地形未完整覆盖该范围，请减小半径或补充相邻 DEM 瓦片。')
+            raise CoverageGap('Cached originals do not fully cover this radius. Choose a smaller radius or obtain adjoining DEM tiles. / 已缓存原始地形未完整覆盖该范围，请减小半径或补充相邻 DEM 瓦片。')
         profile = old.profile.copy()
         profile.update(width=width, height=height, transform=transform, dtype='float32', nodata=np.nan)
         destination.mkdir(parents=True, exist_ok=True)
@@ -110,7 +114,7 @@ def rebind_preserved_sections(geometry, previous, expanded, unit, datum):
     return result, rebound
 
 
-def expand_model(model, body, maximum_cells=None):
+def expand_model(model, body, maximum_cells=None, allow_download=False):
     key = model['id']
     if model.get('active_project') or model.get('native_review'):
         raise ValueError('Create an editable revision before expanding terrain')
@@ -121,7 +125,36 @@ def expand_model(model, body, maximum_cells=None):
     if current['raster']['sha256'] != previous['raster']['sha256']:
         raise ValueError('The draft uses a different DEM; review its terrain source before expansion')
     destination = core.folder(key) / 'preparation' / unique_id() / 'terrain'
-    expanded = expand_cached(previous, configuration, body.get('buffer_m'), destination, maximum_cells=maximum_cells)
+    try:
+        expanded = expand_cached(previous, configuration, body.get('buffer_m'), destination, maximum_cells=maximum_cells)
+    except CoverageGap:
+        if not allow_download:
+            raise
+        from . import terrain,terrain_metadata
+        config=read(ROOT/model['project'])
+        surveys={terrain.survey_key(p['url']) for p in previous.get('products',[]) if p.get('url')}
+        if config['terrain'].get('mode')!='usgs' or len(surveys)!=1 or None in surveys:
+            raise ValueError('Adjacent DEM acquisition needs one traceable USGS survey and a project download allowance')
+        config['terrain'].update(buffer_m=body['buffer_m'],required_survey=surveys.pop(),selected_source_ids=None)
+        download_dir=destination.parent/'adjoining_tiles'
+        acquisition_bytes = None
+        try:
+            acquired=terrain.acquire(ROOT/model['project'],config,download_dir)
+            acquisition_bytes = acquired['new_dem_download_bytes']
+            records=terrain_metadata.fetch_products(download_dir/'terrain.json',download_dir/'metadata')
+            metadata=terrain_metadata.review_candidate(records)
+            if (metadata['status']!='CANDIDATE_REQUIRES_REVIEW' or metadata['unit']!=model['metadata'].get('dem_vertical_unit')
+                    or metadata['datum']!=model['metadata'].get('dem_vertical_datum')):
+                raise ValueError('Adjoining DEM vertical metadata differs or is unverified; inspect new source before adoption')
+            products={p['product_id']:p for p in previous['products']+acquired['products']}
+            expanded=expand_cached(dict(previous,products=list(products.values())),configuration,body['buffer_m'],destination,maximum_cells)
+            expanded['expansion'].update(method='Original grid preserved; adjoining same-survey USGS tiles checked against matching vertical metadata',
+                                         acquisition=item(download_dir/'terrain.json'),metadata_sources=metadata['source_paths'],
+                                         new_download_bytes=acquired['new_dem_download_bytes'],acquired_product_bytes=acquired['download_bytes'])
+            save(destination/'terrain.json',expanded)
+        except (ValueError, OSError, KeyError) as error:
+            error.new_download_bytes = acquisition_bytes
+            raise
     rebound_geometry, rebound = rebind_preserved_sections(geometry, previous, expanded,
         model['metadata'].get('dem_vertical_unit'), model['metadata'].get('dem_vertical_datum'))
     checkpoint_path = sp.parent / 'terrain_checkpoint.json'

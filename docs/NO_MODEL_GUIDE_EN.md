@@ -2,6 +2,8 @@
 
 **English** | [简体中文](NO_MODEL_GUIDE_CN.md) | [Home](../README.md)
 
+**Starting with one coordinate.** Choose **River reach (bridges excluded)** and supply the project title and location. Leave unknown numbers empty. The app searches for a directed USGS river, nearby mapped road crossings and a DEM covering the candidate bends and cross sections. Open **Automatic DEM layout / QA repair**. At a crossing, choose the intended reach by its two road names. Generate the preview, check the river and banks against the imagery, then adopt it. The parameter page shows populated values, sources, estimates and any missing inputs together. One final confirmation starts HEC-RAS. [River instructions](RIVER_REACH_EN.md)
+
 For a reach without structures, choose **River reach (bridges excluded)** and follow the [river guide](RIVER_REACH_EN.md). It removes culvert/road fields and requires channel-bed representation and active boundary conditions. The crossing-specific steps below apply to culvert projects.
 
 Use **Prepare an automatic draft** after source import and crossing/metadata checks. It stages geometry and labelled estimates together. Resolve highlighted issues, then use the single final parameter confirmation. The tools below provide detailed inspection and correction routes. [Automatic preparation](AUTOMATION_EN.md).

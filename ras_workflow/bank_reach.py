@@ -8,6 +8,7 @@ from .banks import propose, channel_origin
 from .common import digest, finite
 
 SETTINGS = dict(window_ft=6., center_search_fraction=.1, distance_penalty=1.)
+METHOD = 'reach_bank_dynamic_programming_v2'
 
 
 def _pair(row, indices, cost, source='local_slope_breaks'):
@@ -39,10 +40,24 @@ def _options(row, proposal, fixed):
             if not left['index']<bottom<right['index']:
                 continue
             cost = 0.
+            hillside=[]
             for side, value in [('left',left),('right',right)]:
                 best = max(c['score'] for c in proposal[side])
                 cost += math.log(best/value['score'])+.7*(3-value['scale_support'])
-            result.append(_pair(row,[left['index'],right['index']],cost))
+                # A high valley wall can produce a stronger break than the
+                # near-channel shoulder. Apply a soft penalty only when a
+                # competing inner break is independently visible at two scales.
+                toe=x[bottom]
+                inner=[v for v in proposal[side] if v['scale_support']>=2
+                       and abs(v['station_ft']-toe)*2<abs(value['station_ft']-toe)
+                       and .5<=v['relief_ft']<value['relief_ft']/4]
+                if inner:
+                    alt=max(inner,key=lambda v:v['score'])
+                    cost+=min(4.,math.log(value['relief_ft']/alt['relief_ft']))
+                    hillside.append(dict(side=side,outer_ft=value['station_ft'],inner_ft=alt['station_ft']))
+            pair=_pair(row,[left['index'],right['index']],cost)
+            pair['hillside_comparisons']=hillside
+            result.append(pair)
     return result
 
 
@@ -95,7 +110,7 @@ def propose_reach(geometry, locked=None):
     local = [propose(row,SETTINGS) for row in rows]
     result = copy.deepcopy(local)
     options = [_options(row,p,index in fixed) for index,(row,p) in enumerate(zip(rows,local))]
-    summary = dict(method='reach_bank_dynamic_programming_v1', settings=SETTINGS,
+    summary = dict(method=METHOD, settings=SETTINGS,
                    section_count=len(rows), section_ids=[dict(index=i,reach_id=r.get('reach_id'),rs=r.get('rs')) for i,r in enumerate(rows)],
                    continuity_weight=1., tested_weights=[.5,1.,2.], locked_indices=sorted(fixed),
                    interpolated_indices=[], changed_local_choices=[], weight_sensitive_indices=[])
@@ -149,6 +164,8 @@ def propose_reach(geometry, locked=None):
                 continue
             value = options[index][selected[1][position]]
             reasons = list(local[index]['reasons'])
+            alternatives=[q for opt in options[index] for q in opt.get('hillside_comparisons',[])]
+            if alternatives:reasons.append('COMPARE_INNER_SHOULDER_AND_VALLEY_WALL')
             if local[index].get('selected_indices')!=value['indices']:
                 reasons.append('REACH_CONTINUITY_CHANGED_LOCAL_CHOICE')
                 summary['changed_local_choices'].append(index)
@@ -166,7 +183,8 @@ def propose_reach(geometry, locked=None):
                 reasons=list(dict.fromkeys(reasons)), reach_inputs_hash=input_hash,
                 continuity=dict(weight=1.,tested_weights=[.5,1.,2.],segment_rs=[rows[i]['rs'] for i in segment],
                     source=value['source'],interpolation_neighbors=value.get('neighbors',[]),
-                    selected_local_cost=value['cost'], weight_sensitive=sensitive),
+                    selected_local_cost=value['cost'], weight_sensitive=sensitive,
+                    hillslope_candidates=list({(q['side'],q['outer_ft'],q['inner_ft']):q for q in alternatives}.values())),
                 basis='Morphological candidates ranked jointly along the reach using slope breaks, scale support and a soft bank-continuity cost. Saved user banks act as fixed controls. Isolated missing interior pairs may use labelled neighbor interpolation. Inspect local splits, terraces and uncertain banks.',
                 basis_zh='结合坡折、多尺度支持和岸线连续性，对全河段候选共同排序。已存人工岸站作为固定控制；孤立缺失的内部断面可采用带标注的邻断面插值。请核对局部分汊、阶地及不确定岸站。')
     # Preserve the existing, explicitly assumed end-section extrapolation route.
@@ -191,7 +209,7 @@ def signature(geometry,fixed):
     sections = [dict(rs=r.get('rs'),reach_id=r.get('reach_id'),center=r.get('center_xy'),cutline=r.get('cutline_xy'),
         stations=r.get('station_ft'),elevations=r.get('elevation_ft'),locked_banks=r.get('bank_stations_ft') if i in fixed else None)
         for i,r in enumerate(geometry['cross_sections'])]
-    return digest(dict(method='reach_bank_dynamic_programming_v1',settings=SETTINGS,sections=sections,
+    return digest(dict(method=METHOD,settings=SETTINGS,sections=sections,
         crs=geometry.get('horizontal_crs'),faces={k:(geometry.get('structure') or {}).get(k) for k in ('us_xs_rs','ds_xs_rs')}))
 
 

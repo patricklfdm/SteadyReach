@@ -1,10 +1,10 @@
-"""Bounded cached-DEM coverage for the geometry the user has asked to prepare."""
+"""Plan terrain coverage and retain the original grid when extending the study area."""
 import math
 
 from pyproj import CRS
 from rasterio.warp import transform_bounds
 
-from .common import ROOT, finite
+from .common import ROOT, finite, read, intact
 from .terrain import bbox_for
 
 
@@ -26,6 +26,12 @@ def plan(model, geometry, config, info, maximum=800., length=400.):
     else:
         kinds = ('river',) if model.get('model_type') == 'river' else ('upstream', 'downstream', 'inlet', 'outlet', 'road')
         points = [p for kind in kinds for p in model.get('map_picks', {}).get(kind, [])]
+        if not points and kinds==('river',) and model.get('public_reach') and intact([model['public_reach']]):
+            from pyproj import Transformer
+            candidate=read(ROOT/model['public_reach']['path'])
+            choices=candidate.get('options',[candidate]) if candidate.get('status') in ('CANDIDATE','CHOOSE_REACH') else []
+            converter=Transformer.from_crs(4326,crs,always_xy=True)
+            points=[converter.transform(*p) for choice in choices for p in choice['anchor_lonlat']]
         if not points:
             return dict(status='NO_EXPLICIT_EXTENT', new_download_bytes=0)
         padding = (maximum/2 + (40. if model.get('model_type') == 'river' else length))/factor
@@ -70,11 +76,11 @@ def ensure(model, options=None):
             return dict(request,status='UNAVAILABLE',reason='DRAFT_TERRAIN_DIFFERS')
         old = model['terrain']['raster']
         updated = app_terrain_extent.expand_model(model,dict(revision=model['revision'],buffer_m=request['buffer_m']),
-                                                 maximum_cells=request['maximum_cells'])
+                                                 maximum_cells=request['maximum_cells'],allow_download=True)
         return dict(request,status='EXPANDED',previous_raster=old,raster=updated['terrain']['raster'],
-                    old_cells_preserved=True)
+                    new_download_bytes=updated['terrain'].get('expansion',{}).get('new_download_bytes',0),
+                    acquisition=updated['terrain'].get('expansion'),old_cells_preserved=True)
     except (ValueError, OSError, KeyError) as error:
-        # The old crop and drafts remain usable. A failed bounded attempt does
-        # not authorize new downloads, datum changes, or an unbounded search.
+        # A failed acquisition can transfer bytes before a raster is adopted.
         return dict(status='UNAVAILABLE',reason='CACHED_EXPANSION_UNAVAILABLE',error=str(error),
-                    new_download_bytes=0,geometry_changed=False)
+                    new_download_bytes=getattr(error,'new_download_bytes',0),geometry_changed=False)

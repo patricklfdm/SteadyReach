@@ -215,6 +215,17 @@ def prepare(key):
     if old and old.get('raster') and intact([old['raster']]):
         m.update(status='INPUTS_READY',phase='SUPPLY_MISSING_INPUTS',errors=[]);persist(m);return
     dest=f/'preparation'/unique_id();dest.mkdir(parents=True)
+    if m.get('model_type') == 'river' and c['terrain'].get('mode') == 'usgs' and not m.get('map_picks', {}).get('river'):
+        from .public_reach import discover
+        m['phase']='Finding river bends and crossing limits / 正在查询河道弯点及道路交叉位置'
+        persist(m)
+        entry=discover(c['location'], dest/'public_reach')
+        candidate=read(ROOT/entry['path'])
+        m['public_reach']=entry
+        if candidate['status'] in ('CANDIDATE','CHOOSE_REACH'):
+            c=copy.deepcopy(c)
+            c['terrain']['buffer_m']=max(c['terrain']['buffer_m'],candidate['buffer_m'])
+        persist(m,'PUBLIC_REACH_SEARCH',dict(candidate=entry,status=candidate['status']))
     t=terrain.acquire(cp,c,dest/'terrain');m['terrain']=t
     records=[]
     try:
@@ -373,6 +384,13 @@ def worker(record):
             elif job['action'] in ('acquire','analyze'):
                 from .app_acquisition import analyze
                 analyze(key,network=job['action']=='acquire')
+                updated=model(key)
+                if job['action']=='acquire' and updated.get('public_reach') and updated.get('terrain') and not updated.get('map_picks',{}).get('river'):
+                    from .terrain_extent_auto import ensure
+                    extent=ensure(updated)
+                    updated=model(key)
+                    updated['reach_terrain_check']=extent
+                    persist(updated,'RECHECK_DISCOVERED_REACH_COVERAGE',extent)
             elif job['action']=='catalog':
                 from .app_catalog import acquire as acquire_catalog
                 acquire_catalog(key)
@@ -439,6 +457,8 @@ def view(key,detail=True):
             if not process_alive(task.get('pid')):result.update(status='INTERRUPTED',errors=['The worker stopped; saved inputs and outputs remain. Retry the task.'])
             else:result['status']='PROCESSING'
     if not detail:return result
+    if m.get('public_reach') and intact([m['public_reach']]):
+        result['reach_proposal']=read(ROOT/m['public_reach']['path'])
     if m.get('active_check_batch'):
         from .app_check_batch import progress
         result['check_batch_progress']=progress(m)

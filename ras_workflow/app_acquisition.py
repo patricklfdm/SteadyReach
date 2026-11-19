@@ -50,6 +50,13 @@ def discover(m,out):
     from .source_fetch import Download,CATALOG,MA_RELEASE,MA_SURVEY,search_url,survey_members,resolve_public_archive,PublicDownloadRequired
     c=read(ROOT/m['project']);loc=c.get('location');attempts=[];links=[];download=Download()
     if not loc:return [dict(route='public_catalog',status='NEEDS_COORDINATES')],[]
+    if m.get('model_type')=='river' and not m.get('map_picks',{}).get('river'):
+        old=m.get('public_reach')
+        previous=read(ROOT/old['path']) if old and intact([old]) else {}
+        if previous.get('status') not in ('CANDIDATE','CHOOSE_REACH') and m.get('source_analysis'):
+            from .public_reach import discover as discover_reach
+            progress(m,'Retrying public river and road layers / 正在重新查询公开河网及道路')
+            m['public_reach']=discover_reach(loc,out/'public_reach')
     progress(m,'Searching USGS source catalog / 正在查询 USGS 资料目录')
     url=search_url(loc['latitude'],loc['longitude'])
     try:
@@ -60,6 +67,14 @@ def discover(m,out):
     from .source_fema import discover as discover_fema
     fema_attempts,fema_links=discover_fema(m,loc,out,download)
     attempts+=fema_attempts;links+=fema_links
+    if m.get('model_type')=='river' and 32<=loc['latitude']<=42.1 and -125<=loc['longitude']<=-114:
+        from .california_flow import lookup
+        entry=m.get('public_reach')
+        reach=read(ROOT/entry['path']) if entry and intact([entry]) else {}
+        try:
+            attempts.append(lookup(loc,reach,out,download))
+        except (OSError,ValueError,KeyError) as error:
+            attempts.append(dict(route='CA_USGS_gage_frequency',status='LOOKUP_FAILED',error=str(error)))
     # A verified tabular provider. Other catalog records are not coerced into its schema.
     if not (41<=loc['latitude']<=43 and -74<loc['longitude']<-69):
         attempts.append(dict(route='MA_30_crossing_inventory',status='OUTSIDE_PROVIDER_COVERAGE'));return attempts,links
@@ -111,6 +126,13 @@ def analyze(key,network=False,reuse_failed=False):
         record=dict(field=field,value=value,basis=basis,evidence_class=classification,source=source,auto_eligible=auto,**extra)
         record['candidate']=digest(record);record['condition']=dict(en=basis,zh='资料提取候选：'+basis)
         candidates.append(record)
+    for attempt in attempts:
+        if attempt.get('route')=='CA_USGS_gage_frequency' and attempt.get('matches') and intact(attempt['sources']):
+            matches_at_gages=attempt['matches']
+            for match in matches_at_gages:
+                candidate(flow_field,match['value'],match['basis'],attempt['sources'][-1],match['evidence_class'],
+                          auto=len(matches_at_gages)==1 and match['distance_m']<=25,
+                          sources=attempt['sources'],requires_applicability_review=len(matches_at_gages)>1)
     for i,entry in enumerate(m['attachments']):
         progress(m,f'Inspecting material {i+1}/{len(m["attachments"])} / 解析资料：'+entry['original_name'])
         if not intact([entry]):

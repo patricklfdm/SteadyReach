@@ -1,7 +1,8 @@
 """Continuous river candidates between explicit upstream/downstream reach anchors."""
 import copy
 import numpy as np
-from .common import item, save, unique_id, ROOT
+from .common import item, read, save, unique_id, ROOT, intact
+from pyproj import Transformer
 from .terrain_auto import adaptive_sections
 from .alignment import corridor_grid
 from .banks import annotate
@@ -61,6 +62,22 @@ def trace(anchors, sampler):
 
 def initial(m, g, c, sampler, length, maximum):
     anchors = m.get('map_picks', {}).get('river', [])
+    sources=[]
+    public=None
+    entry=m.get('public_reach')
+    if not anchors and entry and intact([entry]):
+        public=read(ROOT/entry['path'])
+        if public['status']=='CHOOSE_REACH':
+            index=m.get('reach_option')
+            if type(index)!=int or not 0<=index<len(public['options']):
+                raise ValueError('Choose the upstream and downstream road names from the mapped reach list / 请在候选河段列表中选择道路组合')
+            public=dict(public['options'][index],sources=public['sources'])
+        if public['status']=='CANDIDATE':
+            sources=[entry]+public['sources']
+            if not intact(sources):
+                raise ValueError('Mapped reach evidence changed; search again or pick the intended reach')
+            transform=Transformer.from_crs(4326,sampler.crs,always_xy=True)
+            anchors=[list(transform.transform(*point)) for point in public['anchor_lonlat']]
     if len(anchors) < 2:
         raise ValueError('Mark the river upstream → downstream between the two bridges (at least two points; add bend points) / 请先沿流向点选桥间河道，至少两点，弯道处加点')
     a = np.asarray(anchors, float)
@@ -68,7 +85,8 @@ def initial(m, g, c, sampler, length, maximum):
         raise ValueError('Finite river anchor pairs required')
     path = ROOT/m['session']
     source = path.parent/'river_anchor_records'/(unique_id()+'.json')
-    save(source, dict(anchors_xy=anchors,crs=sampler.crs.to_string(),basis='User-selected continuous reach, ordered upstream to downstream; excludes bridge structures',model_type='river'))
+    basis=public['basis'] if sources else 'User-selected continuous reach, ordered upstream to downstream; excludes bridge structures'
+    save(source, dict(anchors_xy=anchors,crs=sampler.crs.to_string(),basis=basis,sources=sources,model_type='river'))
     line, _, ev = trace(a, sampler)
     endpoint_search = ev.get('endpoint_search') or {}
     needs_bend = endpoint_search.get('needs_bend_anchor', False)
@@ -95,6 +113,13 @@ def initial(m, g, c, sampler, length, maximum):
                 issues=issues,warnings=['VERIFY_BRIDGE_BOUNDARY_EFFECTS','VERIFY_SUBMERGED_CHANNEL_GEOMETRY'],
                 changed_sections=list(range(len(rows))),missing_heights=sum(v is None for r in rows for v in r['elevation_ft']),can_apply=not issues and not needs_bend,
                 basis='Adaptive sections and bank candidates from DEM; final user confirmation required')
+    if sources:
+        layout['public_reach']={key:public[key] for key in ('river','upstream_crossing','downstream_crossing','length_m','buffer_m','inset_m')}
+        layout['seed'].update(basis=basis,sources=sources+[item(source)])
+        z=sampler.sample(a)
+        if not np.isfinite(z).all() or float(z[-1])>float(z[0])+1:
+            layout['warnings'].append('REVIEW_MAPPED_FLOW_DIRECTION_AND_DEM_ENDPOINTS')
+            layout['can_apply']=False
     if endpoint_search:
         layout['endpoint_search'] = endpoint_search
-    return dict(layouts=[layout],failures=[],sources=[sampler.source,item(source)],solver_run=False)
+    return dict(layouts=[layout],failures=[],sources=[sampler.source,item(source)]+sources,solver_run=False)
