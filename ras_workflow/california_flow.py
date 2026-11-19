@@ -61,7 +61,7 @@ def station_on_river(station_name, river_name):
     suffix = name[len(river):]
     if not suffix:
         return True
-    return suffix.startswith(' ') and suffix.split()[0] in {'at','near','above','below','ab','bl','blw','upstream','downstream'}
+    return suffix.startswith(' ') and suffix.split()[0] in {'at','a','near','above','below','ab','abv','bl','blw','upstream','downstream'}
 
 
 def lookup(location, reach, out, download):

@@ -43,6 +43,7 @@ class MappedReachTests(unittest.TestCase):
     def test_station_matching_excludes_named_tributaries_and_diversions(self):
         for name in ('SOQUEL C AT SOQUEL CA','Soquel Creek near Soquel','Soquel Creek'):
             self.assertTrue(california_flow.station_on_river(name,'Soquel Creek'))
+        self.assertTrue(california_flow.station_on_river('MERCED R A HAPPY ISLES BRIDGE NR YOSEMITE CA','Merced River'))
         for name in ('Soquel Creek Tributary at Soquel','Soquel Creek Canal near Soquel','East Soquel Creek'):
             self.assertFalse(california_flow.station_on_river(name,'Soquel Creek'))
         with self.assertRaisesRegex(ValueError,'workbook'):
