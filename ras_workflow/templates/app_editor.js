@@ -47,6 +47,10 @@ function renderFinalReview(){
  el('p',tr('Nothing has been solved yet. Edit any field; changes cancel this confirmation. No name, reason, or signature is required.','尚未开始求解。可以修改任意字段，修改后本次确认会失效。无需姓名、理由或签名。')),
  button('← Back to preparation','← 返回准备页面',async()=>{await save();finalReview=null;await open(current.id);}));
  const state=el('p',review.ready?tr('Technical input checks passed. Assumptions remain conditional.','必要输入检查通过。假设仍属于条件性输入。'):tr('Fill the items below, then refresh this list. The solver is paused.','请补齐下列项目并刷新清单，求解器处于等待状态。'),review.ready?'status':'warning');state.id='review-state';screen.append(state);
+ if(showAcquisitionGaps(screen,current.acquisition))screen.append(button('Review source coverage and local files','查看来源覆盖和本地文件',async()=>{
+  await save();finalReview=null;await open(current.id);
+  document.querySelector('.source-hub')?.scrollIntoView({block:'start'});
+ }));
  if(!review.ready&&current.intake?.fields.some(f=>f.missing&&f.parameter_candidates?.length)){
   screen.append(button('Choose source candidates for missing inputs','集中选择缺项的资料候选',async()=>{
    await save();finalReview=null;await open(current.id);

@@ -164,6 +164,31 @@ def build(data, plots, folder, language='en', detail='full', details=None):
               len(row['wet_sections']) if 'wet_sections' in row else '—',
               row.get('diagnostics',{}).get('native_messages','—'),n(row.get('max_wse_change_ft'))] for row in result['cases']],
             [1.6,1.2,1.3,2.6])
+    checks=data.get('river_checks') or {}
+    if checks.get('comparison'):
+        d.add_heading(tr('Geometry alternatives at the same discharge','同流量下的几何修订比选'),2)
+        table(d,[tr('Case','方案'),tr('Wet sections','湿端断面数'),tr('Cleared ends','消除端点数'),tr('New wet ends (RS / side)','新增湿端（RS／左右侧）')],
+              [[tr('Fixed direction','固定方向') if k=='fixed' else tr('Rotation allowed','可旋转'),str(checks['comparison'][k]['wet_sections']),str(checks['comparison'][k]['cleared_wet_ends']),', '.join(checks['new_ends'][k]) or '—'] for k in ('fixed','rotated')],[1.5,1.1,1.1,3.])
+        for row in checks.get('changed_ends',[])[:12]:
+            side=tr('left','左') if row['side']=='L' else tr('right','右')
+            case=tr('Fixed direction','固定方向') if row['case']=='fixed' else tr('Rotation allowed','可旋转')
+            prefix=case+' · RS '+row['rs']+' · '+side
+            p(prefix+' endpoint. WSE '+n(row['stage'])+' ft, ground '+n(row['end'])+' ft, depth '+n(row['stage']-row['end'])+' ft; WSE change '+n(row['delta'])+' ft.',
+              prefix+'端点。水位 '+n(row['stage'])+' ft，地面 '+n(row['end'])+' ft，过水深度 '+n(row['stage']-row['end'])+' ft，水位变化 '+n(row['delta'])+' ft。')
+    if checks.get('screen'):
+        d.add_heading(tr('Field measurements and event coverage','实测资料与事件覆盖'),2)
+        table(d,[tr('Event / use','事件／用途'),tr('Elevation and datum','高程及基准'),tr('Flow cfs','流量 cfs'),tr('Nearest section','最近断面')],[
+            [r['date']+' · '+r['role'],n(r['observed_ft'])+' ft '+str(r['observed_datum'] or '—'),n(r['flow_cfs']),('RS '+r['location']['rs']+' · '+n(r['location']['distance_m'])+' m') if r['location'] else '—'] for r in checks['screen'][:20]],[2.,2.1,1.,1.6])
+        valid=[r for r in checks['events']+checks['screen'] if r['residual_ft'] is not None]
+        if valid:
+            table(d,[tr('Event date','事件日期'),'RS',tr('Observed ft','实测 ft'),tr('Calculated ft','计算 ft'),tr('Residual ft','偏差 ft')],[[r['date'],r['location']['rs'],n(r['observed_ft']),n(r['model_ft']),n(r['residual_ft'])] for r in valid[:20]],[1.6,.8,1.4,1.4,1.5])
+        else:p('No independent residual is available. Check the observation location, elevation datum and same-event discharge.','当前无法计算独立偏差。请核对测点位置、高程基准、同场洪水流量和结果。')
+        if full:
+            reasons=sorted({issue for row in checks['screen'] for issue in row['issues']})
+            if reasons:d.add_paragraph(tr('Screening findings','初筛发现')+' · '+', '.join(reasons))
+            for source in dict.fromkeys(row['source'] for row in checks['screen'] if row['source']):d.add_paragraph(source)
+            p('The complete record and any remaining rows are retained in report_data.json and in the archived source CSV. Forcing at the downstream boundary does not provide an independent observation at that section.',
+              '完整逐行记录可在 report_data.json 和归档 CSV 中查阅。下游边界输入不能用于同一断面的独立验证。')
     if full:
         if coverage_studies and not d.paragraphs[-1].text:
             spacer=d.paragraphs[-1]._p

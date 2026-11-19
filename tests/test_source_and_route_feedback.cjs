@@ -25,6 +25,18 @@ assert.equal(blocks.at(-1).expanded,true);
 fields.forEach(field=>field.parameter_candidates=[]);
 context.renderFisSelection(el());
 assert.equal(blocks.length,2);
+const makeElement=(tag,text)=>({tag,text,children:[],append(...children){this.children.push(...children);}});
+Object.assign(context,{URL,el:makeElement,sourceStatus:String});
+const panel=makeElement('main');
+const attempts=[{route:'FEMA_FIS_download',status:'DOWNLOAD_FAILED',url:'https://msc.fema.gov/portal/downloadProduct?productID=06087CV001C',error:'connection reset'},
+ {route:'inventory',status:'OUTSIDE_PROVIDER_COVERAGE'},{route:'catalog',status:'NO_CATALOG_MATCH'}];
+assert.equal(context.showAcquisitionGaps(panel,{attempts:attempts.slice(1)}),false);
+assert.equal(context.showAcquisitionGaps(panel,{attempts,documents:[]}),true);
+assert.match(JSON.stringify(panel),/06087CV001C.*connection reset/);
+assert.doesNotMatch(JSON.stringify(panel),/local PDF with this/);
+const recovered=makeElement('main');
+context.showAcquisitionGaps(recovered,{attempts,documents:[{source:{original_name:'06087CV001C.pdf'}}]});
+assert.match(JSON.stringify(recovered),/local PDF with this/);
 const editor=fs.readFileSync(path.join(templates,'app_editor.js'),'utf8');
 vm.runInContext(editor.slice(editor.indexOf('function riverBendIndex('),editor.indexOf('function renderRiverMap(')),context);
 assert.equal(context.riverBendIndex([[0,0],[10,0]],[5,3]),1);

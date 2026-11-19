@@ -52,6 +52,7 @@ def collect(summary_path, summary):
             if rows!=result['rows'] or totals!=result['totals']:raise ValueError('Revision comparison differs from native output')
             sources.extend([result[k] for k in ('study','review','table','execution')])
             data['comparison']=totals
+            data['changed_ends']=[dict(rs=r['rs'],case=k,side=side,stage=v['stage_ft'],end=v['ends_ft'][i],delta=v['delta_wse_ft'],share=v['ob_percent'][i]) for r in rows for k,v in r['variants'].items() for i,side in enumerate(('L','R')) if v['new_wet'][i]]
             data['new_ends']={k:[r['rs']+' '+side for r in rows for side,new in zip(('L','R'),r['variants'][k]['new_wet']) if new] for k in ('fixed','rotated')}
     if sources and not intact(sources):raise ValueError('River review source is incomplete or has changed')
     return data,list({x['path']:x for x in sources}.values())

@@ -106,6 +106,25 @@ function renderFisSelection(parent) {
  populate();
 }
 
+function showAcquisitionGaps(parent,acquisition){
+ const gaps=(acquisition?.attempts||[]).filter(r=>r.status?.endsWith('_FAILED')||r.status==='PUBLIC_DOWNLOAD_ACTION_REQUIRED');
+ if(!gaps.length)return false;
+ const box=el('section',undefined,'warning');
+ const heading=tr('Public sources needing attention on the last search','上次公开查询中需要留意的来源');
+ box.append(el('strong',heading+' ('+gaps.length+')'),el('p',tr('Document extraction covers files already on disk. Check the listed sources before relying on fallback values. You can retry the public search or import a local copy.','提取统计只涵盖已取得的文件。采用备选参数前，请核对下列来源，可以重试公开查询或导入本地副本。')));
+ const list=el('ul');
+ for(const row of gaps){
+  let product='';
+  if(row.url){try{product=new URL(row.url).searchParams.get('productID')||'';}catch{/* Some providers only record a route. */}}
+  const item=el('li',[row.route,product,sourceStatus(row.status),row.error||row.reason].filter(Boolean).join(' · '));
+  if(product&&(acquisition.documents||[]).some(d=>d.source?.original_name?.toLowerCase()===product.toLowerCase()+'.pdf')){
+   item.append(el('small',tr(' A local PDF with this product name is now available. Verify its contents.',' 已有同产品名的本地 PDF，可核对其内容。')));
+  }
+  list.append(item);
+ }
+ box.append(list);parent.append(box);return true;
+}
+
 function renderSources(parent){
  const a=current.acquisition,card=el('section',undefined,'card source-hub');parent.append(card);
  card.append(el('h2',tr('Find, import and inspect source material','查找、导入与核查资料')),el('p',tr('Local search and extraction retain the original files and identify parameter candidates. Automatic draft preparation fills supported values and labels estimates for the final review. Conflicting sources remain available for your choice.','在本机查询和提取资料，保留原件并识别参数候选。自动准备草稿会填入有依据的数值，并标注估计项供最终核对；来源冲突集中保留供选择。')));
@@ -119,6 +138,7 @@ function renderSources(parent){
  if(a){
   card.append(el('p',`${a.documents.length} `+tr('documents attempted','份资料已尝试解析')+` · ${a.documents.filter(d=>d.status==='EXTRACTION_FAILED').length} `+tr('failed (originals retained)','份提取失败（原件保留）')+` · ${a.candidates.length} `+tr('source candidates','项来源候选')+` · ${a.surveys.reduce((n,s)=>n+s.points.length,0)} `+tr('survey points','个测点'),'status'));
   if(a.auto_filled?.length)card.append(el('p',tr('Filled missing source-reported values: ','已填入空白资料值：')+a.auto_filled.join(', '),'status'));
+  showAcquisitionGaps(card,a);
   renderFisSelection(card);
   const attempts=details(card,'Public search coverage and attempts','公开查询范围与尝试记录',false);
   attempts.append(el('p',tr('Searches the USGS catalog, the supported Massachusetts crossing inventory, and effective FEMA FIS reports for the coordinate-matched community. Review source coverage, river location and applicable map revisions.','查询 USGS 目录、已支持的 Massachusetts 过水设施资料表，以及坐标所在社区的有效 FEMA FIS 报告。请核查来源覆盖范围、河流位置和相关地图修订。')));
