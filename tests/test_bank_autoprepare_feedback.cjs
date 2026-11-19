@@ -8,11 +8,11 @@ const context=vm.createContext({tr:(en,zh)=>chinese?zh:en,el:node,
  button(en,zh,action){actions.push(action);return node('button',chinese?zh:en)},
  document:{getElementById(id){selected=id;return null}}});
 vm.runInContext(fs.readFileSync(path.join(__dirname,'../ras_workflow/templates/app_automation.js'),'utf8'),context);
-const data={refreshed_equivalent_fields:['g.test'],bank_preparation:{staged_count:1,deferred_count:2,
+const data={refreshed_equivalent_fields:['g.test'],bank_preparation:{staged_count:1,deferred_count:2,attention_count:13,
  rows:[{index:4,rs:600,before_ft:[20,80],proposed_ft:[25,85]}]}};
 for(const lang of [false,true]){
  chinese=lang;const root=node('root');context.renderPreparedBanks(root,data);
- const text=textTree(root);assert.match(text,/600/);assert.match(text,/20.00 \/ 80.00/);assert.match(text,/25.00 \/ 85.00/);
+ const text=textTree(root);assert.ok(text.includes(lang?'当时标记需判读的断面数：13':'Sections flagged for interpretation at that time: 13'));assert.match(text,/600/);assert.match(text,/20.00 \/ 80.00/);assert.match(text,/25.00 \/ 85.00/);
  assert.ok(text.includes(lang?'此处尚未启动计算':'No calculation has started'));
  assert.ok(text.includes(lang?'当前保存值为准':'current saved values'));
 }

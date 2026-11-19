@@ -24,7 +24,9 @@ function renderPreparedBanks(parent,prepared){
  if(extent?.status==='EXPANDED')parent.append(el('p',tr('DEM crop expanded automatically to ','DEM 裁剪已自动扩展至 ')+extent.buffer_m+tr(' m radius using verified downloaded USGS originals. Previous cells are unchanged; no new download. This is terrain coverage, not a flood boundary.',' 米半径，采用已核验的 USGS 下载原件。旧栅格值保持不变，无新增下载；该范围是地形覆盖，不是洪水边界。'),'status'));
  if(extent?.status==='UNAVAILABLE')parent.append(el('p',tr('Automatic DEM expansion needs attention: ','自动扩展 DEM 需要处理：')+(extent.error||extent.reason)+tr(' Saved terrain remains. Review the extent or obtain adjoining data.',' 已保存地形保留，请核对范围或补充相邻资料。'),'warning'));
  const data=prepared.bank_preparation;if(!data)return;
- parent.append(el('p',tr('Automatic bank draft: ','自动岸站草稿：')+data.staged_count+tr(' pairs staged · ',' 组已填入 · ')+data.deferred_count+tr(' candidates still need a choice.',' 组候选仍需判断。'),'status'));
+ const counts=tr('Last automatic preparation: ','上次自动准备：')+data.staged_count+tr(' bank pairs staged, ',' 组岸站已填入，')+data.deferred_count+tr(' replacement proposals deferred.',' 项替换建议暂缓。');
+ const flags=Number.isInteger(data.attention_count)?tr(' Sections flagged for interpretation at that time: ',' 当时标记需判读的断面数：')+data.attention_count:'';
+ parent.append(el('p',counts+flags,'status'));
  const count=prepared.refreshed_equivalent_fields?.length||0;
  if(count)parent.append(el('p',count+tr(' unchanged dependent values refreshed automatically.',' 项数值及依据未变的关联参数已自动更新。'),'muted'));
  if(!data.rows.length)return;
@@ -152,7 +154,7 @@ function renderBankBatch(parent,review){
     const leaders=info.leading_ft.map(v=>Number.isFinite(v)?v.toFixed(1):'—');
     evidence.append(el('p',name+' · '+tr('Leading station (ft): ','各窗口首选岸站（ft）：')+leaders.join(' / ')));
     for(const choice of info.options.filter(v=>v.station_ft!==info.saved_ft)){
-     const caption=name+' '+choice.station_ft+' ft';
+     const caption=name+' '+choice.station_ft.toFixed(3)+' ft';
      const btn=button(caption,caption,async()=>{
       const candidate=bank.slice();candidate[k]=choice.index;
       if(!bankPairReady(row,candidate))throw Error(tr('Select an interior sample for the opposite bank and check the bank order.','请为另一侧选择内部样点，并检查左右岸顺序。'));
