@@ -114,6 +114,36 @@ def rebind_preserved_sections(geometry, previous, expanded, unit, datum):
     return result, rebound
 
 
+def acquisition_origin(model, current):
+    """Find the verified USGS tiles behind a computed case's identical working DEM."""
+    expected=current['raster']['sha256']
+    owner=model
+    seen=set()
+    while owner['id'] not in seen:
+        seen.add(owner['id'])
+        other=owner.get('terrain') or {}
+        raster=other.get('raster') or {}
+        if raster.get('sha256')!=expected:
+            break
+        products=other.get('products') or []
+        config_path=ROOT/owner['project']
+        link=other.get('usgs_configuration')
+        if link:
+            if not intact([link]):
+                raise ValueError('Original USGS acquisition configuration changed')
+            config_path=ROOT/link['path']
+        config=read(config_path)
+        if products and config['terrain'].get('mode')=='usgs':
+            if not intact([raster]+[p['source'] for p in products]):
+                raise ValueError('USGS originals or original crop changed; review terrain sources')
+            return dict(copy.deepcopy(other),raster=current['raster'],usgs_configuration=link or item(config_path)),config
+        parent_key=(owner.get('parent_revision') or {}).get('project_id')
+        if not parent_key:
+            break
+        owner=core.model(parent_key)
+    return current,read(ROOT/model['project'])
+
+
 def expand_model(model, body, maximum_cells=None, allow_download=False):
     key = model['id']
     if model.get('active_project') or model.get('native_review'):
@@ -124,6 +154,7 @@ def expand_model(model, body, maximum_cells=None, allow_download=False):
     previous = copy.deepcopy(model['terrain'])
     if current['raster']['sha256'] != previous['raster']['sha256']:
         raise ValueError('The draft uses a different DEM; review its terrain source before expansion')
+    previous,acquisition_config=acquisition_origin(model,previous)
     destination = core.folder(key) / 'preparation' / unique_id() / 'terrain'
     try:
         expanded = expand_cached(previous, configuration, body.get('buffer_m'), destination, maximum_cells=maximum_cells)
@@ -131,7 +162,7 @@ def expand_model(model, body, maximum_cells=None, allow_download=False):
         if not allow_download:
             raise
         from . import terrain,terrain_metadata
-        config=read(ROOT/model['project'])
+        config=copy.deepcopy(acquisition_config)
         surveys={terrain.survey_key(p['url']) for p in previous.get('products',[]) if p.get('url')}
         if config['terrain'].get('mode')!='usgs' or len(surveys)!=1 or None in surveys:
             raise ValueError('Adjacent DEM acquisition needs one traceable USGS survey and a project download allowance')

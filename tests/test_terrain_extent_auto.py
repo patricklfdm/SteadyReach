@@ -1,3 +1,4 @@
+from pathlib import Path
 """Coverage planning is bounded; cached expansion never changes saved engineering inputs."""
 import copy
 import unittest
@@ -68,6 +69,19 @@ class AutomaticExtentTests(unittest.TestCase):
         self.assertEqual(result['status'],'EXPANDED')
         self.assertTrue(result['old_cells_preserved'])
         self.assertEqual(expand.call_args.kwargs['maximum_cells'],16_000_000)
+
+    def test_study_revision_recovers_only_identical_ancestor_terrain(self):
+        unit={'raster':{'sha256':'same','path':'study_copy.tif'}}
+        parent={'id':'root','project':'original.json','terrain':{
+            'raster':{'sha256':'same','path':'original.tif'},'products':[{'source':{'sha256':'tile'}}]}}
+        child={'id':'study','project':'child.json','terrain':unit,'parent_revision':{'project_id':'root'}}
+        config=lambda path:{'terrain':{'mode':'usgs' if path.name=='original.json' else 'local'}}
+        with patch.object(app_terrain_extent,'read',side_effect=config),patch.object(app_terrain_extent.core,'model',return_value=parent),patch.object(app_terrain_extent,'intact',return_value=True),patch.object(app_terrain_extent,'item',return_value={'path':'original.json','sha256':'input'}):
+            working,source=app_terrain_extent.acquisition_origin(child,unit)
+            self.assertEqual(working['raster'],unit['raster'])
+            self.assertEqual(source['terrain']['mode'],'usgs')
+            parent['terrain']['raster']['sha256']='different'
+            self.assertEqual(app_terrain_extent.acquisition_origin(child,unit),(unit,config(Path('child.json'))))
 
     def test_missing_cached_tiles_preserve_original_model_and_return_action(self):
         m=dict(self.model,session='test.json',terrain=dict(raster=dict(sha256='old')),revision=3)
