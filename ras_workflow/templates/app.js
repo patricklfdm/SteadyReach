@@ -27,28 +27,69 @@ async function task(fn,label=tr('Working','正在处理'),source=null){
 function button(en,zh,fn,cls){const b=el('button',tr(en,zh),cls);b.type='button';b.onclick=()=>task(fn,tr(en,zh),b);return b;}
 function field(parent,id,en,zh,value='',kind='text',options=null,onchange=null){const box=el('label',undefined,'field');box.append(el('span',tr(en,zh)));let input=el(kind==='select'?'select':kind==='textarea'?'textarea':'input');input.id=id;if(kind==='select'){for(const [v,en0,zh0]of options)input.append(new Option(tr(en0,zh0),v));}else if(kind!=='textarea'){input.type=kind;if(kind==='number'){input.step='any';input.addEventListener('wheel',()=>input.blur(),{passive:true});}}input.value=value??'';if(onchange)input.addEventListener(kind==='select'?'change':'input',()=>onchange(input.value));box.append(input);parent.append(box);return input;}
 const expansionState=new Map();
-function details(parent,en,zh,open=false){const d=el('details');const key=(current?.id||'home')+'|'+(finalReview?'review':'edit')+'|'+(parent.closest('[data-key]')?.dataset.key||'')+'|'+en;d.open=expansionState.get(key)??open;d.addEventListener('toggle',()=>expansionState.set(key,d.open));d.append(el('summary',tr(en,zh)));const b=el('div');d.append(b);parent.append(d);return b;}
+function details(parent,en,zh,open=false,stateKey=en){const d=el('details');const key=(current?.id||'home')+'|'+(finalReview?'review':'edit')+'|'+(parent.closest('[data-key]')?.dataset.key||'')+'|'+stateKey;d.open=expansionState.get(key)??open;d.addEventListener('toggle',()=>expansionState.set(key,d.open));d.append(el('summary',tr(en,zh)));const b=el('div');d.append(b);parent.append(d);return b;}
 function check(parent,en,zh,value,onchange){const l=el('label',undefined,'check'),i=el('input');i.type='checkbox';i.checked=value;l.append(i,el('span',tr(en,zh)));i.onchange=()=>onchange(i.checked);parent.append(l);return i;}
 function table(parent,head,rows){const wrap=el('div',undefined,'scroll'),t=el('table'),hr=el('tr');head.forEach(h=>hr.append(el('th',h)));t.append(hr);for(const row of rows){const r=el('tr');for(const v of row)r.append(el('td',v??'—'));t.append(r);}wrap.append(t);parent.append(wrap);}
 function shell(step){$('#steps').replaceChildren();[tr('1 · Project','1 · 建立项目'),tr('2 · Model','2 · 确认模型'),tr('3 · Results','3 · 查看结果')].forEach((s,i)=>$('#steps').append(el('span',s,i===step?'active':'')));$('#language').textContent=lang==='zh'?'English':'简体中文';$('#subtitle').textContent=tr('HEC-RAS · Local computation','HEC-RAS · 本机计算');$('#foot').textContent=tr('1D steady rivers and culverts. Actual HEC-RAS results; assumptions and unresolved checks remain visible. No engineering certification is implied.','1D 恒定流河道与涵洞分析。使用真实 HEC-RAS；保留估计项与未闭合检查，不自动认定设计合格。');$('#screen').replaceChildren();}
 const stateLabel=s=>({NEW:tr('New','新建'),PROCESSING:tr('Processing','处理中'),INPUTS_READY:tr('Complete the model','补齐模型'),RESULTS_READY:tr('Computed · review limitations','已计算 · 请查看限制'),RESULTS_READY_MAP_PENDING:tr('Computed · map export needs attention','已计算 · 地图导出待处理'),NEEDS_ATTENTION:tr('Needs attention · draft retained','需处理 · 草稿已保留'),ABANDONED:tr('Abandoned · files retained','已放弃 · 文件保留'),INTERRUPTED:tr('Interrupted · retry available','已中断 · 可重试')}[s]||s);
 async function home(){clearTimeout(poll);current=null;dirty=false;mapData=null;shell(0);const screen=$('#screen');screen.append(el('h1',tr('A steady-flow model, with fewer steps','更少步骤，完成恒定流计算')),el('p',tr('Start from a location or a native HEC-RAS model. Supply missing engineering values on one model page.','从坐标或已有 HEC-RAS 工程开始，在一个模型页面补齐必要参数。')));const card=el('section',undefined,'card');screen.append(card);const form=el('div',undefined,'grid');card.append(form);const route=field(form,'route','Starting information','起始资料','coordinates','select',[['coordinates','Coordinates / partial information','坐标／部分资料'],['native','Existing HEC-RAS model','已有 HEC-RAS 工程']]);const modelType=field(form,'model-type','Analysis scope','分析范围','culvert','select',[['culvert','Culvert crossing','涵洞设施'],['river','River reach (bridges excluded)','纯河道（不建桥梁）']]);const title=field(form,'title','Project name','项目名称');const lat=field(form,'latitude','Latitude (WGS84)','纬度（WGS84）','','number'),lon=field(form,'longitude','Longitude (WGS84)','经度（WGS84）','','number');const q=field(form,'flow','Discharge (cfs), if known','流量（cfs，已知时填写）','','number');const more=details(card,'Optional roughness','可选：已知糙率');field(more,'channel_n','Channel Manning n','主槽糙率','','number');field(more,'overbank_n','Overbank Manning n','两侧漫滩糙率','','number');const native=el('div');card.append(native);nativeSelector(native,false);native.hidden=true;route.onchange=()=>{native.hidden=route.value!=='native';};let gis=true;check(card,'Also prepare GIS / Mapper / exhibits','同时准备 GIS、Mapper 和展示图',true,v=>gis=v);card.append(button('Prepare project','准备项目',async()=>{let body={model_type:modelType.value,route:route.value,title:title.value,latitude:lat.value,longitude:lon.value,flow_cfs:q.value,channel_n:$('#channel_n').value,overbank_n:$('#overbank_n').value,gis};if(route.value==='native')Object.assign(body,await nativeBody());const r=await api('create',body);await open(r.id);},'primary'));const saved=el('section');screen.append(saved);await renderSavedProjects(saved);}
 
+function savedProjectGroups(projects,deleted){
+ const byId=new Map([...projects,...deleted].map(project=>[project.id,project]));
+ const roots=new Map();
+ function originalId(id){
+  const path=new Set();
+  while(!roots.has(id)){
+   if(path.has(id)){
+    // Keep a damaged parent loop in one stable, recoverable entry.
+    const members=[...path];
+    id=members.slice(members.indexOf(id)).sort()[0];
+    break;
+   }
+   path.add(id);
+   const parentId=byId.get(id)?.parent_revision?.project_id;
+   if(!parentId)break;
+   id=parentId;
+  }
+  const root=roots.get(id)??id;
+  for(const member of path)roots.set(member,root);
+  return root;
+ }
+ const groups=new Map();
+ // The API supplies newest first. Keep that order, with the original first inside each entry.
+ for(const project of projects){
+  const id=originalId(project.id);
+  if(!groups.has(id))groups.set(id,{id,original:byId.get(id),versions:[]});
+  const versions=groups.get(id).versions;
+  if(project.id===id)versions.unshift(project);
+  else versions.push(project);
+ }
+ return groups.values();
+}
+
 async function renderSavedProjects(parent){
  const data=await api('state');parent.replaceChildren();
  parent.append(el('h2',tr('Saved projects','已保存的项目')));
  if(!data.projects.length)parent.append(el('p',tr('No saved projects yet.','暂无已保存项目。'),'muted'));
- for(const project of data.projects)renderProjectCard(parent,project,false,parent);
  const deleted=data.deleted_projects||[];
+ for(const group of savedProjectGroups(data.projects,deleted)){
+  const title=group.original?.title??group.id;
+  const count=group.versions.length;
+  const entry=details(parent,title+' · '+count+(count===1?' version':' versions'),title+' · '+count+' 个版本',false,'project-group/'+group.id);
+  if(!group.original)entry.append(el('p',tr('The original project is unavailable.','本机缺少原项目记录。'),'muted'));
+  else if(group.versions[0].id!==group.id)entry.append(el('p',tr('The original project is in Deleted projects.','原项目已移至回收站。'),'muted'));
+  for(const project of group.versions)renderProjectCard(entry,project,false,parent,project.id===group.id);
+ }
  if(deleted.length){
-  const trash=details(parent,'Deleted projects ('+deleted.length+')','回收站（'+deleted.length+'）');
+  const trash=details(parent,'Deleted projects ('+deleted.length+')','回收站（'+deleted.length+'）',false,'deleted-projects');
   trash.append(el('p',tr('Deleted projects keep their files on this computer and can be restored. These files still use disk space and remain available to related revisions.','回收站保留本机项目文件，可随时恢复。文件仍占用磁盘空间，关联修订版可继续使用。'),'muted'));
   for(const project of deleted)renderProjectCard(trash,project,true,parent);
  }
 }
 
-function renderProjectCard(parent,project,deleted,list){
+function renderProjectCard(parent,project,deleted,list,original=false){
  const card=el('div',undefined,'card');card.dataset.projectId=project.id;parent.append(card);
+ if(original)card.append(el('span',tr('Original','原项目'),'tag'));
  card.append(el('h3',project.title),el('p',deleted?tr('Deleted · can restore','已删除 · 可恢复'):stateLabel(project.status),'status'),el('small',project.id));
  const actions=el('div',undefined,'actions');card.append(actions);
  if(deleted){

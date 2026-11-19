@@ -12,7 +12,7 @@ Double-click `start_workflow.cmd`. Keep its console running. It opens a local br
 
 For a missing Python environment the launcher invokes the retained setup procedure. HEC-RAS must be installed and discoverable. QGIS supports editable GIS/exhibit production; LibreOffice provides PDF conversion. Do not close an unrelated open engineering project to satisfy an automated check: save/close it yourself if it prevents an owned solver session.
 
-The homepage lists saved projects. Use Open / continue after restarting the launcher. The browser address changes between sessions; open the current launcher address rather than an old bookmark.
+Under **Saved projects**, each project you create has one collapsed entry. Expand its name to see the original first, followed by QA drafts and revisions, newest first. Choose **Open / continue** on the version you want. Independently created projects with the same name have separate entries. After restarting the launcher, use the browser address it opens for that session.
 
 ## 2. Choose your starting information
 
@@ -72,6 +72,6 @@ Public-model reproduction checks software behavior, not current field conditions
 
 ## Delete and restore saved projects
 
-On the home page, choose **Delete project** beside a saved project, then **Confirm deletion**. Cancel closes the confirmation without changing the project. A running project becomes eligible after its current task finishes.
+Expand the project entry, choose **Delete project** on the version you want to remove, then **Confirm deletion**. Other versions stay in the same entry, including when you delete the original. A running version becomes eligible after its current task finishes.
 
-Deleted projects appear in the collapsed **Deleted projects** list. Choose **Restore project** to return one to the normal list. Deletion retains the files in their original location so dependent revisions keep working. The retained files continue to use disk space. This feature manages the project list through a recoverable deletion record.
+Open **Deleted projects** and choose **Restore project** to put that version back in its original entry. Files stay in their original location, so related revisions can use them and they continue to occupy disk space.

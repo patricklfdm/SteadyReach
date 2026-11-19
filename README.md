@@ -37,7 +37,7 @@ The supported calculation scope is one river/reach: either a river without struc
 
 The model page now retrieves effective FEMA FIS reports by coordinates and supports grouped river/Q100/roughness selection with page references. It searches supported public sources, parses survey CSV, PDF text/scanned pages, DOCX paragraphs/tables, KML/KMZ placemarks and labelled text, attempts local OCR, overlays survey points on the DEM and proposes values with provenance. It keeps existing values, distinguishes conflicts and failed attempts, and groups parameters in collapsed sections with a missing-item navigator. See [source assistance](docs/SOURCE_ASSIST_EN.md). Provider coverage is limited; unsupported or ambiguous site information still needs an engineer.
 
-Saved projects can be deleted from the home page and restored from **Deleted projects**. Their files remain available to dependent revisions and continue to use disk space.
+Under **Saved projects**, expand a project name to see the original and its QA drafts and revisions. Select **Open / continue** on the version you want. You can delete individual versions and restore them from **Deleted projects**.
 
 ## Your files
 
