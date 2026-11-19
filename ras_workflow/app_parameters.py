@@ -391,6 +391,14 @@ def review(m):
     if m.get('automatic_preparation') and not m.get('active_project') and not m.get('native_review'):
         from .app_autoprepare import fill
         automatic_settled=fill(m, owned_only=True)['dependencies_settled']
+    elif m.get('session') and not m.get('active_project') and not m.get('native_review'):
+        from .app_autoprepare import link_sources
+        sp,_,draft,config,geometry=objects(m)
+        linked=link_sources(draft,config,geometry,m['scenario'])
+        if linked:
+            intake.save_draft(sp,draft)
+            m['revision']+=1
+            core.persist(m,'REFRESH_INPUT_SOURCE_LABELS',dict(fields=list(linked)))
     refreshed = []
     if not m.get('native_review') and not m.get('active_project'):
         refreshed = refresh_equivalent_candidates(m)

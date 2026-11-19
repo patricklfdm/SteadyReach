@@ -40,6 +40,17 @@ class MappedReachTests(unittest.TestCase):
         self.river[0]['attributes']['flowdir']=0
         with self.assertRaisesRegex(ValueError,'directed'):self.reach(240)
 
+    def test_flow_provenance_reaches_native_configuration_and_preserves_explicit_source(self):
+        from ras_workflow import app_autoprepare,app_core
+        prefix='c.scenarios.0.profiles.0.'
+        answer={'value':13000.,'evidence_class':'assumed','basis':'USGS Table 4; conditional transfer','candidate_record':{'cell':'T281'}}
+        field={'key':prefix+'source','value':app_core.USER_SOURCE}
+        self.assertEqual(app_autoprepare.source_label(field,{prefix+'flow_cfs':answer}),answer['basis'])
+        self.assertIsNone(app_autoprepare.source_label(dict(field,value='Explicit field report'),{prefix+'flow_cfs':answer}))
+        other={'key':'c.scenarios.0.parameter_source','value':app_core.USER_SOURCE}
+        labels=app_autoprepare.source_label(other,{'c.scenarios.0.channel_n':answer})
+        self.assertIn('channel_n (assumed)',labels)
+
     def test_station_matching_excludes_named_tributaries_and_diversions(self):
         for name in ('SOQUEL C AT SOQUEL CA','Soquel Creek near Soquel','Soquel Creek'):
             self.assertTrue(california_flow.station_on_river(name,'Soquel Creek'))

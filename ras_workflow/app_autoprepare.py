@@ -50,6 +50,43 @@ def select_candidate(field, g, estimates):
     return next((c for c in choices if c['value'] == target), None)
 
 
+def source_label(field, answers):
+    """Derive the report label from the same input records used in the calculation."""
+    key=field['key']
+    parent,_,kind=key.rpartition('.')
+    if kind not in ('source','parameter_source'):
+        return None
+    generic='See the parameter input register for source files, derivations and conditional assumptions.'
+    value=field.get('value')
+    if value not in (None,'',core.USER_SOURCE,generic) and not answers.get(key,{}).get('derived_source_label'):
+        return None
+    names=('flow_cfs',) if kind=='source' else ('channel_n','overbank_n','culvert_n')
+    parts=[]
+    for name in names:
+        answer=answers.get(parent+'.'+name,{})
+        if answer.get('value') is None or not answer.get('basis'):
+            continue
+        basis=answer['basis']
+        if answer.get('candidate_record') or answer.get('automatic_preparation'):
+            parts.append(f"{name} ({answer['evidence_class']}) — {basis}" if kind=='parameter_source' else basis)
+        elif kind=='parameter_source':
+            parts.append(f"{name} ({answer.get('evidence_class','user_entered')}) — {basis}")
+    if not parts:
+        return generic if value in (None,'') or answers.get(key,{}).get('derived_source_label') else None
+    return ' | '.join(parts)
+
+
+def link_sources(draft, c, g, scenario):
+    changes={}
+    for field in intake.fields(c, g, scenario):
+        value=source_label(field, draft['answers'])
+        if value is not None and value!=field['value']:
+            draft['answers'][field['key']] = dict(value=value,evidence_class='model_setting',
+                basis='Derived from the current individual input records.',derived_source_label=True,confirmed=False)
+            changes[field['key']] = draft['answers'][field['key']]
+    return changes
+
+
 def fill(m, estimates=True, owned_only=False):
     """Resolve dependent values in memory, then save one draft transaction."""
     sp, packet, original, c, g = params.objects(m)
@@ -96,11 +133,7 @@ def fill(m, estimates=True, owned_only=False):
     c, g = intake._objects(packet, draft)
     # Derived source labels remove bookkeeping text entry while keeping the
     # individual numbers and source hashes in the input register.
-    for field in ([] if owned_only else intake.fields(c, g, m['scenario'])):
-        if field['key'].endswith(('.source', '.parameter_source')) and field['value'] in (None, ''):
-            value = 'See the parameter input register for source files, derivations and conditional assumptions.'
-            draft['answers'][field['key']] = dict(value=value, evidence_class='model_setting', basis=value, confirmed=False)
-            changes[field['key']] = draft['answers'][field['key']]
+    changes.update(link_sources(draft,c,g,m['scenario']))
     if changes:
         draft.update(consent=False, reviewer=None, basis='Automatically prepared editable draft; final user confirmation is pending.')
         intake.save_draft(sp, draft, refresh_banks=True)
