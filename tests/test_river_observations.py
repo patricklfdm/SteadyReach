@@ -8,6 +8,13 @@ from ras_workflow import river_observations as obs
 
 
 class ObservationTests(unittest.TestCase):
+    def test_native_known_stage_cannot_be_claimed_as_a_holdout_by_omitting_event_metadata(self):
+        self.geometry['boundaries']={'downstream':{'type':'known_stage','stages_ft':[18.]}}
+        event={key:v for key,v in self.event.items() if key!='downstream_ft'}
+        row=self.screen(event,y='0')
+        self.assertIn('DOWNSTREAM_STAGE_USED_AS_BOUNDARY',row['issues'])
+        self.assertFalse(row['event_eligible'])
+        self.assertIsNone(row['residual_ft'])
     def setUp(self):
         self.geometry={'horizontal_crs':'EPSG:26910','vertical_datum':'NAVD88','cross_sections':[
             {'rs':200,'cutline_xy':[[0,30],[30,30]],'station_ft':[0,100]},

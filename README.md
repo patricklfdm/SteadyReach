@@ -2,6 +2,8 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
+[Local production review and recovery](docs/LOCAL_RELEASE_EN.md) · [Measured Siletz River benchmark](examples/siletz_or/README.md)
+
 A Windows desktop workflow for one-dimensional steady-flow river and culvert analysis with HEC-RAS. Work locally through three browser screens, **Project → Model → Results**, with no AI service required.
 
 For a new model, import the available material and check the crossing and terrain metadata. Click **Prepare an automatic draft** to prepare sections, banks and labelled estimates together. Resolve highlighted issues, then confirm the complete model once. Numeric bank editing and profile grids support corrections. [Preparation guide](docs/AUTOMATION_EN.md).

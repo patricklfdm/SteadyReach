@@ -22,6 +22,14 @@ class MappedReachTests(unittest.TestCase):
         lon,lat=self.reverse.transform(*(self.origin+[x,0]))
         return public_reach.propose(lat,lon,self.river,self.roads)
 
+    def test_unnamed_leaving_branch_on_selected_reach_is_reported(self):
+        coords=[self.reverse.transform(*(self.origin+p)) for p in [[200,12],[230,80]]]
+        self.river.append(dict(attributes=dict(gnis_name=None,flowdir=1,permanent_identifier='side'),
+                               geometry={'paths':[coords]}))
+        result=self.reach(240)
+        self.assertEqual([(p['source_id'],p['direction']) for p in result['mapped_junctions']],[('side','leaving')])
+        self.assertEqual(self.reach(550)['mapped_junctions'],[])
+
     def test_pin_in_reach_supplies_ordered_endpoints_bends_and_crop(self):
         reach=self.reach(240)
         self.assertEqual((reach['upstream_crossing'],reach['downstream_crossing']),('Upper','Middle'))

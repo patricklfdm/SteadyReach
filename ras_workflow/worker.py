@@ -4,7 +4,7 @@ from pathlib import Path
 import h5py, numpy as np
 import pythoncom, win32com.client.dynamic
 from .common import *
-from .river import is_river
+from .river import is_river, check_known_stages
 
 BASE='Results/Steady/Output/Output Blocks/Base Output/Steady Profiles'
 WANTED=['W.S. Elev','E.G. Elev','Q Total','Vel Chnl','Froude # Chl','Crit W.S.',
@@ -92,7 +92,9 @@ def verify_native(hdf, expected, profiles):
         if not np.isfinite(w).all() or (np.abs(w)>1e30).any():raise ValueError('Invalid WSE output')
         if is_river(expected) and (expected.get('boundaries') or {}).get('downstream',{}).get('type')=='known_stage':
             wanted=expected['boundaries']['downstream']['stages_ft']
-            if not np.allclose(w[:,-1],wanted,rtol=0,atol=.002):raise ValueError('Known downstream water level readback mismatch')
+            path=BASE+'/Cross Sections/Additional Variables/Critical Water Surface'
+            critical=h[path][:,-1].astype(float).tolist() if path in h else None
+            check_known_stages(profiles,attrs[-1]['RS'].decode().strip(),wanted,w[:,-1].astype(float).tolist(),critical)
         checks=dict(model_type=expected.get('model_type','culvert'),profile_names=actual_names,profiles_and_flows=True,culvert_groups=len(groups),road_readback=road_check,
             barrels=[int(x['Barrels']) for x in groups],geometry_and_structure=True,no_additional_bridge=True,
             xs_count=len(attrs),roughness='verified' if 'channel_n' in expected or 'manning_by_section' in expected else 'preserved reviewed native input',

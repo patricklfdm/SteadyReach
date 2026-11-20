@@ -120,6 +120,22 @@ def propose(latitude, longitude, hydro, roads, inset_m=40.):
     segments = [(a,p) for a,p in paths(hydro,forward) if a.get('gnis_name') and a.get('flowdir') == 1]
     name, xy, ids = joined_channel(segments, pin)
     _, position = project(pin,xy)
+    # Inspect unnamed branches too. A mapped junction gives a review location,
+    # not a measured lateral discharge or proof of floodplain connectivity.
+    junctions = []
+    for attr, line in paths(hydro, forward):
+        if attr.get('permanent_identifier') in ids or attr.get('flowdir') != 1:
+            continue
+        for end, role in ((line[0], 'leaving'), (line[-1], 'entering')):
+            distance, station = project(end, xy)
+            if distance <= 2:
+                junctions.append((station, dict(direction=role, name=attr.get('gnis_name'),
+                    source_id=attr.get('permanent_identifier'), lonlat=list(backward.transform(*end)))))
+
+    def candidate(us, ds, setbacks):
+        result = reach_between(name,xy,ids,pin,backward,us,ds,setbacks)
+        result['mapped_junctions'] = [row for at,row in junctions if us[0]+setbacks[0] < at < ds[0]-setbacks[1]]
+        return result
     crossings = road_crossings(xy, paths(roads,forward))
     if len(crossings)<2:
         raise ValueError('Two named road crossings were not found; choose the intended endpoints on the map')
@@ -129,7 +145,7 @@ def propose(latitude, longitude, hydro, roads, inset_m=40.):
         for i in (nearest-1,nearest):
             if 0<=i<len(crossings)-1:
                 try:
-                    options.append(reach_between(name,xy,ids,pin,backward,crossings[i],crossings[i+1],[inset_m,inset_m]))
+                    options.append(candidate(crossings[i],crossings[i+1],[inset_m,inset_m]))
                 except ValueError:
                     continue
         if not options:
@@ -144,7 +160,7 @@ def propose(latitude, longitude, hydro, roads, inset_m=40.):
     setbacks = [min(inset_m,(position-us[0])/2),min(inset_m,(ds[0]-position)/2)]
     if min(setbacks)<5:
         raise ValueError('The point is on a road crossing. Select the intended side or pick both reach endpoints.')
-    return reach_between(name,xy,ids,pin,backward,us,ds,setbacks)
+    return candidate(us,ds,setbacks)
 
 
 def reach_between(name,xy,ids,pin,backward,us,ds,setbacks):

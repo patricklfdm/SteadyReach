@@ -18,6 +18,19 @@ def collect(summary_path, summary):
         if not intact([entry]):raise ValueError('River review evidence changed: '+entry['path'])
         sources.append(entry)
         return read(ROOT/entry['path'])
+    if model.get('extent_review'):
+        from .extent_review import current as current_extent
+        packet=current_extent(model)
+        if not packet:raise ValueError('Restore the matching flood-edge source and native runs before regenerating this review')
+        sources.append(model['extent_review'])
+        if packet['extent']:sources.append(packet['extent'])
+        data['extent_review']=dict(event=packet['event'],classification=packet['classification'],
+            common_sections=packet['common_sections'],max_wse_change=packet['max_wse_change'],
+            cases=[{k:c[k] for k in ('label','run_id','profile','flow_cfs','native_warning_count','matched','total','common_median_abs_m')} for c in packet['cases']])
+        if model.get('extent_decision'):
+            decision=load(model['extent_decision'])
+            if decision['comparison']!=model['extent_review'] or decision['summary']!=ref:raise ValueError('Review decision belongs to another edition')
+            data['extent_review']['decision']=decision
     if model.get('river_observations'):
         packet=current(model)
         if not packet:raise ValueError('Field observations differ from their saved source or baseline')

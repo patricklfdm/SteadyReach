@@ -110,12 +110,15 @@ def screen(records,summary,event=None):
         end=station_key(geom['cross_sections'][-1]['rs'])
         if (kind=='boundary_stage' or role=='boundary') and (not location or location['rs']!=end or kind not in ('boundary_stage','stage','gage_height') or role!='boundary'):
             issues.append('BOUNDARY_REQUIRES_DOWNSTREAM_OBSERVATION')
+        imposed=(geom.get('boundaries',{}).get('downstream') or {}).get('type')=='known_stage'
+        if imposed and kind in ('stage','gage_height','boundary_stage') and role in ('calibration','holdout') and location and location['rs']==end:
+            issues.append('DOWNSTREAM_STAGE_USED_AS_BOUNDARY')
         physical=list(issues)
         event_match=event and event['event']==row.get('event') and event['date']==row.get('date') and event['profile'] in profiles
         if kind!='bed':
             if not event_match:issues.append('NO_MATCHED_EVENT_RUN')
             elif q is not None and abs(profiles[event['profile']]['flow_cfs']-q)>max(1e-5,1e-7*q):issues.append('EVENT_DISCHARGE_MISMATCH')
-        if kind!='bed' and event_match and event.get('downstream_ft') is not None and location and location['rs']==end and role!='boundary':
+        if kind!='bed' and event_match and event.get('downstream_ft') is not None and location and location['rs']==end and role!='boundary' and 'DOWNSTREAM_STAGE_USED_AS_BOUNDARY' not in issues:
             issues.append('DOWNSTREAM_STAGE_USED_AS_BOUNDARY')
         calc=None
         if not issues and location:

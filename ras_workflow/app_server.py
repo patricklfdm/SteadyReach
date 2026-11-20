@@ -43,6 +43,8 @@ def create():
                     if not path.is_relative_to(ROOT/'projects') or path.suffix.lower() not in ('.pdf','.docx','.json','.txt','.csv','.png','.jpg','.jpeg'):raise ValueError('Unsupported artifact')
                     return self.send(200,path.read_bytes(),mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
                 assets={'app_warning_study.js':('app_warning_study.js','application/javascript; charset=utf-8'),'app_field_feedback.js':('app_field_feedback.js','application/javascript; charset=utf-8'),'app_floodplain.js':('app_floodplain.js','application/javascript; charset=utf-8'),'app_observations.js':('app_observations.js','application/javascript; charset=utf-8'),'observation-template.csv':('observation-template.csv','text/csv; charset=utf-8'),'app_river_checks.js':('app_river_checks.js','application/javascript; charset=utf-8'),'app_check_batch.js':('app_check_batch.js','application/javascript; charset=utf-8'),'app_spacing_review.js':('app_spacing_review.js','application/javascript; charset=utf-8'),'app_atlas.js':('app_atlas.js','application/javascript; charset=utf-8'),'app_guidance.js':('app_guidance.js','application/javascript; charset=utf-8'),'app_sensitivity.js':('app_sensitivity.js','application/javascript; charset=utf-8'),'app_geometry_auto.js':('app_geometry_auto.js','application/javascript; charset=utf-8'),'app_results.js':('app_results.js','application/javascript; charset=utf-8'),'app_automation.js':('app_automation.js','application/javascript; charset=utf-8'),'app_map.js':('app_map.js','application/javascript; charset=utf-8'),'app_section_repair.js':('app_section_repair.js','application/javascript; charset=utf-8'),'':('app.html','text/html; charset=utf-8'),'app.js':('app.js','application/javascript; charset=utf-8'),'app_editor.js':('app_editor.js','application/javascript; charset=utf-8'),'app_sources.js':('app_sources.js','application/javascript; charset=utf-8'),'app.css':('app.css','text/css; charset=utf-8')}
+                assets['app_extent.js']=('app_extent.js','application/javascript; charset=utf-8')
+                assets['app_handoff.js']=('app_handoff.js','application/javascript; charset=utf-8')
                 if route not in assets:return self.send(404,dict(error='Not found'))
                 file,mime=assets[route];self.send(200,(ROOT/'ras_workflow/templates'/file).read_bytes(),mime)
             except Exception as e:self.send(400,dict(error=str(e)))
@@ -59,10 +61,18 @@ def create():
                 if route=='create':
                     m=core.create(body)
                     if body.get('native_path') or body.get('files'):core.native_inputs(m['id'],body)
-                    result=core.launch(m['id'],'prepare')
+                    from .feasibility import OUTSIDE
+                    result = (dict(id=m['id'],status=m['status']) if m.get('production_scope',{}).get('flow_paths') in OUTSIDE
+                              else core.launch(m['id'],'prepare'))
                 else:
                     key=body['id']
                     if route in ('delete-project','restore-project'):result=core.set_deleted(key,body,deleted=route=='delete-project')
+                    elif route in ('handoff-inspect','handoff-repair'):
+                        from . import handoff
+                        result=(handoff.inspection if route=='handoff-inspect' else handoff.repair)(key,body)
+                    elif route=='pilot-clock':
+                        from .pilot_session import update
+                        result=update(key,body)
                     elif route=='spacing-diagnostics':
                         from .spacing_diagnostics import collect
                         result=collect(key,body)
@@ -82,6 +92,15 @@ def create():
                     elif route=='qa-floodplain':
                         from .section_context import collect
                         result=collect(key,body)
+                    elif route=='extent-decision':
+                        from .extent_review import disposition
+                        result=disposition(key,body)
+                    elif route in ('extent-options','extent-review','extent-current'):
+                        from . import extent_review
+                        if route=='extent-current':
+                            result=extent_review.current(extent_review.model_for(key,body))
+                        else:
+                            result=(extent_review.choices if route=='extent-options' else extent_review.analyze)(key,body)
                     elif route=='qa-atlas':
                         from .result_atlas import collect
                         result=collect(key,body)
@@ -163,10 +182,16 @@ def create():
                 if counts is not None:
                     try:
                         record(core.folder(m['id'] if route=='create' else result['id'] if route=='revision' else key),route,counts,
-                               'workflow_page' if self.headers.get('X-SteadyReach-Client')=='page' else 'local_api')
+                               'workflow_page' if self.headers.get('X-SteadyReach-Client')=='page' else 'local_api',
+                               field_names=body.get('values',{}).keys() if route=='save' and body.get('values') else None)
                     except OSError as error:
                         result=dict(result,operation_log_warning=str(error))
                 self.send(200,result)
+            except OSError as e:
+                import errno
+                if e.errno==errno.ENOSPC or getattr(e,'winerror',None) in (39,112):
+                    self.send(507,dict(error='Disk full. Free space, reopen the project to see the last saved step, then retry. / 磁盘已满，请释放空间，重新打开项目确认已保存进度后重试。'))
+                else:self.send(409,dict(error=str(e)))
             except Exception as e:self.send(409,dict(error=str(e)))
     server=ThreadingHTTPServer(('127.0.0.1',0),Handler);server.daemon_threads=True
     server.mutation_lock=threading.RLock()

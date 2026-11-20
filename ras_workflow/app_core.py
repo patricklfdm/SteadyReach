@@ -30,7 +30,7 @@ def edition_record(record):
         path = ref.get('path', '') if isinstance(ref, dict) else ''
         parts = Path(path).parts
         return len(parts) > 2 and parts[0] == 'projects' and parts[1] != record['id']
-    for field in ('river_observations', 'latest_observed_event', 'latest_geometry_comparison', 'latest_warning_study'):
+    for field in ('river_observations', 'latest_observed_event', 'latest_geometry_comparison', 'latest_warning_study','extent_review','extent_decision'):
         if inherited(record.get(field)):
             record.pop(field)
     if 'observed_event_history' in record:
@@ -75,6 +75,8 @@ def number(value,label,low=None,high=None):
 
 def create(body):
     from .inputs import template
+    from .feasibility import scope
+    project_scope = scope(body.get('production_scope', {}))
     title=str(body.get('title','')).strip()
     if not title or len(title)>160:raise ValueError('Enter a project name / 请填写项目名称')
     route=body.get('route','coordinates')
@@ -104,7 +106,7 @@ def create(body):
     save(f/'project.json',c);save(f/'initial.json',c)
     m=dict(id=key,title=title,model_type=model_type,route=route,revision=0,status='NEW',phase='CREATED',project=rel(f/'project.json'),
         scenario=c['scenarios'][0]['id'],created_utc=utc(),gis=bool(body.get('gis',lat is not None)),metadata={},attachments=evidence,
-        engineering_acceptance='NOT_ASSESSED',policy=POLICY,errors=[])
+        engineering_acceptance='NOT_ASSESSED',policy=POLICY,errors=[], production_scope=project_scope)
     for k in ['native_length_unit','vertical_datum','horizontal_crs','dem_vertical_unit','dem_vertical_datum']:
         if body.get(k):m['metadata'][k]=str(body[k])
     persist(m,'CREATE',dict(initial_information=copy.deepcopy(c),route=route))
@@ -137,12 +139,16 @@ def native_inputs(key,body):
     persist(m,'SELECT_NATIVE_INPUTS',dict(inspection=item(packet),source=str(source),selected_plan=read(packet)['selected_plan']))
     return view(key)
 
+def task_alive(job):
+    from .project_actions import process_alive
+    pids={job.get('pid'),job.get('worker_pid')} - {None}
+    return not pids or any(process_alive(pid) for pid in pids)
+
 def require_task_finished(m):
     if m.get('task'):
         job=read(ROOT/m['task'])
-        if job['status']=='RUNNING':
-            from .project_actions import process_alive
-            if process_alive(job.get('pid')):raise ValueError('A task is running; wait for it to finish / 当前任务尚未结束')
+        if job['status']=='RUNNING' and task_alive(job):
+            raise ValueError('A task is running; wait for it to finish / 当前任务尚未结束')
 
 def require_idle(m):
     if deletion_record(m['id']).exists():raise ValueError('Restore this project from Deleted projects first / 请先从回收站恢复此项目')
@@ -152,6 +158,11 @@ def require_idle(m):
 def update(key,body):
     m=model(key);require_idle(m)
     if body.get('revision')!=m['revision']:raise ValueError('This page is stale; refresh to retain the saved draft')
+    if 'production_scope' in body:
+        from .feasibility import scope
+        if m.get('active_project') or m.get('summary'):
+            raise ValueError('Change the scope on an editable revision / 请在可编辑修订版修改用途')
+        m['production_scope'] = scope(body['production_scope'])
     allowed={'native_length_unit','vertical_datum','horizontal_crs','dem_vertical_unit','dem_vertical_datum'}
     values=body.get('metadata',{})
     if set(values)-allowed:raise ValueError('Unknown metadata fields')
@@ -301,10 +312,20 @@ def check(m):
     return errors
 
 def start(key,body):
-    m=model(key);require_idle(m)
-    if body.get('revision')!=m['revision']:raise ValueError('Inputs changed; refresh before starting')
+    m=model(key)
     if body.get('start') is not True:raise ValueError('An explicit Start action is required')
     if body.get('confirmed') is not True:raise ValueError('Confirm the complete parameter list / 请确认完整参数清单')
+    if body.get('revision')!=m['revision']:raise ValueError('Inputs changed; refresh before starting')
+    # A network retry after a lost HTTP response reopens the same attempt,
+    # including after completion. A new parameter review issues a new token.
+    pointer=m.get('task')
+    if pointer and body.get('review_token') and not deletion_record(key).exists():
+        last=read(safe_path(ROOT,pointer))
+        if (last.get('project_id')==key and last.get('action')=='run' and
+            last.get('confirmed_review')==body['review_token'] and last.get('status') in ('RUNNING','FINISHED')):
+            if last['status']=='FINISHED' or task_alive(last):
+                return dict(id=key,status=m['status'],task=pointer,reused_request=True)
+    require_idle(m)
     from . import app_parameters
     app_parameters.confirm(m,body.get('review_token'))
     persist(m,'START_REQUEST',dict(policy=POLICY,metadata=m['metadata'],gis=m['gis'],revision=m['revision'],named_engineering_review=False))
@@ -378,13 +399,13 @@ def launch(key,action):
     with lock(ROOT/'status/app/launch.lock'):
         m=model(key);require_idle(m)
         if global_state.exists():
-            from .project_actions import process_alive
             previous=read(global_state)
             if previous.get('record') and (ROOT/previous['record']).exists():
                 prev=read(ROOT/previous['record'])
-                if prev['status']=='RUNNING' and process_alive(prev.get('pid')):raise ValueError('Another project is processing; keep this draft and wait')
+                if prev['status']=='RUNNING' and task_alive(prev):raise ValueError('Another project is processing; keep this draft and wait')
         f=folder(key)/'tasks'/unique_id();f.mkdir(parents=True)
         record=f/'task.json';job=dict(project_id=key,action=action,status='RUNNING',started_utc=utc(),log=rel(f/'task.log'))
+        if action=='run' and m.get('pending_review'):job['confirmed_review']=m['pending_review']['sha256']
         save(record,job)
         with (f/'task.log').open('wb') as log:
             process=subprocess.Popen([sys.executable,str(ROOT/'app.py'),'worker',rel(record)],cwd=ROOT,stdin=subprocess.DEVNULL,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
@@ -396,8 +417,13 @@ def worker(record):
     path=safe_path(ROOT,record);job=read(path);key=job['project_id'];started=time.monotonic()
     # Parent publishes its PID and model task pointer before the worker proceeds.
     for _ in range(100):
-        if model(key).get('task')==rel(path):break
+        if model(key).get('task')==rel(path) and read(path).get('pid'):break
         time.sleep(.05)
+    else:
+        job=read(path)
+        job.update(status='INTERRUPTED',finished_utc=utc(),error='Task publication was interrupted. Reopen the saved project and retry. / 任务登记中断，请重新打开已保存项目并重试。')
+        save(path,job)
+        return 1
     # A Windows virtual-environment launcher may have a different PID from
     # its actual Python worker. Retain both identities for owned substeps.
     job=read(path);job['worker_pid']=os.getpid();save(path,job)
@@ -452,7 +478,7 @@ def worker(record):
 
 def report_refresh_binding(m):
     binding={key:m.get(key) for key in ('summary','latest_study','latest_spacing','latest_coverage','latest_coverage_exports')}
-    for key in ('river_observations','observed_event_history','latest_geometry_comparison','latest_warning_study'):
+    for key in ('river_observations','observed_event_history','latest_geometry_comparison','latest_warning_study','extent_review','extent_decision'):
         if m.get(key):binding[key]=m[key]
     return binding
 
@@ -480,6 +506,10 @@ def regenerate(key,action):
         reuse=(previous or {}).get('complete',{}).get('path') if (previous or {}).get('mapped') else None
         result=generate(summary,out/'delivery',reuse_package=reuse);m['latest_delivery']=result
         if result.get('status') in ('READY_FOR_REVIEW','READY_NATIVE_ONLY','READY'):m['exports_need_refresh']=False
+        else:
+            message=result.get('error') or 'Delivery is incomplete. The original calculation and refreshed reports remain available.'
+            m.update(status='RESULTS_READY_MAP_PENDING',phase='DONE',errors=[message]);persist(m,'DELIVERY_INCOMPLETE')
+            return
     m.update(status='RESULTS_READY',phase='DONE',errors=[]);persist(m,'REGENERATE_'+action.upper())
 
 def view(key,detail=True):
@@ -488,8 +518,7 @@ def view(key,detail=True):
     if m.get('task'):
         task=read(ROOT/m['task']);result['job']=task
         if task['status']=='RUNNING':
-            from .project_actions import process_alive
-            if not process_alive(task.get('pid')):result.update(status='INTERRUPTED',errors=['The worker stopped; saved inputs and outputs remain. Retry the task.'])
+            if not task_alive(task):result.update(status='INTERRUPTED',errors=['The worker stopped; saved inputs and outputs remain. Retry the task. / 后台进程已停止。输入与已有结果已保留，可重试。'])
             else:result['status']='PROCESSING'
     if not detail:return result
     if m.get('public_reach') and intact([m['public_reach']]):
@@ -571,17 +600,24 @@ def view(key,detail=True):
     result['native']=native_preview(m)
     from .app_acquisition import snapshot
     if m.get('source_analysis'):result['acquisition']=snapshot(m)
+    feasibility_inputs = None
     if m.get('session') and not m.get('native_review') and not m.get('active_project'):
         from . import intake
         result['intake']=intake.view(ROOT/m['session'])
-        from .app_parameters import attention, rows
-        result['intake']['fields']=rows(m)
+        from .app_parameters import attention, rows, objects
+        context = objects(m)
+        result['intake']['fields']=rows(m, context)
+        feasibility_inputs = (context[3], context[4], context[2]['answers'])
         if result.get('preparation_result'):
             result['intake']['current_attention'] = attention(m, result['intake']['fields'])
-        from .app_parameters import objects
         from .app_automation import view as automation_view
-        result['automation']=automation_view(m,objects(m)[4])
+        result['automation']=automation_view(m,context[4])
         result['intake']['check']=intake.validate(ROOT/m['session'],require_consent=False,direct_start=True)
+    if not m.get('active_project') and not m.get('summary'):
+        from .feasibility import assess
+        if feasibility_inputs is None:
+            feasibility_inputs = (read(ROOT/m['project']), {}, {})
+        result['feasibility'] = assess(m, *feasibility_inputs, result.get('acquisition'), result['native'], result.get('reach_proposal'))
     result['missing']=check(m) if m['status'] not in ('PROCESSING','ABANDONED') and not m.get('active_project') else []
     if m.get('summary') and intact([m['summary']]):
         s=read(ROOT/m['summary']['path']);h=s.get('hydraulics') or {}

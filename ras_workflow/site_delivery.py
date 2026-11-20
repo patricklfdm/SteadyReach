@@ -371,7 +371,12 @@ def generate(summary_path,output,reuse_package=None,refresh_imagery_extent=False
         for folder in [full,minimal]:spatial.check_references(folder)
         result.update(status='READY_FOR_REVIEW' if mapped else 'READY_NATIVE_ONLY',mapped=mapped,
             complete=seal(full),minimal=seal(minimal),validation_scope='Verified bytes, native terrain association, QGIS save/reopen and exports; desktop/visual review separate')
-        verify(full);verify(minimal);save(output/'delivery.json',result)
+        verify(full);verify(minimal)
+        from .delivery_pair import check as pair_check
+        result['cross_package_identity']=pair_check(full,minimal)
+        from .handoff import retain_unique_exhibit
+        retain_unique_exhibit(full,result)
+        save(output/'delivery.json',result)
         register(summary_path,output/'delivery.json')
     except Exception as e:
         result.update(status='INCOMPLETE',error=str(e));save(output/'delivery.json',result)

@@ -10,6 +10,17 @@ def is_river(obj):
     return obj.get('model_type', 'culvert') == 'river'
 
 
+def check_known_stages(profiles, station, requested, actual, critical=None):
+    failures=[]
+    for i,(profile,target,value) in enumerate(zip(profiles,requested,actual,strict=True)):
+        if finite(value) and abs(value-target)<=.002:continue
+        message=f"{profile['id']} at downstream RS {station}: requested {target:.4f} ft, native {value:.4f} ft"
+        if critical is not None and finite(critical[i]) and abs(critical[i]-value)<=.002 and target<critical[i]-.002:
+            message+=f", computed critical elevation {critical[i]:.4f} ft; review the outlet survey, stage transfer and regime"
+        failures.append(message)
+    if failures:raise ValueError('Known downstream water level readback mismatch: '+' | '.join(failures))
+
+
 def boundary_errors(g, profile_count=None):
     errors = []
     sides = ['downstream'] if g.get('flow_regime') == 'subcritical' else ['upstream', 'downstream']

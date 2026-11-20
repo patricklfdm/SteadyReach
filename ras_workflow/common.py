@@ -17,9 +17,15 @@ def read(path):
 def save(path, obj):
     path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.partial')
-    tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=2, allow_nan=False), encoding='utf-8')
-    # Windows readers/indexers can briefly deny replacement. Keep the old file
-    # intact and retry only sharing/lock violations; never suppress permissions.
+    try:
+        tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=2, allow_nan=False), encoding='utf-8')
+    except BaseException:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass  # Preserve the original write error for the operator.
+        raise
+    # If a complete replacement is locked, preserve both versions for recovery.
     for delay in (0.02, 0.05, 0.1, 0.2, 0.3, None):
         try:
             os.replace(tmp, path)

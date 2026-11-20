@@ -24,6 +24,9 @@ def stage(state,path,name,key,action,fresh=False):
     return record['result']
 
 def solve(dest,path,c,s,g,engine,attempt,timeout,native_terrain=None):
+    from .run_source import freeze
+    code=code_identity()
+    code_archive=freeze(code)
     snapshots=dest/'inputs_before';snapshots.mkdir()
     dep=inputs.dependencies(path,c)
     for d in dep:
@@ -40,11 +43,12 @@ def solve(dest,path,c,s,g,engine,attempt,timeout,native_terrain=None):
     save(dest/'request.json',request)
     rec=native.run_isolated(dest/'request.json',timeout)
     hyd=results.extract(project,expected,c,s,attempt,dest)
+    if code!=code_identity():raise ValueError('Workflow code changed while calculating. Run the frozen inputs again with a consistent version.')
     receipt=dict(run_id=attempt,source_inputs=dep,native_before=native_before,
         input_snapshots=[item(p,'input_snapshot') for p in snapshots.rglob('*') if p.is_file()],
         native_after=[item(p,'native_after') for p in project.parent.iterdir() if p.suffix.lower() in ['.prj','.g01','.f01','.p01']],
         outputs=[item(p,'raw_solver_output') for p in project.parent.iterdir() if p.suffix.lower() in ['.hdf','.o01','.r01','.txt','.json','.log']],
-        code=code_identity(),engine=engine,execution=rec,engineering_acceptance='NOT_ASSESSED')
+        code=code,code_archive=code_archive,engine=engine,execution=rec,engineering_acceptance='NOT_ASSESSED')
     save(dest/'manifest.json',receipt)
     return hyd
 

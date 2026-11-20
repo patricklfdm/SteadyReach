@@ -346,6 +346,8 @@ def binding(m):
         data=dict(configuration=c,geometry=g,answers=d['answers'],map_picks=m.get('map_picks'),survey_settings=m.get('survey_settings'),opening_mapping=m.get('opening_mapping'),group_map_picks=m.get('group_map_picks'))
     if not intact(sources):raise ValueError('Input/source file changed or disappeared. Review its current copy / 输入或来源文件已改变，请重新核对')
     data.update(project_id=m['id'],revision=m['revision'],metadata=m['metadata'],gis=m['gis'],sources=sources)
+    if 'production_scope' in m:
+        data['production_scope'] = m['production_scope']
     return data
 
 def attention(m, fields, automatic=False):
@@ -417,12 +419,23 @@ def review(m):
         from .app_automation import preflight
         for q in preflight(m,data['geometry'])['issues']:
             if q['blocking']:errors.append(dict(code=q['code'],field=q.get('field',''),en=q['message'],zh=q['zh']))
+    from .feasibility import assess
+    from .app_acquisition import snapshot
+    reach = read(ROOT/m['public_reach']['path']) if m.get('public_reach') else None
+    feasibility = assess(m, data.get('configuration', {}), data.get('geometry', {}), data.get('answers', {}),
+                         snapshot(m), native, reach)
+    if feasibility['state'] == 'outside':
+        errors.append(dict(code='OUTSIDE_STEADY_SCOPE',en='This project requires a different hydraulic representation. Review its flow paths before starting.',
+                           zh='所选过流条件超出当前模型范围，请先复核范围。'))
+    if any(row['status']=='conflict' for row in feasibility['rows']):
+        errors.append(dict(code='VERTICAL_DATUM_CONFLICT',en='Resolve the model and terrain vertical datum conflict.',
+                           zh='请先解决模型和地形垂直基准冲突。'))
     if not automatic_settled:
         errors.append(dict(code='AUTOMATIC_INPUTS_UNSETTLED',en='Automatic values did not settle. Review conflicting dependencies before calculation.',zh='自动推导尚未稳定，请核对关联参数后再计算。'))
     packet=dict(schema_version='parameter_review_1',project_id=m['id'],revision=m['revision'],fingerprint=digest(data),
         inputs=data,fields=fields,native=native,errors=errors,ready=not errors,created_utc=utc(),engineering_acceptance='NOT_ASSESSED',
         refreshed_equivalent_fields=[change['field'] for change in refreshed],
-        attention=[] if native else attention(m, fields))
+        attention=[] if native else attention(m, fields), feasibility=feasibility)
     if m.get('model_type')=='river' and not native:
         from .river_review import key_inputs
         packet['key_inputs'] = key_inputs(fields)

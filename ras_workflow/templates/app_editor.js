@@ -47,6 +47,7 @@ function renderFinalReview(){
  el('p',tr('Nothing has been solved yet. Edit any field; changes cancel this confirmation. No name, reason, or signature is required.','尚未开始求解。可以修改任意字段，修改后本次确认会失效。无需姓名、理由或签名。')),
  button('← Back to preparation','← 返回准备页面',async()=>{await save();finalReview=null;await open(current.id);}));
  const state=el('p',review.ready?tr('Technical input checks passed. Assumptions remain conditional.','必要输入检查通过。假设仍属于条件性输入。'):tr('Fill the items below, then refresh this list. The solver is paused.','请补齐下列项目并刷新清单，求解器处于等待状态。'),review.ready?'status':'warning');state.id='review-state';screen.append(state);
+ renderFeasibility(screen,review.feasibility);
  if(showAcquisitionGaps(screen,current.acquisition))screen.append(button('Review source coverage and local files','查看来源覆盖和本地文件',async()=>{
   await save();finalReview=null;await open(current.id);
   document.querySelector('.source-hub')?.scrollIntoView({block:'start'});
@@ -131,6 +132,79 @@ function renderDependencyReview(parent,review){
  },'primary'));
  count();
 }
+function scopeFields(parent,scope,atHome=false){
+ const box=details(parent,'Intended use and flow paths','用途和过流路径',false);
+ const purpose=field(box,'project-purpose','Intended use','项目用途',scope.purpose||'screening','select',[
+  ['screening','Site screening','场地初筛'],['comparison','Compare alternatives','方案比较'],['review','Prepare for engineering review','准备工程复核']]);
+ const paths=field(box,'project-flow-paths','Known hydraulic setting','已知水力条件',scope.flow_paths||'unknown','select',[
+  ['unknown','Check against the site materials','根据场地资料核查'],['single','One main flow path','单一主过流路径'],
+  ['parallel','Separate branches or strong lateral exchange must be modeled','需模拟独立支汊或显著横向交换'],
+  ['bridge','A bridge inside the reach must be modeled','需模拟河段内部桥梁'],['unsteady','Flood-wave timing or storage is essential','需模拟洪峰传播时间或蓄泄过程']]);
+ const hint=el('p');box.append(hint);
+ function update(){
+  hint.textContent=['parallel','unsteady','bridge'].includes(paths.value)
+   ?tr('This scope needs a different hydraulic model. You can retain the site and revise the limits.','该范围需采用其他水力模型，可以保留项目并调整河段范围。')
+   :tr('Public data and the imported inputs will populate the feasibility review.','开工核查会沿用公开资料和已导入的输入。');
+ }
+ paths.addEventListener('change',update);update();
+ const value=()=>({purpose:purpose.value,flow_paths:paths.value});
+ if(!atHome)box.append(button('Save intended use and flow paths','保存用途与过流条件',async()=>{
+  await saveAll();await api('save',{id:current.id,revision:current.revision,production_scope:value()});
+  await open(current.id);notify(tr('Project scope saved. Feasibility updated.','范围已保存，开工核查已更新。'));
+ }));
+ return value;
+}
+
+function renderFeasibility(parent,data,editable=false){
+ if(!data)return;
+ const card=el('section',undefined,'card');parent.append(card);
+ card.append(el('h2',tr('Before building this reach','开工前的项目判断')));
+ const state={outside:tr('The requested flow paths exceed the single-reach steady model.','当前过流条件超出单河段恒定流范围。'),
+  missing:tr('Inputs or datum checks remain. Use the available sources below.','还有待补输入或基准冲突，可按下表核对资料。'),
+  review:tr('Continue to parameter review. Verify the listed assumptions for this use.','可以继续核对参数，请按项目用途复核下列假设。')};
+ card.append(el('p',state[data.state],data.state==='outside'?'warning':'status'));
+ if(data.use==='conditional_screening')card.append(el('p',tr('Suitable for a conditional screening run. Confirm the assumptions below before calculating.','当前可做条件性初筛。运算前请集中确认下列假设。')));
+ const labels={scope:tr('Flow paths','过流路径'),flow:tr('Discharge','流量'),bed:tr('Submerged bed','水下河床'),
+  datum:tr('Elevation datum','垂直基准'),boundary:tr('Boundary control','边界控制'),openings:tr('Culvert openings','涵洞开口'),
+  inverts:tr('Length and inverts','涵长和涵底'),independent_event:tr('Independent event','独立事件')};
+ const statuses={available:tr('Specified','已说明'),missing:tr('Needed','待补'),review:tr('Check evidence','核对依据'),
+  conditional:tr('Conditional','条件性'),conflict:tr('Conflict','冲突'),outside:tr('Outside scope','超出范围')};
+ const panel=details(card,'Inputs, sources and next actions','输入、依据与下一步',data.state!=='review');
+ for(const row of data.rows){
+  const f=row.facts;
+  const item=details(panel,labels[row.key]+' · '+statuses[row.status],labels[row.key]+' · '+statuses[row.status],false);
+  item.append(el('p',tr(row.en,row.zh)));
+  const sources={scope:['The National Map','https://apps.nationalmap.gov/downloader/'],flow:['USGS StreamStats','https://streamstats.usgs.gov/ss/'],
+   datum:['NOAA NCAT','https://www.ngs.noaa.gov/NCAT/'],bed:['USGS ScienceBase','https://www.sciencebase.gov/catalog/'],
+   boundary:['USGS Water Data','https://waterdata.usgs.gov/'],independent_event:['USGS Water Data','https://waterdata.usgs.gov/']};
+  if(sources[row.key]){const [label,url]=sources[row.key],link=el('a',label);link.href=url;link.target='_blank';link.rel='noopener noreferrer';item.append(link);}
+  if(['inverts','openings'].includes(row.key))item.append(el('p',tr('Use the owner’s structure inventory, as-built sheet or survey. Import any original you obtain in Site materials.','优先查业主的结构台账、竣工图或实测断面，在本站资料中导入原件。')));
+  if(row.key==='scope'&&f.mapped_junctions?.length)table(item,[tr('Mapped branch','地图支流'),tr('Direction','方向'),'WGS84'],
+   f.mapped_junctions.map(p=>[p.name||tr('Unnamed','未命名'),p.direction==='entering'?tr('Entering reach','汇入'):tr('Leaving reach','流出'),p.lonlat.join(', ')]));
+  if(row.key==='flow')table(item,[tr('Profile','工况'),'cfs',tr('Source','来源')],f.profiles.map(p=>[p.id,p.flow_cfs,p.source]));
+  if(row.key==='datum')item.append(el('p',tr('Model / terrain: ','模型／地形：')+[f.model_datum||'—',f.terrain_datum||'—'].join(' / ')));
+  if(f.basis)item.append(el('p',f.basis));
+  if(f.values?.length)table(item,[tr('Group','涵孔组'),tr('Parameter','字段'),tr('Value','取值'),tr('Origin','类别'),tr('Source','依据')],
+   f.values.map(v=>[v.group,v.field,v.value,v.origin,v.basis]));
+  if(f.nearby_frequency_stations?.length)table(item,['USGS',tr('Distance to project point (m)','距项目定位点（m）')],
+   f.nearby_frequency_stations.map(s=>[s.station,s.distance_to_project_m]));
+  if(f.search_status)item.append(el('p',tr('USGS boundary search','USGS 边界资料查询')+' · '+f.search_status));
+  if(f.stations?.length)table(item,['USGS',tr('Outlet distance (m)','距下游边界（m）'),tr('Station information','测站资料')],
+   f.stations.map(s=>[s.station,s.boundary_m,[s.transfer_required?tr('Water-level transfer required','需水位传递依据'):'',
+    s.datum,...(s.rating_dates||[]),...(s.gage_history||[]).map(h=>h.statement),
+    ...(s.outside_rating||[]).map(p=>p+' '+tr('outside rating','超出评级曲线'))].filter(Boolean).join(' · ')]));
+  if(f.search_failures?.length)item.append(el('p',f.search_failures.join('\n'),'warning'));
+ }
+ if(editable){
+  scopeFields(card,data.scope);
+  if(data.state!=='outside'&&current.intake)card.append(button('Open site materials and public search','打开本站资料与公开搜索',async()=>{
+   const dest=document.querySelector('.source-hub');
+   if(dest){if(dest.tagName==='DETAILS')dest.open=true;dest.scrollIntoView({block:'start'});}
+   else notify(tr('Use the source-material panel on this project.','请打开本项目的资料面板。'));
+  }));
+ }
+}
+
 function renderManual(screen){
  if(current.model_type==='river'){renderRiverManual(screen);return;}
  const intake=current.intake;if(!intake){screen.append(button('Prepare terrain and inputs','准备地形与输入',async()=>{await api('prepare',{id:current.id});await open(current.id);}));return;}

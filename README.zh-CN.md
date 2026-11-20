@@ -2,6 +2,8 @@
 
 [English](README.md) | **简体中文**
 
+[本机生产复核与恢复](docs/LOCAL_RELEASE_CN.md) · [Siletz 河实测基准](examples/siletz_or/README.zh-CN.md)
+
 基于 HEC-RAS 的 Windows 本地一维恒定流河道与涵洞分析工具。通过浏览器的 **项目 → 模型 → 结果** 三屏操作，无需 AI 服务。
 
 新模型先导入已有资料并核对设施位置和地形元数据，再点击 **自动准备草稿（含标注的估计值）**，集中生成断面、岸站和参数。修改突出显示的问题，最后一次核对完整模型。岸站支持数字输入及剖面网格。[准备指南](docs/AUTOMATION_CN.md)。

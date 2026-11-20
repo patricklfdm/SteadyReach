@@ -44,8 +44,8 @@ def build(data, plots, folder, language='en', detail='full', details=None):
         d.add_picture(str(ROOT/entry['path']),width=Inches(6.65))
         d.paragraphs[-1].paragraph_format.keep_with_next=True
         d.add_paragraph(caption,'Caption')
-    p('One-dimensional steady flow in a single river reach. HEC-RAS completed the calculation; hydraulic QA, input adequacy and engineering acceptance are reported separately.',
-      '本报告为单一河段的一维恒定流分析。HEC-RAS 已完成计算，水力 QA、输入充分性和工程接受状态分别列示。')
+    from .report_decision import add as decision
+    decision(d,data,cn)
     if c['case_kind']=='software_validation':
         p('SOFTWARE VERIFICATION ONLY. Geometry and flows are synthetic numerical test inputs. These results do not describe Pagosa Springs or any real site.',
           '仅用于软件验证。几何与流量为合成数值测试输入，结果不代表 Pagosa Springs 或任何实际场地。')
@@ -180,6 +180,22 @@ def build(data, plots, folder, language='en', detail='full', details=None):
               row.get('diagnostics',{}).get('native_messages','—'),n(row.get('max_wse_change_ft'))] for row in result['cases']],
             [1.6,1.2,1.3,2.6])
     checks=data.get('river_checks') or {}
+    edge=checks.get('extent_review')
+    if edge:
+        d.add_heading(tr('Spatial comparison of native results','原生计算空间对照'),2)
+        event=edge['event']
+        meanings={'NATIVE_GEOMETRY_COMPARISON':tr('Native geometry comparison','模型几何版本对照'),'SPATIAL_CONTEXT':tr('Spatial reference','空间参照'),
+                  'USED_FOR_GEOMETRY_OR_CALIBRATION':tr('Used to interpret the model','参与模型判读'),
+                  'RESERVED_EVENT_REVIEW':tr('Matched reserved event, pending review','留出事件已匹配，待复核')}
+        d.add_paragraph(meanings[edge['classification']])
+        if event:
+            d.add_paragraph(f"{event['name']} · {event['date']} · {event['flow_cfs']:g} cfs · "+event['source'])
+        table(d,[tr('Calculation','计算'),tr('Profile','工况'),tr('Matched sections','匹配断面'),tr('Median absolute edge difference, shared sections (m)','共有断面边线绝对差中位数（m）')],
+              [[c['label'],c['profile'],f"{c['matched']} / {c['total']}",n(c['common_median_abs_m'])] for c in edge['cases']],[2.3,1.0,1.3,2.1])
+        delta=edge.get('max_wse_change')
+        if delta:
+            d.add_paragraph(tr('Largest signed stage change at a common location','同一位置的最大水位变幅及方向')+
+                            f" · RS {delta['station']} · {delta['signed_ft']:+.3f} ft")
     if checks.get('warning_review'):
         warning=checks['warning_review']
         d.add_heading(tr('Native warning review at fixed hydraulic inputs','固定水力输入的原生警告复核'),2)

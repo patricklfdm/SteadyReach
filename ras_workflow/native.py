@@ -232,7 +232,8 @@ def run_isolated(request_path, timeout):
         if state=='TIMEOUT' or code!=0:
             execution=read(folder/'execution.json') if (folder/'execution.json').is_file() else {}
             if execution.get('blocking_code')=='USER_PROJECT_OPEN':raise RuntimeError(execution['error'])
-            raise RuntimeError('Native worker '+state+'; see '+rel(folder/'worker_stderr.log'))
+            detail=str(execution.get('error') or '').strip()
+            raise RuntimeError('Native worker '+state+(' · '+detail[:1000] if detail else '')+'; see '+rel(folder/'worker_stderr.log'))
         if read(request_path).get('operation')=='native_export':return record
         if not record.get('compute_completed') or not record.get('output_identity_verified'):raise RuntimeError('Fresh matching compute was not verified')
         return record

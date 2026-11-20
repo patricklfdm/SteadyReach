@@ -50,15 +50,21 @@ def classify(route, body):
     return dict(counts)
 
 
-def record(folder, route, counts, client):
+def record(folder, route, counts, client, field_names=None):
     path = folder/'operator_actions'/(unique_id()+'.json')
-    save(path,dict(route=route,counts=counts,at=utc(),client=client))
+    event=dict(route=route,counts=counts,at=utc(),client=client)
+    if field_names is not None:
+        from .common import digest
+        event['submitted_fields']=[digest(name) for name in sorted(set(field_names))]
+    save(path,event)
 
 
 def inventory(folder, through=None):
     files = sorted((folder/'operator_actions').glob('*.json'))
     totals, actions, clients = Counter(),Counter(),Counter()
     unreadable = 0
+    fields=Counter()
+    tracked_saves=0
     for file in files:
         try:
             event = read(file)
@@ -75,9 +81,13 @@ def inventory(folder, through=None):
         totals.update(counts)
         actions[route] += 1
         clients[client] += 1
+        if route=='save' and 'submitted_fields' in event:
+            fields.update(event['submitted_fields'])
+            tracked_saves+=1
     return dict(recorded_requests=sum(actions.values()),unreadable=unreadable,coverage='PARTIAL_HISTORY' if unreadable else 'FROM_CREATION' if actions['create'] or actions['revision'] else
                 'RECORDED_REQUESTS_ONLY' if actions else 'NO_RECORDED_HISTORY',
-                counts=dict(totals),routes=dict(actions),clients=dict(clients))
+                counts=dict(totals),routes=dict(actions),clients=dict(clients),tracked_field_saves=tracked_saves,
+                repeat_field_submissions=sum(n-1 for n in fields.values()) if tracked_saves else None)
 
 
 def lineage(model):

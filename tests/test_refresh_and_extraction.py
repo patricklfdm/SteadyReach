@@ -15,7 +15,7 @@ class RefreshTests(unittest.TestCase):
                           latest_delivery=dict(mapped=True, complete={'path': 'old/Complete'}))
         self.saved = []
 
-    def run_refresh(self, action, delivery_error=None):
+    def run_refresh(self, action, delivery_error=None, delivery_result=None):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             with (patch.object(app_core, 'ROOT', root),
@@ -26,7 +26,7 @@ class RefreshTests(unittest.TestCase):
                   patch.object(app_core, 'persist', side_effect=lambda m, *args: self.saved.append(copy.deepcopy(m))),
                   patch('ras_workflow.report.generate') as report,
                   patch('ras_workflow.site_delivery.generate', side_effect=delivery_error,
-                        return_value={'status': 'READY_FOR_REVIEW'}) as delivery):
+                        return_value=delivery_result or {'status': 'READY_FOR_REVIEW'}) as delivery):
                 if delivery_error:
                     with self.assertRaisesRegex(ValueError, 'mapping'):
                         app_core.regenerate('test', action)
@@ -61,6 +61,12 @@ class RefreshTests(unittest.TestCase):
     def test_report_only_preserves_package_as_previous_edition(self):
         report, delivery, _ = self.run_refresh('report')
         self.assertEqual((report, delivery), (1, 0))
+        self.assertTrue(self.saved[-1]['exports_need_refresh'])
+
+    def test_incomplete_delivery_receipt_keeps_actionable_status(self):
+        self.run_refresh('delivery',delivery_result={'status':'INCOMPLETE','error':'Map coverage incomplete'})
+        self.assertEqual(self.saved[-1]['status'],'RESULTS_READY_MAP_PENDING')
+        self.assertEqual(self.saved[-1]['errors'],['Map coverage incomplete'])
         self.assertTrue(self.saved[-1]['exports_need_refresh'])
 
     def test_unknown_action_is_rejected(self):
@@ -102,6 +108,23 @@ class PdfExtractionTests(unittest.TestCase):
     def test_previous_extractor_cache_is_reprocessed(self):
         cached = dict(status='INSPECTED', extractor_version=2, warnings=[])
         self.assertFalse(source_extract.reuse_document(cached, False, {}))
+
+
+class FirstPageFieldResult(unittest.TestCase):
+    def test_cover_uses_eligible_field_residuals_only_in_both_languages(self):
+        from docx import Document
+        from ras_workflow.report_decision import add
+        rows=[dict(date='2019-02-21',role='holdout',kind='stage',issues=[],location={'rs':'500'},
+                   residual_ft=-.125,uncertainty_ft=None)]
+        rows.extend([dict(rows[0],role='boundary',residual_ft=40),dict(rows[0],issues=['VERTICAL_DATUM_MISMATCH'],residual_ft=20)])
+        data=dict(summary=dict(hydraulics={},configuration={}),river_checks={'events':rows})
+        for cn in (False,True):
+            doc=Document();add(doc,data,cn)
+            text=' '.join(p.text for p in doc.paragraphs)
+            for expected in ('2019-02-21','RS 500','-0.125 ft','1 笔缺少' if cn else 'without stated vertical uncertainty: 1'):
+                self.assertIn(expected,text)
+            self.assertNotIn('40.000',text)
+            self.assertNotIn('20.000',text)
 
 
 if __name__ == '__main__':

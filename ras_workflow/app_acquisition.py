@@ -75,6 +75,10 @@ def discover(m,out):
             attempts.append(lookup(loc,reach,out,download))
         except (OSError,ValueError,KeyError) as error:
             attempts.append(dict(route='CA_USGS_gage_frequency',status='LOOKUP_FAILED',error=str(error)))
+    if m.get('model_type')=='river':
+        from .early_gages import lookup as locate_gages
+        progress(m,'Checking nearby USGS boundary records / 正在检查附近测站与边界资料')
+        attempts.append(locate_gages(loc,out,Download(limit=4_000_000,timeout=8)))
     # A verified tabular provider. Other catalog records are not coerced into its schema.
     if not (41<=loc['latitude']<=43 and -74<loc['longitude']<-69):
         attempts.append(dict(route='MA_30_crossing_inventory',status='OUTSIDE_PROVIDER_COVERAGE'));return attempts,links

@@ -86,8 +86,8 @@ def build(data, plots, folder, language='en', detail='full', details=None):
         inline=run._r.xpath('.//wp:docPr')
         if inline:inline[0].set('descr',tr(caption_en,caption_cn))
         d.add_paragraph(tr(caption_en,caption_cn),'Caption')
-    p('This report explains the calculated water levels, the model inputs and the issues that need review before the results can support a site decision.',
-      '本报告说明计算水位、采用的模型条件，以及结果用于现场决策前仍需复核的问题。')
+    from .report_decision import add as decision
+    decision(d,data,cn)
     if c['case_kind']=='site_conditional':
         p('HEC-RAS completed the calculation under the stated conditional inputs. Hydraulic QA status: '+qa_state+'. These results do not establish design adequacy or absence of flooding.',
           'HEC-RAS 已按所列条件性输入完成计算。水力 QA 状态：'+qa_state+'。当前结果不能据以认定设计合格或场地不存在淹没。')
