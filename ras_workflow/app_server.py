@@ -75,6 +75,9 @@ def create():
                     elif route=='qa-guidance':
                         from .result_guidance import collect
                         result=collect(key,body)
+                    elif route=='qa-assessment-save':
+                        from .result_assessment import save_summary
+                        result=save_summary(key,body)
                     elif route=='save':result=core.update(key,body)
                     elif route=='native':result=core.native_inputs(key,body)
                     elif route=='use-native-values':result=core.use_native_values(key,body)

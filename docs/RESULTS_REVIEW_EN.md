@@ -8,7 +8,7 @@ For a reach without structures, choose **River reach (bridges excluded)** and fo
 
 ## Delivery assessment
 
-Open the computed edition. The card at the top checks the run and grades what you can hand to another engineer. It gives the reason for the first action, the limiting findings and a link to each existing review tool. Save the assessment as text to retain its timestamp, run ID, summary hash and evidence references.
+Open the computed edition. The card at the top checks the run and grades what you can hand to another engineer. It gives the reason for the first action, the limiting findings and a link to each existing review tool. Select **Save assessment summary (.txt)** and then **Open saved summary**. The project keeps the dated assessment, run ID, source hashes and findings in its `assessment_exports` folder.
 
 | Level | Intended use | Evidence |
 |---|---|---|

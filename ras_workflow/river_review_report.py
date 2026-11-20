@@ -10,7 +10,8 @@ def collect(summary_path, summary):
     folder=safe_path(ROOT,'projects/'+summary['configuration']['project_id'])
     model_path=folder/'app.json'
     if not model_path.is_file():return {},[]
-    model=read(model_path)
+    from .app_core import edition_record
+    model=edition_record(read(model_path))
     if model.get('summary')!=ref:return {},[]
     data={};sources=[]
     def load(entry):

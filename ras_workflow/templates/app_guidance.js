@@ -49,15 +49,13 @@ function showResultAssessment(box,a){
  for(let i=0;i<a.levels.length;i++)scope.append(el('p','L'+i+' · '+label(a.levels[i])));
  scope.append(el('p',tr('Grades describe the permitted handoff. Engineering approval and visual map inspection remain separate. Section counts exclude manifest files.','等级描述本版可交付的用途。工程签发和地图目视验收单列判断。文件数不含清单自身。')));
  if(a.run_id){
-  box.append(button('Save assessment summary (.txt)','保存评估摘要（.txt）',()=>{
-   const lines=['SteadyReach · '+a.run_id,'L'+a.level+' · '+label(a.title),use[a.level],a.assessed_utc,a.summary.sha256,
-    tr('Package verification','交付包核验')+' · '+assessmentState(a.delivery.status)+' · '+tr('Map visual review','地图目视验收')+' · '+assessmentState(a.delivery.visual_review),
-    tr('Issue review','问题处置')+' · '+assessmentState(a.qa.status)+' · '+tr('Diagnostic records','诊断记录')+' '+(a.diagnostics.records??'—'),''];
-   for(const row of a.findings)lines.push(label(row.reason),assessmentFact(row),'');
-   for(const ref of a.sources)lines.push(ref.path+' · '+ref.sha256);
-   const url=URL.createObjectURL(new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/plain;charset=utf-8'}));
-   const link=el('a');link.href=url;link.download='SteadyReach_'+a.run_id+'_'+lang+'.txt';link.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
-  }));
+  const output=el('p');
+  box.append(button('Save assessment summary (.txt)','保存评估摘要（.txt）',async()=>{
+   const result=await api('qa-assessment-save',{id:current.id,summary_hash:a.summary.sha256,assessment_hash:a.evidence_hash,language:lang});
+   const link=el('a',tr('Open saved summary','打开已保存摘要'));
+   link.href='file/'+result.file.path.split('/').map(encodeURIComponent).join('/');
+   link.target='_blank';link.rel='noopener';output.replaceChildren(link,el('span',' · '+result.file.path));
+  }),output);
   scope.append(el('p','Run '+a.run_id+' · '+a.profiles.join(', ')+' · '+a.input_adequacy),
   el('p',tr('Map visual review recorded in the delivery receipt','交付回执记录的地图目视验收')+' · '+assessmentState(a.delivery.visual_review)));
   if(a.boundary_cases.length)table(scope,[tr('Parameter / case','参数／工况'),'RS','Δ WSE (ft)',tr('Affected / compared','受影响／已比对')],a.boundary_cases.map(c=>[sensitivityParameterLabel(c.parameter)+' / '+c.profile+' / '+c.case,c.station,c.delta_ft.toFixed(3),c.affected+' / '+c.compared]));

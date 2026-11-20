@@ -1,7 +1,7 @@
 """Current-run delivery uses, ordered by verified prerequisites. Read only."""
 from collections import Counter
 
-from .common import ROOT, finite, intact, read, safe_path, utc
+from .common import ROOT, digest, finite, intact, item, read, safe_path, unique_id, utc
 from .result_guidance import BALANCE, NATIVE_GAPS, WET, text
 from .revision_inputs import station_key
 from .river_review import response
@@ -33,9 +33,10 @@ def unverified(reason):
 
 
 def packages(model, path, hyd):
-    from .app_core import current_refreshed_reports
+    from .app_core import current_refreshed_reports, report_refresh_binding
     from .site_delivery import latest
-    if model.get('exports_need_refresh') or (model.get('latest_reports_binding') and not current_refreshed_reports(model)):
+    has_studies = any(value for field,value in report_refresh_binding(model).items() if field!='summary')
+    if model.get('exports_need_refresh') or ((has_studies or model.get('latest_reports_binding')) and not current_refreshed_reports(model)):
         return dict(status='STALE')
     current = model.get('latest_delivery')
     if not current and model.get('engine_state'):
@@ -95,9 +96,10 @@ def qa_decisions(model, hyd, issues):
 
 
 def boundary_findings(studies, hyd, target):
-    from .qa import THRESHOLDS
+    from .qa import THRESHOLDS, verified_profiles
     profiles=[p['profile_id'] for p in hyd['profiles']]
     signed=response(studies)
+    inventory = verified_profiles(hyd) if signed else {}
     cases=[]
     directions=set()
     for study in studies:
@@ -113,7 +115,13 @@ def boundary_findings(studies, hyd, target):
                 if row['source']!=study['analysis'] or row['case']!=case['id'] or row['paths']!=[path]:continue
                 if path.startswith('boundaries.') and path.endswith(tuple('.'+str(i) for i in range(len(profiles)))):
                     if row['profile']!=profiles[int(path.split('.')[-1])]:continue
-                directions.add((path.split('.')[1],row['profile'],after>before))
+                profile = row['profile']
+                expected = {station_key(rs) for rs in inventory.get(profile,{})}
+                stations = [station_key(r['station']) for comp in study['comparisons'] if comp['case']==case['id']
+                            for r in comp.get('cross_section_differences',[])
+                            if r['profile']==profile and finite(r.get('delta_wse_ft'))]
+                if expected and len(stations)==len(expected) and set(stations)==expected:
+                    directions.add((path.split('.')[1],profile,after>before))
                 cases.append(dict(profile=row['profile'],case=row['case'],parameter=path,
                     station=station_key(row['peak_rs']),delta_ft=row['signed_peak_ft'],affected=len(row['affected']),
                     compared=row['compared'],threshold_ft=row['threshold_ft']))
@@ -232,4 +240,53 @@ def assess(model, path, summary, diagnostics, studies, guidance):
         warning_coverage=(diagnostics or {}).get('warning_coverage'),by_severity=dict(Counter(r['severity'] for r in issues))),
         qa=review,delivery=delivery,boundary_cases=cases,changed_ends=changed,holdout_observations=len(measured),
         sources=list({e['path']:e for e in sources}.values()))
+    result['evidence_hash'] = digest({k:v for k,v in result.items() if k!='assessed_utc'})
     return result
+
+
+def save_summary(key, body):
+    """Save the verified, displayed edition on request, without relying on browser downloads."""
+    from .app_core import folder
+    from .result_guidance import collect
+    language = body.get('language')
+    if language not in ('zh','en'):
+        raise ValueError('Choose English or Chinese')
+    a = collect(key,dict(summary_hash=body.get('summary_hash'),include_assessment=True))['assessment']
+    if not a.get('evidence_hash') or a['evidence_hash']!=body.get('assessment_hash'):
+        raise ValueError('Assessment changed; reopen results / 评估已变化，请重新打开结果页')
+    zh = language=='zh'
+    def label(en,cn):
+        return cn if zh else en
+    d = a['diagnostics']
+    lines = ['SteadyReach · '+a['run_id'], 'L'+str(a['level'])+' · '+a['title'][language],
+             a['assessed_utc']+' · '+a['summary']['sha256'], '',
+             label('Delivery packages','交付包')+' · '+a['delivery']['status'],
+             label('Map visual review','地图目视验收')+' · '+str(a['delivery'].get('visual_review') or 'UNVERIFIED'),
+             'QA · '+a['qa']['status'],
+             label('Native messages / combined diagnostic records','原生信息／综合诊断记录')+
+             f" · {d['native_messages']} / {d['records']}",
+             label('Engineering sign-off remains with the responsible engineer.','工程签发由负责工程师决定。'),'']
+    for row in a['findings']:
+        lines.append(row['reason'][language])
+        f = row['facts']
+        if row['code']=='GEOMETRY_FLOW_PATH':
+            share = lambda value: '—' if value is None else f'{value:.2f}%'
+            lines.append(f"RS {f['station']} · {f['side']} · {share(f['baseline_share_pct'])} → {share(f['alternative_share_pct'])} · "+label('new wet end','新增湿端')+f" {f['end_excess_ft']:.3f} ft")
+        elif row['code']=='BOUNDARY_INFLUENCE':
+            lines.append(f"{f['profile']} · {f['parameter']} · RS {f['station']} · Δ {f['delta_ft']:+.3f} ft · {f['affected']}/{f['compared']} "+label('sections above','条断面超过')+f" {f['threshold_ft']} ft")
+        else:
+            for field,value in f.items():
+                if isinstance(value,list):
+                    value=', '.join(map(str,value))
+                if value is not None and value!='':
+                    lines.append(f'  {field} · {value}')
+        lines.append('')
+    lines.append(label('Traceable sources','可追溯来源'))
+    lines.extend(entry['path']+' · '+entry['sha256'] for entry in a['sources'])
+    destination = folder(key)/'assessment_exports'/unique_id()
+    destination.mkdir(parents=True)
+    path = destination/('Assessment_'+language+'.txt')
+    partial = path.with_suffix('.partial')
+    partial.write_text('\n'.join(lines)+'\n',encoding='utf-8-sig')
+    partial.replace(path)
+    return dict(file=item(path),evidence_hash=a['evidence_hash'])

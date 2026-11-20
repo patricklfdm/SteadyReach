@@ -22,8 +22,27 @@ def folder(key):
     from .common import identifier
     return BASE/identifier(key)
 
+def edition_record(record):
+    """Older editable revisions sometimes carried result pointers from their parent."""
+    if not record.get('parent_revision'):
+        return record
+    def inherited(ref):
+        path = ref.get('path', '') if isinstance(ref, dict) else ''
+        parts = Path(path).parts
+        return len(parts) > 2 and parts[0] == 'projects' and parts[1] != record['id']
+    for field in ('river_observations', 'latest_observed_event', 'latest_geometry_comparison'):
+        if inherited(record.get(field)):
+            record.pop(field)
+    if 'observed_event_history' in record:
+        record['observed_event_history'] = [r for r in record['observed_event_history'] if not inherited(r)]
+    attempt = record.get('native_export_attempt') or {}
+    if inherited(attempt.get('receipt')) or (attempt and not record.get('summary')):
+        record.pop('native_export_attempt')
+    return record
+
+
 def model(key):
-    return read(folder(key)/'app.json')
+    return edition_record(read(folder(key)/'app.json'))
 
 def deletion_record(key):
     return ROOT/'status/app/deleted_projects'/(folder(key).name+'.json')
@@ -510,7 +529,8 @@ def view(key,detail=True):
         comparison=read(ROOT/m['latest_geometry_comparison']['path'])
         evidence=[comparison['study'],comparison['review']]+list(comparison.get('summaries',{}).values())
         if comparison.get('table'):evidence.append(comparison['table'])
-        if intact(evidence):result['geometry_comparison']=comparison
+        if comparison.get('summaries',{}).get('baseline')==m.get('summary') and intact(evidence):
+            result['geometry_comparison']=comparison
     if m.get('latest_spacing') and intact([m['latest_spacing']]):result['spacing_result']=read(ROOT/m['latest_spacing']['path'])
     if m.get('latest_coverage') and intact([m['latest_coverage']]):result['coverage_result']=read(ROOT/m['latest_coverage']['path'])
     if m.get('latest_coverage_exports') and intact([m['latest_coverage_exports']]):
