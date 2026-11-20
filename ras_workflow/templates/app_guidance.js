@@ -19,6 +19,41 @@ function assessmentState(value){
  const labels={VERIFIED_MAPPED:['Both mapped packages verified','两个制图包已核验'],VERIFIED_NATIVE_ONLY:['Native files only','仅有原生文件'],STALE:['Refresh required','需更新'],INCOMPLETE:['Incomplete','未完整生成'],UNVERIFIED:['Unverified','尚未核验'],EDITION_MISMATCH:['Edition mismatch','版本不符'],NO_CURRENT_SUBMISSION:['No bound QA submission','无绑定本次结果的 QA 提交'],REVIEW_IN_PROGRESS:['Review in progress','复核中'],DIFFERENT_ISSUE_INVENTORY:['Reviewed issue list differs','复核问题清单与当前不同'],CLOSED_WITH_RECORDED_CONDITIONS:['Closed with recorded conditions','已记录条件并闭合'],REVIEW_REQUIRED:['Review required','待复核'],NOT_TESTED:['No verified trial','尚无已核验的试算'],NOT_CONVERGED:['Unconverged','未收敛'],PENDING:['Pending','待复核'],NOT_PERFORMED:['Not performed','尚未执行']};
  return labels[value]?tr(...labels[value]):value||'—';
 }
+function showFieldSearch(box,a){
+ const panel=details(box,'Find records and plan fieldwork','查资料与最小补测清单');
+ const result=el('div');let pending=false;
+ async function load(refresh=false){
+  if(pending)return;pending=true;result.setAttribute('aria-busy','true');
+  result.replaceChildren(el('p',tr('Searching local records and official USGS sources…','正在核对本地资料并查询 USGS 官方来源…')));
+  try{
+   const packet=await api('qa-field-search',{id:current.id,summary_hash:a.summary.sha256,refresh});
+   result.replaceChildren(el('p',tr('Retrieved','查询时间')+' · '+packet.created_utc+' · '+tr(packet.limitations.en,packet.limitations.zh)));
+   for(const r of packet.field_requests)result.append(el('p','RS '+r.rs+' · '+r.latitude+', '+r.longitude+' · '+tr(r.need.en,r.need.zh)+' '+tr(r.decision.en,r.decision.zh)));
+   if(packet.worksheet){const link=el('a',tr('Open observation candidate CSV','打开观测候选 CSV'));link.href='file/'+packet.worksheet.path.split('/').map(encodeURIComponent).join('/');link.download='Observation_candidates.csv';result.append(link,
+    el('p',tr('Check gage zero, date, simultaneity and uncertainty, then import the reviewed rows under Field observations.','核实水尺零点、同期性、日期和误差后，在实测资料面板导入已核对的行。')),button('Open field observations','打开实测资料',()=>openGuidanceTool('observations')));}
+   const groups={gage:['Streamgages','河道测站'],rating:['Stage–discharge ratings','水位流量关系'],peak:['Annual peak records','历史洪峰'],catalog:['Public survey records','公开测量目录'],linear_context:['Road or levee context','附近道路或堤线'],local_document:['Project documents','项目文件'],screened_observation:['Screened field records','已初筛的观测']};
+   for(const [kind,names] of Object.entries(groups)){
+    const rows=packet.candidates.filter(r=>r.kind===kind);if(!rows.length)continue;
+    const sub=details(result,names[0]+' ('+rows.length+')',names[1]+'（'+rows.length+'）');
+    for(const r of rows){
+     const line=[r.name,r.station,r.date,r.parameter,r.value,r.unit,r.qualifier,r.rs?'RS '+r.rs:null,r.vertical_datum,
+      r.distance_to_section_m!=null?tr('Section distance ','距断面 ')+r.distance_to_section_m+' m':null,
+      r.distance_to_boundary_m!=null?tr('Boundary distance ','距边界 ')+r.distance_to_boundary_m+' m':null,
+      r.datum_matches===false?tr('Check vertical datum','需核对高程基准'):null,r.position_accuracy,
+      r.min_cfs!=null?r.min_cfs+'–'+r.max_cfs+' cfs':null,r.profile_in_range?Object.entries(r.profile_in_range).map(([p,v])=>p+' '+(v?tr('inside range','在曲线流量范围内'):tr('outside range','超出曲线流量范围'))).join(', '):null,...(r.validity||[]),...(r.issues||[])].filter(v=>v!=null&&v!=='');
+     const p=el('p',line.join(' · '));sub.append(p);
+     if(r.landing||r.url){const link=el('a',tr('Official record','官方记录'));link.href=r.landing||r.url;link.target='_blank';link.rel='noopener';p.append(' · ',link);}
+    }
+   }
+   const attempts=details(result,'Search coverage and failures','查询覆盖与失败记录');
+   table(attempts,[tr('Source','来源'),tr('Outcome','状态'),tr('Details','详情')],packet.searches.map(r=>[r.kind,r.status,r.error||String(r.count??'')]));
+  }catch(e){result.replaceChildren(el('p',e.message,'warning'));}
+  finally{pending=false;result.removeAttribute('aria-busy');}
+ }
+ panel.append(button('Refresh official sources','重新查询官方资料',()=>load(true)),result);
+ panel.parentElement.addEventListener('toggle',()=>{if(panel.parentElement.open&&!result.hasChildNodes())void load();});
+ if(panel.parentElement.open)void load();
+}
 function showResultAssessment(box,a){
  const label=s=>tr(s.en,s.zh),primary=a.findings[0];
  box.append(el('h2',tr('Delivery assessment','结果交付评估')+' · L'+a.level+' · '+label(a.title)));
@@ -64,6 +99,7 @@ function showResultAssessment(box,a){
  }
  if(a.run_id&&!current.native_review){const actions=el('div',undefined,'actions');box.append(actions);
   actions.append(button('Prepare QA revision suggestions','根据 QA 创建修订建议',prepareQaRevision),button('Open editable revision tool','打开独立修订入口',()=>openGuidanceTool('revision')));}
+ if(a.run_id&&current.model_type==='river')showFieldSearch(box,a);
  const scope=details(box,'Grading scope and evidence','分级范围与核验依据');
  for(let i=0;i<a.levels.length;i++)scope.append(el('p','L'+i+' · '+label(a.levels[i])));
  scope.append(el('p',tr('Grades describe the permitted handoff. Engineering approval and visual map inspection remain separate. Section counts exclude manifest files.','等级描述本版可交付的用途。工程签发和地图目视验收单列判断。文件数不含清单自身。')));

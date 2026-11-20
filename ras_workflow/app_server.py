@@ -75,6 +75,9 @@ def create():
                     elif route=='qa-guidance':
                         from .result_guidance import collect
                         result=collect(key,body)
+                    elif route=='qa-field-search':
+                        from .review_evidence import search
+                        result=search(key,body)
                     elif route=='qa-assessment-area':
                         from .assessment_area import select
                         result=select(key,body)
