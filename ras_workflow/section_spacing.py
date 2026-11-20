@@ -103,7 +103,13 @@ def refine(geometry, selected, sampler, reference_water=None):
         if not 0 < banks[0] < banks[1] < width:
             raise ValueError('Inferred bank stations must lie inside the new section')
         count = min(498, max(3, math.ceil(width / sampler.cell_ft) + 1))
-        stations = np.unique(np.r_[np.linspace(0, width, count), banks])
+        controls = np.r_[0., banks, width]
+        if np.min(np.diff(controls)) < .001:
+            raise IntervalUnavailable(a,b,'Inferred bank controls cannot be distinguished at native station precision')
+        grid = np.linspace(0, width, count)[1:-1]
+        # A shifted section label must still leave the bank and adjacent sample distinguishable.
+        grid = grid[np.min(abs(grid[:,None]-controls),axis=1)>=.001]
+        stations = np.sort(np.r_[grid, controls])
         heights = sampler.sample(cut[0] + stations[:, None]/width * (cut[1]-cut[0]))
         if not np.isfinite(heights).all():
             raise IntervalUnavailable(a,b,'Added section crosses DEM NoData')

@@ -48,6 +48,37 @@ def validate(model, entry):
     return plan
 
 
+def spacing_geometry(case):
+    geometry=read(ROOT/case['geometry']['path'])
+    if geometry.get('spacing_trial'):
+        geometry['spacing_trial'].pop('created_utc',None)
+    return geometry
+
+
+def existing_checks(model):
+    from .report_studies import collect
+    from .river_review_report import collect as field_review
+    path=ROOT/model['summary']['path'];summary=read(path)
+    studies,sources=collect(path,summary)
+    changes={};spacing=[]
+    for s in studies:
+        if s.get('coverage'):continue
+        if s.get('convergence'):
+            old=read(ROOT/s['analysis']['path'])
+            spacing.append((read(ROOT/old['study']['path']),s['analysis']))
+        else:
+            for case in s['cases']:
+                if case.get('changes'):
+                    signature=tuple((v['path'],v['after']) for v in case['changes'])
+                    changes[signature]=s['analysis']
+    river,refs=field_review(path,summary)
+    geom=None
+    if river.get('comparison'):
+        analysis=model['latest_geometry_comparison']
+        geom=(read(ROOT/read(ROOT/analysis['path'])['study']['path']),analysis)
+    return changes,spacing,geom,sources+refs
+
+
 def prepare(key, body):
     model = core.model(key); core.require_idle(model)
     return prepare_model(model, body)
@@ -59,47 +90,71 @@ def prepare_model(model, body):
         raise ValueError('Project changed; reload before preparing checks')
     sensitivity = body.get('sensitivity', True)
     spacing = body.get('spacing', True)
-    if type(sensitivity) is not bool or type(spacing) is not bool or not (sensitivity or spacing):
+    integrated=body.get('integrated',False)
+    geometry=body.get('geometry',False)
+    if type(integrated) is not bool or type(geometry) is not bool or (geometry and model.get('model_type')!='river'):
+        raise ValueError('Choose supported river checks')
+    if type(sensitivity) is not bool or type(spacing) is not bool or not (sensitivity or spacing or geometry):
         raise ValueError('Select at least one check')
     rounds = body.get('maximum_rounds', 2)
     if type(rounds) is not int or not 0 <= rounds <= 3:
         raise ValueError('Choose zero to three added-section coverage rounds')
     steps = []; sources = [model['summary'], item(ROOT/model['active_project'])]; deferred = []
+    changes={};prior_spacing=[];comparison=None
+    if integrated:
+        changes,prior_spacing,comparison,refs=existing_checks(model);sources.extend(refs)
+    if geometry:
+        width=body.get('maximum_width_ft',2000)
+        if comparison and comparison[0].get('maximum_width_ft')==width:
+            steps.append(dict(id='geometry',status='REUSED',result=comparison[1],maximum_calculations=0))
+        else:
+            prepared=app_study.prepare_model(core.model(key),dict(kind='river_geometry',revision=model['revision'],maximum_width_ft=width))
+            steps.append(dict(id='geometry',status='READY',study=prepared['entry'],maximum_calculations=len(prepared['plan']['cases'])))
     if sensitivity:
-        from .sensitivity_ranges import suggest_model
-        packet = suggest_model(model, dict(revision=model['revision']))
+        from .sensitivity_ranges import current, suggest_model
+        packet = current(model,strict=True) if body.get('parameters') is not None else suggest_model(model, dict(revision=model['revision']))
+        if not packet:raise ValueError('Prepare and review the sensitivity ranges first')
         choices, deferred = adopted_choices(packet)
+        if body.get('parameters') is not None:
+            if body.get('range_token')!=packet['token']:raise ValueError('Sensitivity options changed; refresh the ranges')
+            choices=body['parameters'];deferred=[]
         sources += packet['sources']
         if choices:
-            prepared = app_study.prepare_model(core.model(key), dict(revision=model['revision'], range_token=packet['token'], parameters=choices))
-            steps.append(dict(id='sensitivity', status='READY', study=prepared['entry'],
-                parameters=choices, maximum_calculations=len(prepared['plan']['cases'])))
+            options=dict(revision=model['revision'], range_token=packet['token'], parameters=choices)
+            prepared = app_study.prepare_model(core.model(key),options,verified_changes=changes) if integrated else app_study.prepare_model(core.model(key),options)
+            steps.append(dict(id='sensitivity', status='READY' if prepared['entry'] else 'REUSED', study=prepared['entry'],
+                reused=prepared.get('reused',[]),parameters=choices,maximum_calculations=len((prepared['plan'] or {}).get('cases',[]))))
         else:
             steps.append(dict(id='sensitivity', status='UNAVAILABLE', reason='NO_ADOPTED_RANGES', maximum_calculations=0))
     if spacing:
         if model.get('model_type') != 'river':
             steps.append(dict(id='spacing', status='UNAVAILABLE', reason='RIVER_SPACING_ONLY', maximum_calculations=0))
         else:
-            options = dict(revision=model['revision'], kind='spacing', scope='automatic',
+            options = dict(revision=model['revision'], kind='spacing', scope=body.get('spacing_scope','automatic'),
                            maximum_intervals=body.get('maximum_intervals', 12))
             if rounds:
                 options['coverage_policy'] = dict(maximum_rounds=rounds, maximum_width_ft=body.get('maximum_width_ft', 2000))
             prepared = app_study.prepare_model(core.model(key), options)
             available = prepared['plan']['status'] != 'NO_ELIGIBLE_INTERVALS'
-            steps.append(dict(id='spacing', status='READY' if available else 'UNAVAILABLE', study=prepared['entry'],
-                reason=None if available else 'NO_ELIGIBLE_INTERVALS',
-                maximum_calculations=len(prepared['plan']['cases'])*(1+rounds)))
+            new=prepared['plan']
+            fields=('scope','coverage_policy','intervals','excluded_intervals','deferred_intervals')
+            proof=next((ref for prior,ref in prior_spacing if all(new.get(k)==prior.get(k) for k in fields)
+                        and len(prior['cases'])==len(new['cases']) and all(spacing_geometry(x)==spacing_geometry(y) for x,y in zip(prior['cases'],new['cases']))),None)
+            steps.append(dict(id='spacing',status='REUSED' if proof else 'READY' if available else 'UNAVAILABLE',
+                study=prepared['entry'],result=proof,reason=None if available else 'NO_ELIGIBLE_INTERVALS',
+                maximum_calculations=0 if proof or not available else len(new['cases'])*(1+rounds)))
     for step in steps:
         if step.get('study'):
             sources += [step['study'], *plan_sources(read(ROOT/step['study']['path']))]
     plan = dict(schema_version='checks_batch_1', project_id=key, baseline=model['summary'],
                 active_project=model['active_project'], created_utc=utc(), steps=steps,
-                options=dict(sensitivity=sensitivity, spacing=spacing, maximum_rounds=rounds,
+                options=dict(sensitivity=sensitivity, spacing=spacing,geometry=geometry,integrated=integrated,
+                    spacing_scope=body.get('spacing_scope','automatic'),maximum_rounds=rounds,
                     maximum_intervals=body.get('maximum_intervals', 12),
                     maximum_width_ft=body.get('maximum_width_ft', 2000)),
                 deferred_parameters=deferred, maximum_calculations=sum(s['maximum_calculations'] for s in steps),
                 sources=list({e['path']: e for e in sources}.values()), refresh='delivery',
-                status='REVIEW_REQUIRED' if any(s['status']=='READY' for s in steps) else 'NO_AVAILABLE_CHECKS',
+                status='REVIEW_REQUIRED' if any(s['status'] in ('READY','REUSED') for s in steps) else 'NO_AVAILABLE_CHECKS',
                 engineering_acceptance='NOT_ASSESSED')
     path = core.folder(key)/'check_batches'/unique_id()/'plan.json'; save(path, plan)
     model = core.model(key); model['pending_check_batch'] = item(path); model.pop('pending_study', None)
@@ -111,7 +166,8 @@ def preview(entry):
     if not entry or not intact([entry]):
         return None
     plan = read(ROOT/entry['path'])
-    if not intact([s['study'] for s in plan['steps'] if s.get('study')]):
+    studies = [step['study'] for step in plan['steps'] if step.get('study')]
+    if studies and not intact(studies):
         return None
     return dict(token=entry['sha256'], entry=entry, plan=plan,
         studies={s['id']: read(ROOT/s['study']['path']) for s in plan['steps'] if s.get('study')})
@@ -172,6 +228,8 @@ def execute(key):
     try:
         for step in plan['steps']:
             current_step = step['id']
+            if step['status']=='REUSED':
+                record(step['id'],'REUSED',reused=step.get('reused',[]),source=step.get('result'));continue
             if step['status'] != 'READY':
                 record(step['id'], 'UNAVAILABLE', reason=step['reason']); continue
             confirmation = review['studies'][step['id']]
@@ -191,7 +249,7 @@ def execute(key):
                 raise ValueError('Native check incomplete; saved cases remain available for retry')
             record(step['id'], 'COMPLETED', analysis=analysis, assessment=result['status'])
             model = core.model(key)
-            model['latest_spacing' if step['id']=='spacing' else 'latest_study'] = analysis
+            model[{'spacing':'latest_spacing','sensitivity':'latest_study','geometry':'latest_geometry_comparison'}[step['id']]] = analysis
             model['exports_need_refresh'] = True
             core.persist(model, 'CHECK_BATCH_STUDY_FINISHED', dict(stage=step['id'], analysis=analysis))
         model = core.model(key); model.update(status='PROCESSING', phase='CHECK_BATCH_DELIVERY')

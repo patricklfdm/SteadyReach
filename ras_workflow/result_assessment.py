@@ -260,7 +260,12 @@ def assess(model, path, summary, diagnostics, studies, guidance):
         local_findings.append(finding('BOUNDARY_INFLUENCE',2,sensitivity,'Review boundary influence within the selected reach.',
             '核查边界对所选河段的影响。',**{**worst,**worst['area']}))
     selection.update(level=classify(local_findings)['level'],blocking_codes=[f['code'] for f in local_findings])
-    result.update(area=selection,candidate_findings=candidate_findings,rule_version=2,assessed_utc=utc(),summary=model['summary'],run_id=hyd['run_id'],profiles=[p['profile_id'] for p in hyd['profiles']],input_adequacy=gate.get('input_adequacy_status'),
+    codes={r['code'] for r in findings}
+    checks=dict(geometry=is_river and bool(wet) and len(hyd['profiles'])==1 and hyd['profiles'][0]['profile_id'].lower()=='q100',
+                sensitivity=bool({'BOUNDARY_SCOPE','BOUNDARY_INFLUENCE'} & codes),
+                spacing='SPACING' in codes,spacing_scope='all',maximum_width_ft=river.get('comparison_width_ft'),
+                field_first=bool({'BOUNDARY_INFLUENCE','BED_BASIS','FIELD_SUPPORT'} & codes or candidate_findings))
+    result.update(area=selection,candidate_findings=candidate_findings,recommended_checks=checks,rule_version=2,assessed_utc=utc(),summary=model['summary'],run_id=hyd['run_id'],profiles=[p['profile_id'] for p in hyd['profiles']],input_adequacy=gate.get('input_adequacy_status'),
         bed_basis=hyd.get('channel_geometry_basis'),diagnostics=dict(records=len(issues) if diagnostics else None,
         native_messages=sum(1 for r in issues if (r.get('evidence') or {}).get('native_message')) if diagnostics else None,
         warning_coverage=(diagnostics or {}).get('warning_coverage'),by_severity=dict(Counter(r['severity'] for r in issues))),

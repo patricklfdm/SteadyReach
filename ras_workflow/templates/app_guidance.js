@@ -98,6 +98,10 @@ function showResultAssessment(box,a){
    a.boundary_cases.map(c=>[c.profile+' / '+c.case,c.boundary_rs+' / '+decimal(c.boundary_delta_ft),(c.area.station??'—')+' / '+decimal(c.area.delta_ft),c.area.affected+' / '+c.area.compared]));
  }
  if(a.run_id&&!current.native_review){const actions=el('div',undefined,'actions');box.append(actions);
+  if(current.model_type==='river')actions.append(button('Review checks in one batch','集中核对本版试算',()=>{
+   openGuidanceTool('check-batch');
+   document.getElementById('qa-tool-check-batch')?.dispatchEvent(new CustomEvent('steadyreach-recommend-checks',{detail:a.recommended_checks}));
+  }));
   actions.append(button('Prepare QA revision suggestions','根据 QA 创建修订建议',prepareQaRevision),button('Open editable revision tool','打开独立修订入口',()=>openGuidanceTool('revision')));}
  if(a.run_id&&current.model_type==='river')showFieldSearch(box,a);
  const scope=details(box,'Grading scope and evidence','分级范围与核验依据');

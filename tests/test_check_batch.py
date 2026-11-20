@@ -69,6 +69,14 @@ class CheckBatchTests(unittest.TestCase):
                 else:save(self.root/'spacing'/'source.json',{'altered':True})
                 with self.assertRaises(ValueError):batch.validate(model,self.entry)
 
+    def test_reused_only_plan_can_be_previewed_without_new_studies(self):
+        path = self.root / 'batch' / 'plan.json'
+        plan = read(path)
+        plan['steps'] = [dict(id='sensitivity', status='REUSED', maximum_calculations=0)]
+        plan['maximum_calculations'] = 0
+        save(path, plan)
+        self.assertEqual(batch.preview(item(path))['plan'], plan)
+
     def test_native_model_is_excluded(self):
         self.m['native_review']='test'
         with self.assertRaisesRegex(ValueError,'workflow-built'):batch.validate(self.m,self.entry)

@@ -9,7 +9,7 @@ def prepare(key,body):
     return prepare_model(m,body)
 
 
-def prepare_model(m,body):
+def prepare_model(m,body,verified_changes=None):
     key=m['id']
     if body.get('revision')!=m['revision']:raise ValueError('Project changed; reload')
     if not m.get('active_project') or not m.get('summary') or not intact([m['summary']]):raise ValueError('Compute a baseline before preparing a sensitivity batch')
@@ -65,10 +65,20 @@ def prepare_model(m,body):
                 raise
             cases.append(dict(id=topic+'_'+suffix,topic=topic,changes=changes))
     if not cases:raise ValueError('The selected range does not change baseline inputs')
+    reused=[]
+    if verified_changes:
+        fresh=[]
+        for case in cases:
+            signature=tuple((v['path'],v['value']) for v in case['changes'])
+            proof=verified_changes.get(signature)
+            if proof:reused.append(dict(case=case['id'],changes=case['changes'],source=proof))
+            else:fresh.append(case)
+        cases=fresh
+        if not cases:return dict(reused=reused,entry=None,plan=None)
     out=core.folder(key)/'studies'/unique_id();spec=dict(id='sensitivity',case_kind=c['case_kind'],purpose='User-selected local sensitivity comparison; not automatic design acceptance',sources=[m['summary']]+range_sources,measurement_topics=topics,cases=cases,delivery_enabled=False)
     save(out/'specification.json',spec);path=study.prepare(ROOT/m['active_project'],m['scenario'],out/'specification.json',out/'prepared')
     m['pending_study']=item(path);core.persist(m,'PREPARE_SENSITIVITY',dict(study=m['pending_study']))
-    return dict(token=m['pending_study']['sha256'],entry=m['pending_study'],plan=read(path),warning='Each case is a real HEC-RAS run. Only the displayed ranges are tested; no interaction or convergence claim.')
+    return dict(token=m['pending_study']['sha256'],entry=m['pending_study'],plan=read(path),reused=reused,warning='Each case is a real HEC-RAS run. Only the displayed ranges are tested; no interaction or convergence claim.')
 
 
 def start(key,body):

@@ -1,12 +1,12 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
-const buttons=new Map(),fields=new Map(),checks=[],calls=[],notes=[];
+const buttons=new Map(),fields=new Map(),checks=[],namedChecks=new Map(),calls=[],notes=[];
 const element=()=>({append(){},replaceChildren(){},addEventListener(){}});
 const plan={status:'REVIEW_REQUIRED',maximum_calculations:8,deferred_parameters:[],steps:[{id:'sensitivity',status:'READY',maximum_calculations:5,parameters:[{path:'boundary_slopes.downstream',low:.001,high:.01}]}]};
 const proposal={token:'saved',plan,studies:{sensitivity:{measurement_topics:[]}}};
 const context=vm.createContext({current:{id:'isolated',revision:1,model_type:'river',check_batch_preview:proposal},
  tr:(en,zh)=>en,el:(tag,text)=>{if(text)notes.push(text);return element()},details:element,
  field:(p,id,en,zh,value)=>{const input={...element(),value};fields.set(id,input);return input},table(){},notify(){},open:async()=>{},
- check(p,en,zh,value){const box={...element(),checked:value};checks.push(box);return box},
+ check(p,en,zh,value){const box={...element(),checked:value};checks.push(box);namedChecks.set(en,box);return box},
  button(en,zh,fn){buttons.set(en,fn);return element()},api:async(route,body)=>{calls.push({route,body});return proposal}});
 vm.runInContext(fs.readFileSync(path.join(__dirname,'../ras_workflow/templates/app_check_batch.js'),'utf8'),context);
 (async()=>{
@@ -27,6 +27,6 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'../ras_workflow/templates/a
  context.current.check_batch_preview.plan.options={sensitivity:false,spacing:true,maximum_intervals:7,maximum_rounds:0,maximum_width_ft:1500};
  context.renderCheckBatch(element());
  assert.equal(fields.get('checks-intervals').value,7);assert.equal(fields.get('checks-rounds').value,0);
- assert.equal(fields.get('checks-width').value,1500);assert.equal(checks.at(-3).checked,false);
+ assert.equal(fields.get('checks-width').value,1500);assert.equal(namedChecks.get('Include already adopted parameter ranges').checked,false);
  console.log('Batch scope, consent gate, preview retention and same-confirmation retry PASS');
 })().catch(e=>{console.error(e);process.exitCode=1});
