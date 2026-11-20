@@ -26,7 +26,7 @@ def collect(summary_path, summary):
         if rows!=packet['rows']:raise ValueError('Observed quantities differ from their source CSV')
         sources.extend([model['river_observations'],packet['source']])
         data['screen']=rows
-        events=[]
+        events={}
         for entry in model.get('observed_event_history',[]):
             result=load(entry)
             if result.get('observations')!=packet['source'] or result.get('baseline')!=ref:continue
@@ -38,8 +38,8 @@ def collect(summary_path, summary):
             measured=screen(match,native,spec)
             if measured!=result['rows']:raise ValueError('Event residuals differ from native output')
             sources.extend([native['hydraulic_results'],native['hydraulics']['raw_hdf'],native['hydraulics']['raw_controller']])
-            events.extend(measured)
-        data['events']=events
+            events[spec['event'], spec['date']] = measured
+        data['events'] = [row for event_rows in events.values() for row in event_rows]
     if model.get('latest_geometry_comparison'):
         result=load(model['latest_geometry_comparison'])
         if result.get('status')=='COMPARISON_REQUIRES_REVIEW' and result['summaries'].get('baseline')==ref:

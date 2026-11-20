@@ -131,6 +131,16 @@ def screen(records,summary,event=None):
     return results
 
 
+def holdout_stages(rows):
+    measured=[row for row in rows if row.get('role')=='holdout'
+              and row.get('kind') in ('stage','gage_height') and not row.get('issues')
+              and number(row,'residual_ft') is not None]
+    missing=[r for r in measured if number(r,'uncertainty_ft') is None]
+    exceeds=[r for r in measured if number(r,'uncertainty_ft') is not None
+             and abs(r['residual_ft'])>r['uncertainty_ft']]
+    return measured,missing,exceeds
+
+
 def parse(text):
     if not isinstance(text,str) or len(text)>2_000_000:raise ValueError('Use a UTF-8 CSV up to 2 MB')
     reader=csv.DictReader(io.StringIO(text.lstrip('\ufeff')))

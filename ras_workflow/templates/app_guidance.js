@@ -4,6 +4,7 @@ function assessmentFact(row){
  const f=row.facts||{},decimal=(v,d)=>Number.isFinite(v)?v.toFixed(d):'—';
  if(row.code==='GEOMETRY_FLOW_PATH')return 'RS '+f.station+' · '+(f.side==='L'?tr('left','左侧'):tr('right','右侧'))+' '+decimal(f.baseline_share_pct,2)+'% → '+decimal(f.alternative_share_pct,2)+'% · '+tr('new end depth ','新过水端深 ')+decimal(f.end_excess_ft,3)+' ft';
  if(row.code==='BOUNDARY_INFLUENCE')return f.profile+' · '+sensitivityParameterLabel(f.parameter)+' · RS '+f.station+' · Δ '+decimal(f.delta_ft,3)+' ft · '+f.affected+'/'+f.compared+tr(' sections above ',' 条断面的绝对差超过 ')+f.threshold_ft+' ft';
+ if(row.code==='FIELD_RESIDUAL' && f.missing_uncertainty!==undefined)return 'RS '+f.station+' · Δ '+decimal(f.peak_ft,3)+' ft · '+tr('Missing accuracy','缺测量精度')+' '+f.missing_uncertainty+' · '+tr('Outside accuracy','超出测量精度')+' '+f.outside_uncertainty;
  if(f.peak_ft!==undefined)return 'RS '+f.station+' · Δ '+decimal(f.peak_ft,3)+' ft';
  if(f.screened!==undefined)return tr('Screened observations','已初筛的测点')+' · '+f.screened;
  if(f.stations)return 'RS '+f.stations.join(', ');

@@ -25,7 +25,7 @@ class ResultAssessmentTests(TestCase):
             dict(profile='Q100',station=s,delta_wse_ft=.02) for s in ('200','100')]) for c in cases])
         self.spacing=dict(convergence={'status':'STABLE_AT_REVIEW_THRESHOLD'},end_coverage={'status':'ENDS_ABOVE_COMPUTED_WATER'},
             intervals=[{}],cases=[dict(section_count=2),{},{}],comparisons=[])
-        self.field={'events':[dict(role='holdout',residual_ft=.01,uncertainty_ft=.03,location={'rs':'200'})]}
+        self.field={'events':[dict(role='holdout',kind='stage',residual_ft=.01,uncertainty_ft=.03,location={'rs':'200'})]}
         self.package={'status':'VERIFIED_MAPPED'}
         self.review={'status':'NO_CURRENT_SUBMISSION'}
 
@@ -119,8 +119,25 @@ class ResultAssessmentTests(TestCase):
         r=self.assess()
         self.assertEqual(r['holdout_observations'],0)
         self.assertIn('FIELD_SUPPORT',[f['code'] for f in r['findings']])
-        self.field['events']=[dict(role='holdout',residual_ft=3,uncertainty_ft=.03,location={'rs':'100'})]
+        self.field['events']=[dict(role='holdout',kind='gage_height',residual_ft=3,uncertainty_ft=.03,location={'rs':'100'})]
         self.assertIn('FIELD_RESIDUAL',[f['code'] for f in self.assess()['findings']])
+
+    def test_bed_checks_and_rejected_rows_cannot_substitute_for_independent_stages(self):
+        bed=dict(role='holdout',kind='bed',residual_ft=0.,uncertainty_ft=.01,location={'rs':'200'})
+        rejected={**bed,'kind':'stage','issues':['VERTICAL_DATUM_MISMATCH']}
+        self.field['events']=[bed,rejected]
+        result=self.assess()
+        self.assertEqual(result['holdout_observations'],0)
+        self.assertIn('FIELD_SUPPORT',[f['code'] for f in result['findings']])
+
+    def test_field_finding_identifies_a_station_requiring_review(self):
+        stage=self.field['events'][0]
+        self.field['events']=[{**stage,'residual_ft':.09,'uncertainty_ft':.1},
+                              {**stage,'kind':'gage_height','residual_ft':-.04,'uncertainty_ft':.02,'location':{'rs':'300'}},
+                              {**stage,'residual_ft':.01,'uncertainty_ft':None}]
+        finding=next(f for f in self.assess()['findings'] if f['code']=='FIELD_RESIDUAL')['facts']
+        self.assertEqual((finding['station'],finding['peak_ft']),('300',-.04))
+        self.assertEqual((finding['records'],finding['missing_uncertainty'],finding['outside_uncertainty']),(2,1,1))
 
     def test_revision_reads_its_own_results_even_for_legacy_drafts(self):
         from ras_workflow.app_core import edition_record

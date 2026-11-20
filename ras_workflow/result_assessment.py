@@ -6,6 +6,7 @@ from .result_guidance import BALANCE, NATIVE_GAPS, WET, text
 from .revision_inputs import station_key
 from .river_review import response
 
+RULE_VERSION = 3
 LEVELS = [
     text('Evidence insufficient', '计算证据不足'),
     text('Internal diagnosis', '可供内部诊断'),
@@ -24,7 +25,7 @@ def finding(code, ceiling, target, en, zh, **facts):
 def classify(findings):
     level = min((r['ceiling'] for r in findings), default=3)
     return dict(level=level, title=LEVELS[level], levels=LEVELS, findings=sorted(findings,key=lambda r:r['ceiling']),
-                engineering_acceptance='NOT_ASSESSED', rule_version=1)
+                engineering_acceptance='NOT_ASSESSED', rule_version=RULE_VERSION)
 
 
 def unverified(reason):
@@ -241,20 +242,21 @@ def assess(model, path, summary, diagnostics, studies, guidance):
     elif gate.get('input_adequacy_status')=='CONDITIONAL_UNVERIFIED':
         findings.append(finding('STRUCTURE_INPUTS',2,revise,'Verify structure dimensions, inverts and road levels for the intended use.',
                                 '按交付用途核实结构尺寸、涵底和道路高程。'))
-    measured=[r for r in river.get('events',[]) if r.get('role')=='holdout' and finite(r.get('residual_ft'))]
+    from .river_observations import holdout_stages
+    measured,missing_accuracy,exceeds=holdout_stages(river.get('events',[]))
     if is_river and not measured:
         findings.append(finding('FIELD_SUPPORT',2,'observations' if editable else 'qa',
             'Document an independent measured event before submitting a site performance claim for sign-off.',
             '如需送审场地水位预测，补充独立事件的非边界实测水位，并核对位置与基准。',
             screened=len(river.get('screen',[]))))
     elif measured:
-        largest=max(measured,key=lambda r:abs(r['residual_ft']))
-        outside=[r for r in measured if not finite(r.get('uncertainty_ft')) or abs(r['residual_ft'])>r['uncertainty_ft']]
+        outside=missing_accuracy+exceeds
         if outside:
+            largest=max(outside,key=lambda r:abs(r['residual_ft']))
             findings.append(finding('FIELD_RESIDUAL',2,'observations' if editable else 'qa',
                 'Review held-out residuals and measurement uncertainty for the intended site use.',
                 '核对独立事件的逐站偏差、测量不确定度以及拟用范围。',records=len(outside),
-                peak_ft=largest['residual_ft'],station=(largest.get('location') or {}).get('rs')))
+                missing_uncertainty=len(missing_accuracy), outside_uncertainty=len(exceeds), peak_ft=largest['residual_ft'],station=(largest.get('location') or {}).get('rs')))
     result=classify(findings)
     local_findings=[f for f in findings if f['code']!='BOUNDARY_INFLUENCE']
     local_cases=[c for c in cases if c['area']['affected']]
@@ -268,7 +270,7 @@ def assess(model, path, summary, diagnostics, studies, guidance):
                 sensitivity=bool({'BOUNDARY_SCOPE','BOUNDARY_INFLUENCE'} & codes),
                 spacing='SPACING' in codes,spacing_scope='all',maximum_width_ft=river.get('comparison_width_ft'),
                 field_first=bool({'BOUNDARY_INFLUENCE','BED_BASIS','FIELD_SUPPORT'} & codes or candidate_findings))
-    result.update(area=selection,candidate_findings=candidate_findings,recommended_checks=checks,rule_version=2,assessed_utc=utc(),summary=model['summary'],run_id=hyd['run_id'],profiles=[p['profile_id'] for p in hyd['profiles']],input_adequacy=gate.get('input_adequacy_status'),
+    result.update(area=selection,candidate_findings=candidate_findings,recommended_checks=checks,assessed_utc=utc(),summary=model['summary'],run_id=hyd['run_id'],profiles=[p['profile_id'] for p in hyd['profiles']],input_adequacy=gate.get('input_adequacy_status'),
         bed_basis=hyd.get('channel_geometry_basis'),diagnostics=dict(records=len(issues) if diagnostics else None,
         native_messages=sum(1 for r in issues if (r.get('evidence') or {}).get('native_message')) if diagnostics else None,
         warning_coverage=(diagnostics or {}).get('warning_coverage'),by_severity=dict(Counter(r['severity'] for r in issues))),
