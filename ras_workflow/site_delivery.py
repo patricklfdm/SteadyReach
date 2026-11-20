@@ -176,7 +176,7 @@ def generate(summary_path,output,reuse_package=None,refresh_imagery_extent=False
     summary_path=safe_path(ROOT,summary_path);summary=read(summary_path);c=summary['configuration'];h=summary.get('hydraulics')
     if not h:raise ValueError('A verified actual solver run is required for a computed delivery')
     from .report_data import collect
-    collect(summary_path)  # Verifies raw solver outputs and the sealed extraction.
+    feedback=collect(summary_path).get('field_feedback')  # Verifies native outputs and the sealed extraction.
     cp,run,run_manifest=config_origin(summary);settings=c.get('delivery',{})
     setting_path=cp.parent/'delivery.settings.json'
     if setting_path.exists():
@@ -355,6 +355,10 @@ def generate(summary_path,output,reuse_package=None,refresh_imagery_extent=False
             +'保持目录完整。重新计算前先复制文件夹，再打开恒定流方案计算并复核警告。请核对本次模型的输入依据和水力 QA 状态。\n'
             +f"输入充分性 {result['input_adequacy']}；水力 QA {result['hydraulic_qa']}；工程验收 NOT_ASSESSED。\n"
             +'两个包来自同一个运行。地图是地形和模型位置展示，不是已验证的洪泛范围。\n')
+        if feedback:
+            from .field_results import lines
+            text+='\n'+'\n'.join(lines(feedback,False)+['']+lines(feedback,True))+'\n'
+            for directory in (full,minimal):save(directory/'Field_review.json',feedback)
         for folder in [full,minimal]:(folder/'READ_ME.txt').write_text(text,encoding='utf-8-sig')
         comparison=('PACKAGE COMPARISON / 交付包比较\n\nBoth: native inputs/results, runtime, opening instructions; when mapped: Terrain, CRS, offline imagery (if available), contour SHP and English exhibit.\n'
             'Complete only: editable QGIS project/layouts, English/Chinese exhibits, detailed bilingual DOCX/PDF reports, original input snapshots and run/QA evidence.\n'

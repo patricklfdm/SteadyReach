@@ -54,6 +54,15 @@ def build(data, plots, folder, language='en', detail='full', details=None):
         [tr('Input adequacy','输入充分性'),localized(h['input_adequacy_status'])],
         [tr('Hydraulic QA','水力 QA'),localized(h['hydraulic_qa_status'])],
         [tr('Engineering acceptance','工程接受'),localized(h['engineering_acceptance_status'])]],[1.8,4.9])
+    feedback=data.get('field_feedback')
+    if feedback:
+        from .field_results import lines
+        d.add_heading(tr('Field feedback and native response','现场反馈与原生水位响应'),1)
+        for line in lines(feedback,cn):d.add_paragraph(line)
+        if full and feedback['mode']=='event':
+            table(d,['RS',tr('Use','用途'),tr('Point / basis','点类型／依据'),tr('Uncertainty (ft)','不确定度（ft）'),tr('Residual (ft)','偏差（ft）')],
+                  [[r['rs'],r['role'],r['point_type']+' / '+r['basis'],n(r['uncertainty_ft'] or None),n(r['residual_ft'])] for r in feedback['observations']],
+                  [.7,1.1,2.1,1.25,1.25])
     d.add_heading(tr('Results at a glance','主要结果'),1)
     table(d,[tr('Profile','工况'),'Q cfs',tr('Upstream WSE ft','上端水位 ft'),tr('Downstream WSE ft','下端水位 ft'),tr('Max channel V ft/s','最大主槽流速 ft/s')],
         [[v['profile_id'],n(v['flow_cfs']),n(v['metrics']['upstream_wse_ft']),n(v['metrics']['downstream_wse_ft']),n(v['metrics']['max_channel_velocity_fts'])] for v in h['profiles']],
@@ -145,6 +154,12 @@ def build(data, plots, folder, language='en', detail='full', details=None):
                   '湿端使本次加密对比仍属暂定，即使数值差达到阈值也不能完成收敛验收。应在独立修订版中核对并确认覆盖调整，再从新基准重新进行加密评估；不能单独修改现有嵌套序列中的某一级。')
             p('The internal threshold is '+str(convergence['threshold_ft'])+' ft. Coverage is limited to the selected refinement intervals. Added elevations were sampled from the same DEM and added banks were inferred from neighboring sections. Hydraulic warnings and physical applicability remain open.',
               '内部阈值为 '+str(convergence['threshold_ft'])+' ft，结论限于所选加密区间。新增高程从同一 DEM 采样，新增岸站按相邻断面推定。水力警告与物理适用性仍需复核。')
+    elif feedback and feedback['mode']=='event':
+        p('The event tailwater comparison above covers three profiles in the same native plan. Separate roughness and spacing studies remain open for this edition.',
+          '上方事件尾水对比采用同一原生计划中的三个工况。本版本仍待单独检验糙率与断面间距的影响。')
+    elif feedback and feedback['mode']=='geometry':
+        p('The field review above compares the two solved geometries near the selected section. Boundary and roughness sensitivity remain open for this edition.',
+          '上方现场复核对比所选断面附近两种几何的计算结果。本版本仍待检验边界和糙率敏感性。')
     else:
         p('No completed sensitivity study is bound to this exact baseline. Tests from prior geometry revisions are not reused.',
           '未发现绑定本次基准的已完成敏感性测试；不沿用旧几何修订版的测试结果。')

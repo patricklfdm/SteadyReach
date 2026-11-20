@@ -42,7 +42,7 @@ def create():
                     path=safe_path(ROOT,route[5:])
                     if not path.is_relative_to(ROOT/'projects') or path.suffix.lower() not in ('.pdf','.docx','.json','.txt','.csv','.png','.jpg','.jpeg'):raise ValueError('Unsupported artifact')
                     return self.send(200,path.read_bytes(),mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
-                assets={'app_floodplain.js':('app_floodplain.js','application/javascript; charset=utf-8'),'app_observations.js':('app_observations.js','application/javascript; charset=utf-8'),'observation-template.csv':('observation-template.csv','text/csv; charset=utf-8'),'app_river_checks.js':('app_river_checks.js','application/javascript; charset=utf-8'),'app_check_batch.js':('app_check_batch.js','application/javascript; charset=utf-8'),'app_spacing_review.js':('app_spacing_review.js','application/javascript; charset=utf-8'),'app_atlas.js':('app_atlas.js','application/javascript; charset=utf-8'),'app_guidance.js':('app_guidance.js','application/javascript; charset=utf-8'),'app_sensitivity.js':('app_sensitivity.js','application/javascript; charset=utf-8'),'app_geometry_auto.js':('app_geometry_auto.js','application/javascript; charset=utf-8'),'app_results.js':('app_results.js','application/javascript; charset=utf-8'),'app_automation.js':('app_automation.js','application/javascript; charset=utf-8'),'app_map.js':('app_map.js','application/javascript; charset=utf-8'),'app_section_repair.js':('app_section_repair.js','application/javascript; charset=utf-8'),'':('app.html','text/html; charset=utf-8'),'app.js':('app.js','application/javascript; charset=utf-8'),'app_editor.js':('app_editor.js','application/javascript; charset=utf-8'),'app_sources.js':('app_sources.js','application/javascript; charset=utf-8'),'app.css':('app.css','text/css; charset=utf-8')}
+                assets={'app_field_feedback.js':('app_field_feedback.js','application/javascript; charset=utf-8'),'app_floodplain.js':('app_floodplain.js','application/javascript; charset=utf-8'),'app_observations.js':('app_observations.js','application/javascript; charset=utf-8'),'observation-template.csv':('observation-template.csv','text/csv; charset=utf-8'),'app_river_checks.js':('app_river_checks.js','application/javascript; charset=utf-8'),'app_check_batch.js':('app_check_batch.js','application/javascript; charset=utf-8'),'app_spacing_review.js':('app_spacing_review.js','application/javascript; charset=utf-8'),'app_atlas.js':('app_atlas.js','application/javascript; charset=utf-8'),'app_guidance.js':('app_guidance.js','application/javascript; charset=utf-8'),'app_sensitivity.js':('app_sensitivity.js','application/javascript; charset=utf-8'),'app_geometry_auto.js':('app_geometry_auto.js','application/javascript; charset=utf-8'),'app_results.js':('app_results.js','application/javascript; charset=utf-8'),'app_automation.js':('app_automation.js','application/javascript; charset=utf-8'),'app_map.js':('app_map.js','application/javascript; charset=utf-8'),'app_section_repair.js':('app_section_repair.js','application/javascript; charset=utf-8'),'':('app.html','text/html; charset=utf-8'),'app.js':('app.js','application/javascript; charset=utf-8'),'app_editor.js':('app_editor.js','application/javascript; charset=utf-8'),'app_sources.js':('app_sources.js','application/javascript; charset=utf-8'),'app.css':('app.css','text/css; charset=utf-8')}
                 if route not in assets:return self.send(404,dict(error='Not found'))
                 file,mime=assets[route];self.send(200,(ROOT/'ras_workflow/templates'/file).read_bytes(),mime)
             except Exception as e:self.send(400,dict(error=str(e)))
@@ -66,6 +66,19 @@ def create():
                     elif route=='spacing-diagnostics':
                         from .spacing_diagnostics import collect
                         result=collect(key,body)
+                    elif route.startswith('field/'):
+                        from . import field_feedback,field_followup,field_paths
+                        action=route.split('/')[1]
+                        if action=='latest':
+                            model=field_feedback.model_for(key,body)
+                            result={k:field_feedback.latest(model,k,body.get('event'),body.get('date')) for k in ('event','geometry')}
+                        elif action=='resume':
+                            model=core.model(key);core.require_idle(model)
+                            if not model.get('feedback_spec') or body.get('confirmed') is not True:raise ValueError('Confirm this saved field run')
+                            result=core.launch(key,'field-run')
+                        else:
+                            result={'request':field_feedback.exports,'preview':field_feedback.prepare,'confirm':field_followup.confirm,
+                                    'compare':field_paths.compare}[action](key,body)
                     elif route=='qa-floodplain':
                         from .section_context import collect
                         result=collect(key,body)

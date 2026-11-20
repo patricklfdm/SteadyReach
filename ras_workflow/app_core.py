@@ -373,7 +373,7 @@ def run(key):
             traceback.print_exc()  # Preserve the completed solver/export outcome.
 
 def launch(key,action):
-    if action not in ('prepare','run','report','delivery','acquire','analyze','study','catalog','native-export','automatic-prepare','check-batch','next-review'):raise ValueError('Unknown task')
+    if action not in ('prepare','run','report','delivery','acquire','analyze','study','catalog','native-export','automatic-prepare','check-batch','next-review','field-run'):raise ValueError('Unknown task')
     global_state=ROOT/'status/app/active.json'
     with lock(ROOT/'status/app/launch.lock'):
         m=model(key);require_idle(m)
@@ -423,6 +423,9 @@ def worker(record):
             elif job['action']=='catalog':
                 from .app_catalog import acquire as acquire_catalog
                 acquire_catalog(key)
+            elif job['action']=='field-run':
+                from .field_followup import execute
+                execute(key)
             elif job['action']=='study':
                 from .app_study import execute as execute_study
                 execute_study(key)
@@ -586,6 +589,9 @@ def view(key,detail=True):
         result['delivery']=delivery
         from .app_revision import compare
         result['comparison']=compare(m,s)
+        if s['configuration'].get('field_feedback'):
+            from .field_results import collect as field_results
+            result['field_response']=field_results(s)[0]
         if s.get('native_supplement'):
             from .app_outputs import validate as validate_outputs,diagnostics as supplemented_qa
             try:
@@ -605,7 +611,8 @@ def view(key,detail=True):
 
 def listing(deleted=False):
     projects=[]
-    for path in sorted(BASE.glob('site_*/app.json'),reverse=True):
+    paths=[*BASE.glob('site_*/app.json'),*BASE.glob('field_*/app.json')]
+    for path in sorted(paths,reverse=True):
         key=path.parent.name
         if deletion_record(key).exists()==deleted:
             projects.append(model(key) if deleted else view(key,False))

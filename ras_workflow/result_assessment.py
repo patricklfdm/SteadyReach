@@ -6,7 +6,7 @@ from .result_guidance import BALANCE, NATIVE_GAPS, WET, text
 from .revision_inputs import station_key
 from .river_review import response
 
-RULE_VERSION = 4
+RULE_VERSION = 5
 LEVELS = [
     text('Evidence insufficient', '计算证据不足'),
     text('Internal diagnosis', '可供内部诊断'),
@@ -148,7 +148,7 @@ def qa_decisions(model, hyd, issues):
     return dict(status=closure_status(packet,spec['decisions'])['hydraulic_qa_status'],source=last['spec'])
 
 
-def boundary_findings(studies, hyd, target, inventory, selection):
+def boundary_findings(studies, hyd, target, inventory, selection, feedback=None):
     from .qa import THRESHOLDS
     profiles=[p['profile_id'] for p in hyd['profiles']]
     signed=response(studies)
@@ -185,6 +185,23 @@ def boundary_findings(studies, hyd, target, inventory, selection):
                     station=station_key(row['peak_rs']),delta_ft=row['signed_peak_ft'],affected=len(row['affected']),
                     compared=row['compared'],threshold_ft=row['threshold_ft'],area=local_stats,
                     boundary_rs=end_rs,boundary_delta_ft=dict(points).get(end_rs)))
+    if feedback and feedback['mode']=='event':
+        # The low/high profiles are perturbations of EventBase at one discharge.
+        profiles=['EventBase']
+        downstream=selection['stations'][-1]
+        for response_row in feedback['responses']:
+            values=response_row['by_rs']
+            if set(values)!=set(selection['stations']):raise ValueError('Incomplete native event response')
+            threshold=response_row['threshold_ft']
+            local={rs:values[rs] for rs in selection['selected']}
+            peak=max(values,key=lambda rs:abs(values[rs]))
+            local_peak=max(local,key=lambda rs:abs(local[rs]))
+            high=response_row['profile']=='TailHigh'
+            directions.add(('downstream','EventBase',high))
+            cases.append(dict(profile='EventBase',case=response_row['profile'],parameter='boundaries.downstream.stages_ft.0',
+                station=peak,delta_ft=values[peak],affected=sum(abs(v)>threshold for v in values.values()),compared=len(values),
+                threshold_ft=threshold,boundary_rs=downstream,boundary_delta_ft=values[downstream],assumed=feedback['assumed'],
+                area=dict(station=local_peak,delta_ft=local[local_peak],affected=sum(abs(v)>threshold for v in local.values()),compared=len(local))))
     findings=[]
     affected=[r for r in cases if r['affected']]
     if affected:
@@ -231,6 +248,13 @@ def assess(model, path, summary, diagnostics, studies, guidance):
             if model.get('latest_geometry_comparison') and 'comparison' not in river:
                 errors.append('Geometry comparison belongs to another result or is incomplete.')
         except EVIDENCE_ERRORS as error:errors.append(str(error))
+    feedback=None
+    if summary.get('configuration',{}).get('field_feedback'):
+        from .field_results import collect as collect_feedback
+        try:
+            feedback,feedback_refs=collect_feedback(summary)
+            sources.extend(feedback_refs)
+        except EVIDENCE_ERRORS as error:errors.append(str(error))
     from .survey_import import verified_sources
     try:sources.extend(verified_sources(model))
     except EVIDENCE_ERRORS as error:errors.append(str(error))
@@ -269,7 +293,7 @@ def assess(model, path, summary, diagnostics, studies, guidance):
         selection=full_area(inventory)
         findings.append(finding('AREA_EVIDENCE',1,'qa','Restore the saved area of interest or select it again.',
                                 '恢复已存关注范围，或重新选择。',error=str(error)))
-    boundary,cases=boundary_findings(studies,hyd,sensitivity,inventory,selection)
+    boundary,cases=boundary_findings(studies,hyd,sensitivity,inventory,selection,feedback)
     findings.extend(f for f in boundary if f['code']=='BOUNDARY_INFLUENCE')
     wet=sorted({station_key(r['station']) for r in issues if r['code'] in WET and r.get('station') is not None},key=float,reverse=True)
     if wet:
@@ -296,7 +320,15 @@ def assess(model, path, summary, diagnostics, studies, guidance):
         findings.append(finding('STRUCTURE_INPUTS',2,revise,'Verify structure dimensions, inverts and road levels for the intended use.',
                                 '按交付用途核实结构尺寸、涵底和道路高程。'))
     from .river_observations import holdout_stages
-    measured,missing_accuracy,exceeds=holdout_stages(river.get('events',[]))
+    reviewed_events=list(river.get('events',[]))
+    if feedback:
+        from .field_results import verified_observations
+        if feedback['mode']=='event':
+            reviewed_events.extend(verified_observations(feedback))
+        if feedback['mode']=='geometry' and feedback['decision'] in ('request_survey','review_2d'):
+            findings.append(finding('FLOW_PATH_DISPOSITION',2,'floodplain','Resolve the recorded floodplain condition before sign-off.',
+                                    '送签前复核已记录的漫滩条件。',station=feedback['comparison']['station'],condition=feedback['condition']))
+    measured,missing_accuracy,exceeds=holdout_stages(reviewed_events)
     if is_river and not measured:
         findings.append(finding('FIELD_SUPPORT',2,'observations' if editable else 'qa',
             'Document an independent measured event before submitting a site performance claim for sign-off.',
@@ -312,6 +344,8 @@ def assess(model, path, summary, diagnostics, studies, guidance):
                 missing_uncertainty=len(missing_accuracy), outside_uncertainty=len(exceeds), peak_ft=largest['residual_ft'],station=(largest.get('location') or {}).get('rs'),
                 observations=[{k:r.get(k) for k in ('event','date','location','flow_cfs','residual_ft','uncertainty_ft','source')}
                               for r in outside]))
+    if feedback and feedback['assumed']:
+        findings.append(finding('ASSUMED_FIELD_FEEDBACK',2,'field-feedback','Replace assumed field feedback with dated field records.','用有日期的现场记录替换假设反馈。'))
     result=classify(findings)
     local_findings=[f for f in findings if f['code']!='BOUNDARY_INFLUENCE']
     local_cases=[c for c in cases if c['area']['affected']]
@@ -329,7 +363,7 @@ def assess(model, path, summary, diagnostics, studies, guidance):
         bed_basis=hyd.get('channel_geometry_basis'),diagnostics=dict(records=len(issues) if diagnostics else None,
         native_messages=sum(1 for r in issues if (r.get('evidence') or {}).get('native_message')) if diagnostics else None,
         warning_coverage=(diagnostics or {}).get('warning_coverage'),by_severity=dict(Counter(r['severity'] for r in issues))),
-        qa=review,delivery=delivery,boundary_cases=cases,event_tailwaters=event_tailwaters(river.get('events',[])),changed_ends=changed,holdout_observations=len(measured),
+        qa=review,delivery=delivery,boundary_cases=cases,event_tailwaters=event_tailwaters(reviewed_events),changed_ends=changed,holdout_observations=len(measured),
         sources=list({e['path']:e for e in sources}.values()))
     result['evidence_hash'] = digest({k:v for k,v in result.items() if k!='assessed_utc'})
     return result

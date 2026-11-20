@@ -84,6 +84,7 @@ function renderFloodplainView(parent,data,prior){
     const signals={ABRUPT_PARTITION:tr('Abrupt change in modeled overbank flow share','模型漫滩流量占比突变'),REVIEW_LATERAL_EXCHANGE:tr('Check lateral exchange and whether a 1D representation is appropriate','核查侧向交换和一维表达的适用性'),REVIEW_SECTION_ALIGNMENT:tr('Inspect cut alignment before interpreting the flow split','解读分流前复核断面线位'),VERIFY_CROSSING_OPENINGS:tr('Verify road or levee openings along the low route','核查低地条带内道路或堤防的过水开口'),SHARE_UNAVAILABLE:tr('Native partition unavailable','缺少原生分流数据')};
     for(const s of evidence.strips.filter(s=>s.flags?.length))stripPanel.append(el('p','RS '+r.rs+' → '+s.neighbor+' · '+s.side+' · '+s.flags.map(f=>signals[f]||f).join(' · ')));
     if(overlay)overlay(evidence.strips);
+    if(names.includes('rotated'))fieldGeometryComparison(stripPanel,r,geometry,profileId,{id:projectId,revision:current.revision,summary_hash:summaryHash});
     stripPanel.append(el('p',tr('Shading marks the tested strips. Verify crest and opening levels where mapped roads cross a low path. A continuous low route and an abrupt flow-share change warrant review of lateral exchange and the 1D assumption.','阴影表示检查范围。道路线穿过连续低地时需核实堤顶、路面和开口高程。低地连通且相邻分流变化较大时，请复核横向交换及一维假设。'),'muted'));
    }catch(e){stripsCache.delete(key);if(stripPanel.isConnected)stripPanel.replaceChildren(el('p',e.message,'warning'),button('Retry terrain check','重试地形检查',inspect));}
    finally{stripPanel.removeAttribute('aria-busy');}

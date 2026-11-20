@@ -41,6 +41,10 @@ def load(config_path):
 
 def dependencies(path, c):
     files = [path]
+    if c.get('field_feedback'):
+        ref=c['field_feedback']
+        if not intact([ref]):raise ValueError('Field feedback record differs from its confirmed source')
+        files.append(safe_path(ROOT,ref['path']))
     for key in ['geometry','authorization','native_project','reference_results','benchmark_preparation','configuration_approval','native_import_review']:
         if c.get(key): files.append(safe_path(path.parent, c[key]))
     t = c.get('terrain', {})

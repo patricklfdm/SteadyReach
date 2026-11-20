@@ -131,12 +131,15 @@ def collect(summary_path, comparisons=()):
         from .river_review_report import collect as collect_river_checks
         river_checks,check_sources=collect_river_checks(summary_path,s)
         sources+=check_sources
+    from .field_results import collect as field_results
+    feedback,feedback_sources=field_results(s)
+    sources+=feedback_sources
     revision=None
     if s['configuration'].get('revision_origin'):
         from .app_revision import compare as compare_revision
         revision=compare_revision(dict(parent_revision=s['configuration']['revision_origin']),s)
         sources+=revision.get('sources',[])
-    return dict(studies=studies, river_checks=river_checks, revision_comparison=revision,schema_version='readable_report_data_1.0',created_utc=utc(),summary=s,sections=rows,
+    return dict(studies=studies, field_feedback=feedback, river_checks=river_checks, revision_comparison=revision,schema_version='readable_report_data_1.0',created_utc=utc(),summary=s,sections=rows,
         geometry=geometry,map_geometry=map_geometry,geometry_source=geometry_source,raster_source=raster_source,diagnostics=diagnostics,
         language_review=language_review,native_supplement=supplement,comparisons=compared,reference_comparisons=references,native_inputs=native_inputs,native_input_error=native_input_error,
         sources=sources,report_generation_is_solver_run=False)

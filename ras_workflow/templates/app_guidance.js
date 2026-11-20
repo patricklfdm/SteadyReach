@@ -84,6 +84,7 @@ function showResultAssessment(box,a){
    const detailsBox=details(parent,'Independent observations needing field records','需补现场记录的独立事件测点');
    table(detailsBox,[tr('Event / date','事件／日期'),'RS',tr('Residual (ft)','偏差（ft）'),tr('Survey uncertainty (ft)','实测不确定度（ft）'),tr('Source','来源')],f.observations.map(o=>[o.event+' / '+o.date,o.location?.rs??'—',o.residual_ft.toFixed(3),o.uncertainty_ft>0?o.uncertainty_ft:tr('Request survey record','待补联测或精度记录'),o.source||'—']));
   }
+  if(row.code==='FIELD_RESIDUAL'||row.code==='BOUNDARY_INFLUENCE')parent.append(button('Add field feedback or export a request','补录现场反馈或导出索资清单',()=>openGuidanceTool('field-feedback')));
   parent.append(button('Open related tool','打开对应工具',()=>{
    openGuidanceTool(row.target);
    if(row.target==='floodplain'&&f.station)document.getElementById('qa-tool-floodplain')?.dispatchEvent(new CustomEvent('steadyreach-inspect-floodplain',{detail:{rs:f.station,geometry:f.case}}));
