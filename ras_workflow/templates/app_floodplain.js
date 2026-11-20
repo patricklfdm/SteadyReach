@@ -33,6 +33,7 @@ function renderFloodplain(parent){
 
 function renderFloodplainView(parent,data,prior){
  const names=Object.keys(data.frames),base=data.frames.baseline;
+ const stripsCache=new Map(),projectId=current.id,summaryHash=current.summary.sha256;
  const format=(n,d=2)=>Number.isFinite(n)?n.toFixed(d):'—';
  const options=list=>list.map(v=>[v,v,v]);
  const controls=el('div',undefined,'grid');parent.append(controls);
@@ -61,12 +62,33 @@ function renderFloodplainView(parent,data,prior){
   const pair=el('div',undefined,'section-context-grid');stage.append(pair);
   const map=el('div'),profilePanel=el('div');pair.append(map,profilePanel);
   map.append(el('h3',tr('Imagery and section alignment','航片与断面位置')+' · RS '+r.rs));
-  plotMap(map,r,rows);
+  const overlay=plotMap(map,r,rows);
   profilePanel.append(el('h3',tr('Native ground and water level','原生地面与计算水位')+' · RS '+r.rs));atlasSectionPlot(profilePanel,r);
   stage.append(el('h3',tr('How the floodplain carries flow','漫滩如何分担流量')+' · RS '+r.rs));
   table(stage,[tr('Geometry','几何'),tr('Water level (ft)','水位（ft）'),tr('Left / right share (%)','左／右漫滩占比（%）'),tr('Left / right end exceedance (ft)','左／右端过水深（ft）')],names.map(n=>{
    const a=variants(n).find(v=>v.rs===r.rs);return a?[riverVariantName(n),format(a.wse_ft,3),a.ob_percent.map(v=>format(v)).join(' / '),[a.left_excess_ft,a.right_excess_ft].map(v=>format(v,3)).join(' / ')]:[riverVariantName(n),'—','—','—'];
   }));
+  const stripPanel=el('div');stage.append(stripPanel);
+  const geometry=revision.value,profileId=profile.value;
+  async function inspect(){
+   const key=JSON.stringify([geometry,profileId,r.rs]);
+   stripPanel.setAttribute('aria-busy','true');
+   stripPanel.replaceChildren(el('p',tr('Testing terrain between adjacent cuts…','正在检查相邻断面间的地形通路…')));
+   try{
+    if(!stripsCache.has(key))stripsCache.set(key,api('qa-floodplain',{id:projectId,summary_hash:summaryHash,geometry,profile:profileId,corridor_station:r.rs}));
+    const evidence=await stripsCache.get(key);
+    if(!stripPanel.isConnected||current?.id!==projectId||current.summary?.sha256!==summaryHash)return;
+    stripPanel.replaceChildren(el('h3',tr('Same-side overbank paths','相邻断面同侧漫滩通路')));
+    const status={LOW_ROUTE_AT_BOTH_STAGES:tr('Continuous at lower stage','低水位下已有连续低地'),STAGE_DEPENDENT_LOW_ROUTE:tr('Continuous with sloping water surface','按沿程水面插值时低地连通'),NO_CONNECTED_LOW_ROUTE_IN_STRIP:tr('No continuous low cells in strip','条带内未发现连续低地'),INCOMPLETE_DEM:tr('Incomplete DEM','地形有缺口'),AMBIGUOUS_CORRIDOR:tr('Folded strip','条带折叠'),DIFFERENT_REACH:tr('Different reaches','属不同河段'),BENT_CUT_REVIEW:tr('Bent cut requires map review','断面有折弯，需复核平面图'),UNRESOLVED_EXTENT:tr('Extent unresolved','范围不明'),CORRIDOR_SAMPLE_LIMIT:tr('Sampling limit','超出采样上限'),BANKS_UNAVAILABLE:tr('Missing banks','缺岸站'),STAGES_UNAVAILABLE:tr('Missing stages','缺计算水位')};
+    table(stripPanel,['RS',tr('Side','岸侧'),tr('DEM route','DEM 通路'),tr('Flow share here → neighbor','当前 → 相邻分流占比'),tr('Mapped lines in strip','条带内的道路线／堤线')],evidence.strips.map(s=>[r.rs+' → '+s.neighbor,s.side,(status[s.status]||s.status)+(s.missing_cells?' · '+tr('missing DEM cells','缺失 DEM 格数')+' '+s.missing_cells:''),format(s.section_share_pct)+'% → '+format(s.neighbor_share_pct)+'%',s.crossings.map(c=>{const z=c.dem_surface;return (c.name||c.layer)+(z?.range_ft?' · '+z.range_ft.map(v=>format(v,1)).join('–')+' ft DEM':'')+(z?.status==='INCOMPLETE_DEM'?' · '+tr('DEM gaps','DEM 有缺口'):z?.status==='SAMPLE_LIMIT'?' · '+tr('sampling limit','采样上限'):'');}).join(', ')||'—']));
+    const signals={ABRUPT_PARTITION:tr('Abrupt change in modeled overbank flow share','模型漫滩流量占比突变'),REVIEW_LATERAL_EXCHANGE:tr('Check lateral exchange and whether a 1D representation is appropriate','核查侧向交换和一维表达的适用性'),REVIEW_SECTION_ALIGNMENT:tr('Inspect cut alignment before interpreting the flow split','解读分流前复核断面线位'),VERIFY_CROSSING_OPENINGS:tr('Verify road or levee openings along the low route','核查低地条带内道路或堤防的过水开口'),SHARE_UNAVAILABLE:tr('Native partition unavailable','缺少原生分流数据')};
+    for(const s of evidence.strips.filter(s=>s.flags?.length))stripPanel.append(el('p','RS '+r.rs+' → '+s.neighbor+' · '+s.side+' · '+s.flags.map(f=>signals[f]||f).join(' · ')));
+    if(overlay)overlay(evidence.strips);
+    stripPanel.append(el('p',tr('Shading marks the tested strips. Verify crest and opening levels where mapped roads cross a low path. A continuous low route and an abrupt flow-share change warrant review of lateral exchange and the 1D assumption.','阴影表示检查范围。道路线穿过连续低地时需核实堤顶、路面和开口高程。低地连通且相邻分流变化较大时，请复核横向交换及一维假设。'),'muted'));
+   }catch(e){stripsCache.delete(key);if(stripPanel.isConnected)stripPanel.replaceChildren(el('p',e.message,'warning'),button('Retry terrain check','重试地形检查',inspect));}
+   finally{stripPanel.removeAttribute('aria-busy');}
+  }
+  void inspect();
   const boundary=data.boundaries.filter(c=>c.profile===profile.value);
   stage.append(el('h3',tr('Boundary influence along the original reach','原模型的沿程边界影响')));
   if(!boundary.length){stage.append(el('p',tr('No verified boundary sensitivity cases are attached to this baseline.','此基准尚无已核验的边界敏感性工况。')));return;}
@@ -106,6 +128,7 @@ function renderFloodplainView(parent,data,prior){
   svgEl(svg,'rect',{x:0,y:0,width:620,height:330,fill:'#eceee7'});
   const a=data.imagery;
   if(a.status==='READY'){const [x0,y0,x1,y1]=a.bounds;svgEl(svg,'image',{href:a.uri,x:px(x0),y:py(y1),width:(x1-x0)*k,height:(y1-y0)*k,preserveAspectRatio:'none'});}
+  const stripGroup=svgEl(svg,'g',{'pointer-events':'none'});
   function line(xy,color,width,dash){return svgEl(svg,'polyline',{points:xy.map(([x,y])=>px(x)+','+py(y)).join(' '),fill:'none',stroke:color,'stroke-width':width,'stroke-dasharray':dash||''});}
   for(const layer of data.layers)for(const f of layer.lines){const p=line(f.xy,layer.kind==='levees'?'#ff9a32':'#fbf6d6',layer.kind==='levees'?3:1.5,layer.kind==='levees'?'5 3':'');if(f.name)svgEl(p,'title',{}).textContent=f.name;}
   for(const v of [...rows.filter(v=>v!==active),active]){
@@ -118,6 +141,13 @@ function renderFloodplainView(parent,data,prior){
   svgEl(svg,'text',{x:606,y:20,'text-anchor':'end',fill:'white',stroke:'#28333a','paint-order':'stroke','stroke-width':3}).textContent='N ↑';
   panel.append(el('small',tr('Pink selected · cyan adjacent · yellow banks · cream roads · dashed orange levee alignments.','粉色为当前断面，青色为其他断面，黄点为岸站，米色为道路，橙色虚线为堤线。')));
   if(a.status!=='READY')panel.append(el('p',tr('Offline imagery unavailable','离线航片不可用')+' · '+a.status,'warning'));
+  return strips=>{
+   stripGroup.replaceChildren();
+   for(const s of strips.filter(s=>s.corners_xy)){
+    const color=s.at_interpolated_stage?'#28ae89':'#e09c39';
+    svgEl(stripGroup,'polygon',{points:s.corners_xy.map(([x,y])=>px(x)+','+py(y)).join(' '),fill:color,'fill-opacity':.22,stroke:color,'stroke-width':1});
+   }
+  };
  }
  if(profiles.includes(prior?.profile))profile.value=prior.profile;
  if(names.includes(prior?.geometry))revision.value=prior.geometry;

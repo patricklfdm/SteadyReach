@@ -10,6 +10,10 @@ from .qa import BASE
 from .section_joint import flow_crossing
 
 
+SIGNIFICANT_SHARE = .20
+SHARE_CHANGE = .15
+
+
 def hydraulic_context(summary):
     h=summary['hydraulics']
     if not intact([h['raw_hdf']]):
@@ -54,7 +58,7 @@ def screen(geometry, old, readings, sampler, maximum):
                 if other_rs not in readings or other_rs not in unchanged or other.get('reach_id')!=row.get('reach_id'):continue
                 length=np.linalg.norm(np.asarray(other['cutline_xy'][end])-other['center_xy'])*sampler.factor
                 share=readings[other_rs][side+1]
-                if length>=1.6*span and share>=.20 and share-readings[rs][side+1]>=.15:
+                if length>=1.6*span and share>=SIGNIFICANT_SHARE and share-readings[rs][side+1]>=SHARE_CHANGE:
                     neighbors.append((float(length),other_rs,share))
             if not neighbors:continue
             length,near,share=max(neighbors)

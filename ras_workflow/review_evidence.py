@@ -24,21 +24,31 @@ CATALOG = 'https://www.sciencebase.gov/catalog/'
 
 def rating(raw, station, discharges):
     lines=raw.decode('utf-8-sig').splitlines()
-    if not any('NUMBER="'+station in s and '//STATION AGENCY' in s for s in lines):
+    if not any(re.search(r'//STATION AGENCY="USGS\s*"', s) and re.search(r'\bNUMBER="'+re.escape(station)+r'\s*"', s) for s in lines):
         raise ValueError('USGS rating identifies a different station')
     if not any('Discharge (ft^3/s)' in s and 'RATING_DEP' in s for s in lines):
         raise ValueError('Rating discharge unit not verified')
     if not any('Gage height (ft)' in s and 'RATING_INDEP' in s for s in lines):
         raise ValueError('Rating stage unit not verified')
     reader=csv.DictReader([line for line in lines if line and not line.startswith('#')],delimiter='\t')
-    flows=[]
+    points=[]
     for row in reader:
-        try:value=float(row['DEP'])
-        except (TypeError,ValueError):continue
-        if math.isfinite(value):flows.append(value)
-    if not flows:raise ValueError('No stage-discharge rating rows')
+        try:q,h=float(row['DEP']),float(row['INDEP'])
+        except (TypeError,ValueError,KeyError):continue
+        if math.isfinite(q) and math.isfinite(h):points.append((q,h))
+    if not points:raise ValueError('No stage-discharge rating rows')
+    flows=[q for q,_ in points]
     low,high=min(flows),max(flows)
-    return dict(min_cfs=low,max_cfs=high,profile_in_range={k:low<=q<=high for k,q in discharges.items()},
+    brackets={}
+    # Keep the two tabulated bounds. Rounded discharges can have several gage heights.
+    if all(b>=a for a,b in zip(flows,flows[1:])) and all(b[1]>=a[1] for a,b in zip(points,points[1:])):
+        for profile,q in discharges.items():
+            if low<=q<=high:
+                lo=max(x for x in flows if x<=q)
+                hi=min(x for x in flows if x>=q)
+                heights=[h for value,h in points if lo<=value<=hi]
+                brackets[profile]=[min(heights),max(heights)]
+    return dict(min_cfs=low,max_cfs=high,stage_brackets_ft=brackets,profile_in_range={k:low<=q<=high for k,q in discharges.items()},
                 validity=[s.lstrip('# /') for s in lines if 'RATING_DATETIME' in s or 'RATING REMARKS' in s])
 
 
@@ -62,6 +72,45 @@ def gage_manuscript(raw, station):
             if statement:
                 records.append(dict(kind='gage_history', station=station, statement=statement))
     return records
+
+
+def boundary_evidence(records, discharges, model_datum):
+    """Screen public ratings at their station and existing screened field observations."""
+    from .river_observations import MAX_MATCH_M, datum
+    gages={r['station']:r for r in records if r['kind']=='gage'}
+    histories={r['station']:r for r in records if r['kind']=='gage_history'}
+    output=[]
+    for rating_row in (r for r in records if r['kind']=='rating'):
+        station=rating_row['station']
+        gage=gages.get(station)
+        if not gage:continue
+        history=histories.get(station,{})
+        # Historical moves, multiple zeros and ambiguous prose require review.
+        zero=re.fullmatch(r'(?:[^.]*recorder[^.]*\.\s*)?Datum of gage is ([\d,]+(?:\.\d+)?) ft above (NAVD of 1988|NGVD of 1929)\.',history.get('statement',''),re.I)
+        zero_ft=float(zero[1].replace(',','')) if zero else None
+        zero_datum=('NAVD88' if 'NAVD' in zero[2].upper() else 'NGVD29') if zero else None
+        period=next((re.search(r'BEGIN=(\d{8})\d*.*? END=([\d-]+)',v) for v in rating_row['validity'] if 'BEGIN=' in v),None)
+        def day(raw):
+            return raw[:4]+'-'+raw[4:6]+'-'+raw[6:8] if raw and raw[:8].isdigit() else None
+        start,stop=(day(period[1]),day(period[2])) if period else (None,None)
+        dates=sorted({r['date'][:10] for r in records if r['kind']=='peak' and r['station']==station and r.get('date')})
+        outside=[d for d in dates if (start and d<start) or (stop and d>stop)]
+        for profile,q in discharges.items():
+            in_range=rating_row['profile_in_range'].get(profile)
+            stages=rating_row.get('stage_brackets_ft',{}).get(profile)
+            issues=[]
+            if not in_range:issues.append('FLOW_OUTSIDE_RATING')
+            elif not stages:issues.append('AMBIGUOUS_STAGE')
+            if not zero or zero_datum!=datum(model_datum):issues.append('CHECK_GAGE_ZERO')
+            if zero and gage.get('vertical_datum') and datum(gage['vertical_datum'])!=zero_datum:issues.append('CONFLICTING_DATUM_METADATA')
+            if gage['distance_to_boundary_m']>MAX_MATCH_M:issues.append('BOUNDARY_TRANSFER_REQUIRED')
+            issues.extend(['CONFIRM_RATING_AND_ZERO_DATE','NEED_BOUNDARY_UNCERTAINTY'])
+            output.append(dict(station=station,profile=profile,flow_cfs=q,range_cfs=[rating_row['min_cfs'],rating_row['max_cfs']],
+                status='OUTSIDE_RANGE' if not in_range else 'STATION_CONTEXT',issues=issues,
+                station_wse_bracket_ft=[round(zero_ft+h,4) for h in stages] if stages and zero else None,
+                station_datum=zero_datum,distance_m=gage['distance_to_boundary_m'],rating_start=start,rating_end=stop,
+                historical_dates_outside=outside,sources=[r['source'] for r in (gage,rating_row,history) if r.get('source')]))
+    return output
 
 
 def observation_candidates(evidence,directory):
@@ -97,11 +146,16 @@ def search(key,body):
     if not a.get('run_id') or model.get('model_type')!='river':raise ValueError('Choose a verified river result')
     folder=core.folder(key)/'field_search'
     pointer=folder/'latest.json'
+    archived_queries={}
     if pointer.exists() and not body.get('refresh'):
         ref=read(pointer)
         if intact([ref]):
             previous=read(ROOT/ref['path'])
-            if previous.get('schema_version')==3 and previous['assessment']==a['evidence_hash'] and intact(previous['sources']):return previous
+            if previous.get('summary')==model['summary']:
+                archived_queries={(r['kind'],r.get('url')):(r['source'],r.get('retrieved_utc') or
+                                  (previous.get('created_utc') if r.get('retrieval')!='ARCHIVED' else None)) for r in previous['searches']
+                                  if r.get('url') and r.get('source') and r['status'] in ('CANDIDATES','NO_RECORDS')}
+            if previous.get('schema_version')==6 and previous['assessment']==a['evidence_hash'] and intact(previous['sources']):return previous
     out=folder/unique_id();out.mkdir(parents=True)
     summary=read(ROOT/model['summary']['path'])
     _,geom,sources=bound_inputs(summary)
@@ -118,9 +172,27 @@ def search(key,body):
     def field(topic,rs,where,need,decision):
         lon,lat=to_geo.transform(*where)
         jobs.append(dict(topic=topic,rs=rs,longitude=round(lon,7),latitude=round(lat,7),need=need,decision=decision))
-    if 'BOUNDARY_INFLUENCE' in flags or 'BOUNDARY_SCOPE' in flags:
+    sides={case['parameter'].split('.')[1] for case in a['boundary_cases'] if case['affected']}
+    coverage=next((f for f in a['findings'] if f['code']=='BOUNDARY_SCOPE'),None)
+    if coverage:
+        for missing in coverage['facts']['missing']:
+            sides.update(s for s in ('upstream','downstream') if s in str(missing))
+    if 'upstream' in sides:
+        head=a['area']['stations'][0]
+        field('upstream',head,rows[head]['center_xy'],text('Seek independent stage or control at the upstream limit.','查上游边界的独立水位或控制依据。'),
+              text('Verify location, event discharge, datum and uncertainty.','核对位置、同期流量、高程基准和不确定度。'))
+    if 'downstream' in sides:
         field('tailwater',end,boundary,text('Seek a stage-discharge relation, gage zero and tailwater at the downstream control.','查下游控制断面的水位流量关系、水尺零点与尾水记录。'),
               text('Confirm datum, flood date, flow range and transfer from the gage.','核实基准、洪水日期、适用流量及从测站到边界的水位传递。'))
+    for finding in a['findings']:
+        if finding['code']!='FIELD_RESIDUAL': continue
+        for obs in finding['facts']['observations']:
+            rs=(obs.get('location') or {}).get('rs')
+            if rs not in rows: continue
+            when=obs.get('date') or obs.get('event') or ''
+            field('accuracy',rs,rows[rs]['center_xy'],text(f'Obtain the original survey record for {when}.',f'查找 {when} 的原始测量记录。'),
+                  text('Identify measured versus interpolated points, vertical control and observation uncertainty.',
+                       '核实实测点与插值点身份、垂直控制和测点不确定度。'))
     for row in cases:
         f=row['facts'];rs=f['station'];line=sections[rs];p=line[0 if f['side']=='L' else -1]
         field('opening',rs,p,text('Find embankment crest, road openings and the longitudinal flood route on this side.','查该侧路堤顶高程、通水开口及相邻断面的纵向过流路径。'),
@@ -134,9 +206,16 @@ def search(key,body):
     def request(kind,url,parse):
         attempt=dict(kind=kind,url=url);requests.append(attempt)
         try:
-            data=searcher.get(url,limit=2_000_000)
-            raw=out/(str(len(requests))+'_'+kind+'.dat');raw.write_bytes(data)
-            ref=item(raw);sources.append(ref);attempt['source']=ref
+            ref,received=archived_queries.get((kind,url),(None,None))
+            if ref and intact([ref]):
+                data=(ROOT/ref['path']).read_bytes()
+                attempt.update(retrieval='ARCHIVED',retrieved_utc=received)
+            else:
+                data=searcher.get(url,limit=2_000_000)
+                raw=out/(str(len(requests))+'_'+kind+'.dat');raw.write_bytes(data)
+                ref=item(raw)
+                attempt.update(retrieval='FETCHED',retrieved_utc=utc())
+            sources.append(ref);attempt['source']=ref
             records=parse(data)
             attempt.update(status='CANDIDATES' if records else 'NO_RECORDS',count=len(records))
             for entry in records:evidence.append(dict(**entry,source=ref,url=url))
@@ -184,7 +263,7 @@ def search(key,body):
                         for f in features for p in [f['properties']] if p['monitoring_location_id']=='USGS-'+station
                         and p['parameter_code'] in ('00060','00065')]
             request('peaks',WATER+'/ogcapi/v0/collections/peaks/items?'+urlencode(dict(monitoring_location_id='USGS-'+station,limit=500,f='json')),peaks)
-        for topic,term in [('survey','bathymetry'),('opening','crossing survey')]:
+        for topic,term in [('survey','bathymetry'),('opening','crossing survey'),('accuracy','water surface profile')]:
             if not any(j['topic']==topic for j in jobs):continue
             shape=dict(type='Polygon',coordinates=[[[west,south],[east,south],[east,north],[west,north],[west,south]]])
             url=CATALOG+'items?'+urlencode({'format':'json','max':15,'q':term,'filter':'spatialQuery='+json.dumps(shape)})
@@ -215,7 +294,8 @@ def search(key,body):
             evidence.append(dict(kind='screened_observation',name=row.get('event'),date=row.get('date'),issues=row.get('issues'),source=screened))
     worksheet=observation_candidates(evidence,out)
     if worksheet:sources.append(worksheet)
-    packet=dict(schema_version=3,worksheet=worksheet,summary=model['summary'],assessment=a['evidence_hash'],created_utc=utc(),model_datum=geom['vertical_datum'],
+    discharges={p['profile_id']:p['flow_cfs'] for p in summary['hydraulics']['profiles']}
+    packet=dict(schema_version=6,boundary_evidence=boundary_evidence(evidence,discharges,geom['vertical_datum']),worksheet=worksheet,summary=model['summary'],assessment=a['evidence_hash'],created_utc=utc(),model_datum=geom['vertical_datum'],
                 field_requests=jobs,searches=requests,candidates=evidence,sources=list({r['path']:r for r in sources}.values()),
                 limitations=text('Nearby records, road lines and catalog footprints require an applicability check. Peak stage and peak flow may occur at different times.','附近测站、道路线与目录覆盖范围仍需核实。最高水位与最大流量可能不同步。'))
     path=out/'search.json';save(path,packet);save(pointer,item(path));return packet

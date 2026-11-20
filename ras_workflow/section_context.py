@@ -125,6 +125,65 @@ def boundary_series(studies):
     return series
 
 
+def flow_path_flags(diag, share, neighbor, crossings):
+    from .lateral_coverage import SHARE_CHANGE, SIGNIFICANT_SHARE
+    flags=[]
+    if not all(v is not None and np.isfinite(v) for v in (share,neighbor)):
+        return ['SHARE_UNAVAILABLE']
+    if max(share,neighbor)>=100*SIGNIFICANT_SHARE and abs(share-neighbor)>=100*SHARE_CHANGE:
+        flags.append('ABRUPT_PARTITION')
+        if diag.get('at_interpolated_stage'):
+            flags.append('REVIEW_LATERAL_EXCHANGE')
+        if diag.get('status') in ('AMBIGUOUS_CORRIDOR','BENT_CUT_REVIEW'):
+            flags.append('REVIEW_SECTION_ALIGNMENT')
+    if crossings and diag.get('at_interpolated_stage'):
+        flags.append('VERIFY_CROSSING_OPENINGS')
+    return flags
+
+
+def overbank_strips(summary, rows, layers, profile, station):
+    """Test the mapped overbanks against native stages at the two bounding sections."""
+    from .floodplain_path import corridor, line_surface
+    from .terrain_auto import Sampler
+
+    config,geom,sources=bound_inputs(summary)
+    sampler=Sampler(summary['terrain'],config['terrain']['vertical_unit'],geom['vertical_datum'])
+    if not sampler.crs.equals(geom['horizontal_crs']):
+        raise ValueError('Section coordinates and DEM projection differ')
+    cuts={station_key(c['rs']):c for c in geom['cross_sections']}
+    selected=sorted((r for r in rows if r['profile']==profile),key=lambda r:float(r['rs']),reverse=True)
+    positions=[r['rs'] for r in selected]
+    if station not in positions:raise ValueError('Section or profile is unavailable')
+    i=positions.index(station)
+    active=selected[i]; strips=[]
+    for j in (i-1,i+1):
+        if not 0<=j<len(selected):continue
+        adjacent=selected[j]
+        for side,label in enumerate(('L','R')):
+            stages=[active['wse_ft'],adjacent['wse_ft']]
+            if cuts[station].get('reach_id')!=cuts[adjacent['rs']].get('reach_id'):
+                diag=dict(status='DIFFERENT_REACH')
+            elif not all(z is not None and np.isfinite(z) for z in stages):
+                diag=dict(status='STAGES_UNAVAILABLE')
+            else:
+                diag=corridor(cuts[station],cuts[adjacent['rs']],side,sampler,stages,0.,within_cuts=True)
+            crossings=[]
+            hull=diag.get('corners_xy')
+            if hull:
+                for layer in layers:
+                    for line in layer['lines']:
+                        surface=line_surface(line['xy'],hull,sampler)
+                        if surface is not None:
+                            crossings.append(dict(layer=layer['kind'],name=line['name'],dem_surface=surface))
+            strips.append(dict(**diag,neighbor=adjacent['rs'],side=label,section_share_pct=active['ob_percent'][side],
+                               neighbor_share_pct=adjacent['ob_percent'][side],crossings=crossings,
+                               flags=flow_path_flags(diag,active['ob_percent'][side],adjacent['ob_percent'][side],crossings)))
+    sources.extend([sampler.source,summary['hydraulics']['raw_hdf']])
+    sources.extend(layer['source'] for layer in layers if layer.get('source'))
+    return dict(profile=profile,station=station,strips=strips,layer_coverage=[{'kind':l['kind'],'status':l['status']} for l in layers],
+                cell_ft=sampler.cell_ft,sources=sources)
+
+
 def collect(key,body):
     from .app_core import folder
     from .result_guidance import load_evidence
@@ -133,6 +192,7 @@ def collect(key,body):
     model,path,summary,_,_,errors=load_evidence(key,body)
     if model.get('model_type')!='river':raise ValueError('Choose a solved river reach')
     rows,crs,sources=frame(summary);frames={'baseline':rows}
+    summaries={'baseline':summary}
     entry=model.get('latest_geometry_comparison')
     if entry:
         try:
@@ -140,12 +200,18 @@ def collect(key,body):
             if 'comparison' in audited:
                 result=read(ROOT/entry['path'])
                 for name in ('fixed','rotated'):
-                    variant,other_crs,bound=frame(read(ROOT/result['summaries'][name]['path']))
+                    summaries[name]=read(ROOT/result['summaries'][name]['path'])
+                    variant,other_crs,bound=frame(summaries[name])
                     if crs!=other_crs:raise ValueError('Revisions have different coordinate systems')
                     frames[name]=variant;sources.extend(bound)
                 sources.extend(refs)
         except (OSError,ValueError,KeyError) as error:
             frames={'baseline':rows};errors.append('Geometry comparison: '+str(error))
+    if 'corridor_station' in body:
+        name=body.get('geometry','baseline')
+        if name not in frames:raise ValueError('Selected geometry is unavailable')
+        layers=public_lines(folder(key),extent(frames),crs,False)
+        return overbank_strips(summaries[name],frames[name],layers,body.get('profile'),station_key(body['corridor_station']))
     try:
         runs,refs=studies(path,summary);series=boundary_series(runs);sources.extend(refs)
     except (OSError,ValueError,KeyError) as error:

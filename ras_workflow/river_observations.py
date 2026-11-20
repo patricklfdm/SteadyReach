@@ -135,8 +135,8 @@ def holdout_stages(rows):
     measured=[row for row in rows if row.get('role')=='holdout'
               and row.get('kind') in ('stage','gage_height') and not row.get('issues')
               and number(row,'residual_ft') is not None]
-    missing=[r for r in measured if number(r,'uncertainty_ft') is None]
-    exceeds=[r for r in measured if number(r,'uncertainty_ft') is not None
+    missing=[r for r in measured if (number(r,'uncertainty_ft') or 0)<=0]
+    exceeds=[r for r in measured if (number(r,'uncertainty_ft') or 0)>0
              and abs(r['residual_ft'])>r['uncertainty_ft']]
     return measured,missing,exceeds
 

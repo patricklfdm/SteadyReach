@@ -22,14 +22,25 @@ function assessmentState(value){
 }
 function showFieldSearch(box,a){
  const panel=details(box,'Find records and plan fieldwork','查资料与最小补测清单');
+ panel.id='qa-tool-field-search';
  const result=el('div');let pending=false;
  async function load(refresh=false){
   if(pending)return;pending=true;result.setAttribute('aria-busy','true');
   result.replaceChildren(el('p',tr('Searching local records and official USGS sources…','正在核对本地资料并查询 USGS 官方来源…')));
   try{
    const packet=await api('qa-field-search',{id:current.id,summary_hash:a.summary.sha256,refresh});
-   result.replaceChildren(el('p',tr('Retrieved','查询时间')+' · '+packet.created_utc+' · '+tr(packet.limitations.en,packet.limitations.zh)));
+   result.replaceChildren(el('p',tr('Evidence review prepared','本次资料复核生成时间')+' · '+packet.created_utc+' · '+tr(packet.limitations.en,packet.limitations.zh)));
    for(const r of packet.field_requests)result.append(el('p','RS '+r.rs+' · '+r.latitude+', '+r.longitude+' · '+tr(r.need.en,r.need.zh)+' '+tr(r.decision.en,r.decision.zh)));
+   if(packet.boundary_evidence?.length){
+    const b=details(result,'Can this rating supply the boundary?','这条评级曲线能否用作边界？');
+    const reasons={FLOW_OUTSIDE_RATING:tr('Flow outside rating','流量超出评级范围'),AMBIGUOUS_STAGE:tr('Stage bracket unavailable','水位区间不明确'),CHECK_GAGE_ZERO:tr('Verify zero and datum','核实零点与基准'),CONFLICTING_DATUM_METADATA:tr('Station metadata disagree on datum','测站资料对高程基准的记载不同'),BOUNDARY_TRANSFER_REQUIRED:tr('Need gage-to-boundary transfer','需测站到边界的水位传递依据'),CONFIRM_RATING_AND_ZERO_DATE:tr('Check dates of rating, shifts and zero','核实评级、修正值和零点适用期'),NEED_BOUNDARY_UNCERTAINTY:tr('Need boundary uncertainty','需边界不确定度')};
+    for(const r of packet.boundary_evidence){
+     b.append(el('strong',r.station+' · '+r.profile+' · '+r.flow_cfs+' cfs'),el('p',r.range_cfs.join('–')+' cfs · '+r.distance_m+tr(' m to downstream boundary',' m 至下游边界')+' · '+(r.rating_start??'—')+' / '+(r.rating_end??tr('end unreported','未注明终止日'))));
+     if(r.station_wse_bracket_ft)b.append(el('p',tr('At the gage only, tabulated bracket','仅测站处的查表区间')+' · '+r.station_wse_bracket_ft.join('–')+' ft '+r.station_datum));
+     b.append(el('p',r.issues.map(i=>reasons[i]||i).join(' · ')));
+     if(r.historical_dates_outside.length)b.append(el('p',tr('Peak dates outside this rating period','评级期以外的历史洪峰日期')+' · '+r.historical_dates_outside.join(', ')));
+    }
+   }
    if(packet.worksheet){const link=el('a',tr('Open observation candidate CSV','打开观测候选 CSV'));link.href='file/'+packet.worksheet.path.split('/').map(encodeURIComponent).join('/');link.download='Observation_candidates.csv';result.append(link,
     el('p',tr('Check gage zero, date, simultaneity and uncertainty, then import the reviewed rows under Field observations.','核实水尺零点、同期性、日期和误差后，在实测资料面板导入已核对的行。')),button('Open field observations','打开实测资料',()=>openGuidanceTool('observations')));}
    const groups={gage:['Streamgages','河道测站'],gage_history:['Gage datum and station history','水尺基准与站点历史'],rating:['Stage–discharge ratings','水位流量关系'],peak:['Annual peak records','历史洪峰'],catalog:['Public survey records','公开测量目录'],linear_context:['Road or levee context','附近道路或堤线'],local_document:['Project documents','项目文件'],screened_observation:['Screened field records','已初筛的观测']};
@@ -49,7 +60,7 @@ function showFieldSearch(box,a){
     }
    }
    const attempts=details(result,'Search coverage and failures','查询覆盖与失败记录');
-   table(attempts,[tr('Source','来源'),tr('Outcome','状态'),tr('Details','详情')],packet.searches.map(r=>[r.kind,r.status,r.error||String(r.count??'')]));
+   table(attempts,[tr('Source','来源'),tr('Outcome','状态'),tr('Details','详情')],packet.searches.map(r=>[r.kind,r.status,r.error||[r.count,r.retrieval==='ARCHIVED'?tr('Verified local copy','已校验本机原件'):r.retrieval==='FETCHED'?tr('Downloaded','本次下载'):'',r.retrieved_utc].filter(v=>v!=null&&v!=='').join(' · ')]));
   }catch(e){result.replaceChildren(el('p',e.message,'warning'));}
   finally{pending=false;result.removeAttribute('aria-busy');}
  }
@@ -58,7 +69,7 @@ function showFieldSearch(box,a){
  if(panel.parentElement.open)void load();
 }
 function showResultAssessment(box,a){
- const label=s=>tr(s.en,s.zh),primary=a.findings[0];
+ const label=s=>tr(s.en,s.zh),ordered=a.next_actions||a.findings,primary=ordered[0];
  box.append(el('h2',tr('Delivery assessment','结果交付评估')+' · L'+a.level+' · '+label(a.title)));
  const use=[
   tr('Restore calculation evidence before interpreting water levels.','先恢复本次计算证据，再解读水位。'),
@@ -68,20 +79,29 @@ function showResultAssessment(box,a){
  box.append(el('p',use[a.level]));
  function action(parent,row){
   const f=row.facts||{};
-  parent.append(el('p',label(row.reason)),el('p',assessmentFact(row),'muted'));
+  parent.append(el('p',(row.scope==='CANDIDATE'?tr('Unadopted alternative · ','未采用方案 · '):'')+label(row.reason)),el('p',assessmentFact(row),'muted'));
+  if(row.code==='FIELD_RESIDUAL'&&f.observations?.length){
+   const detailsBox=details(parent,'Independent observations needing field records','需补现场记录的独立事件测点');
+   table(detailsBox,[tr('Event / date','事件／日期'),'RS',tr('Residual (ft)','偏差（ft）'),tr('Survey uncertainty (ft)','实测不确定度（ft）'),tr('Source','来源')],f.observations.map(o=>[o.event+' / '+o.date,o.location?.rs??'—',o.residual_ft.toFixed(3),o.uncertainty_ft>0?o.uncertainty_ft:tr('Request survey record','待补联测或精度记录'),o.source||'—']));
+  }
   parent.append(button('Open related tool','打开对应工具',()=>{
    openGuidanceTool(row.target);
    if(row.target==='floodplain'&&f.station)document.getElementById('qa-tool-floodplain')?.dispatchEvent(new CustomEvent('steadyreach-inspect-floodplain',{detail:{rs:f.station,geometry:f.case}}));
   }));
  }
  if(primary){const first=el('div');box.append(first);first.append(el('strong',tr('First action','优先处理')));action(first,primary);}
+ if(a.event_tailwaters?.length){
+  const panel=details(box,'Measured tailwater by observed event','按实测事件核对尾水');
+  table(panel,[tr('Event / date','事件／日期'),'RS','cfs',tr('Datum','基准'),tr('Observed interval (ft)','观测区间（ft）')],a.event_tailwaters.map(r=>[r.event+' / '+r.date,r.rs,r.flow_cfs,r.datum,r.interval_ft?.map(v=>v.toFixed(3)).join('–')??tr('Need verified event record and uncertainty','待补匹配事件资料与测量精度')]));
+  panel.append(el('p',tr('Intervals use the imported measurement uncertainty for the named event. Review the source before using an interval for sensitivity testing.','区间按该场事件导入的观测不确定度计算，作为敏感性试算依据前请核对原件。')));
+ }
  if(a.delivery){
   const d=a.diagnostics,counts=a.delivery.files;
   box.append(el('p',tr('Delivery files','交付文件')+' · '+assessmentState(a.delivery.status)+(counts?' · Minimal '+counts.minimal+' / Complete '+counts.complete:''),
    'status'),el('p',tr('Native messages','原生信息')+' '+(d.native_messages??'—')+' · '+tr('Combined diagnostic records','综合诊断记录')+' '+(d.records??'—')+' · QA '+assessmentState(a.qa.status)));
  }
- if(a.findings.length>1){const more=details(box,'All remaining findings ('+(a.findings.length-1)+')','其余限制及处理入口（'+(a.findings.length-1)+'）');for(const r of a.findings.slice(1))action(more,r);}
- if(a.candidate_findings?.length){
+ if(ordered.length>1){const more=details(box,'Next actions in priority order ('+(ordered.length-1)+')','其余事项（按优先顺序，共 '+(ordered.length-1)+' 项）');for(const r of ordered.slice(1))action(more,r);}
+ if(a.candidate_findings?.length&&!ordered.some(row=>row.scope==='CANDIDATE')){
   const candidates=details(box,tr('Unadopted geometry alternatives','未采用的几何候选'), '未采用的几何候选');
   for(const row of a.candidate_findings)action(candidates,row);
  }

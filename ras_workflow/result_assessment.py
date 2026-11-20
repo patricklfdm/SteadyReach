@@ -6,7 +6,7 @@ from .result_guidance import BALANCE, NATIVE_GAPS, WET, text
 from .revision_inputs import station_key
 from .river_review import response
 
-RULE_VERSION = 3
+RULE_VERSION = 4
 LEVELS = [
     text('Evidence insufficient', '计算证据不足'),
     text('Internal diagnosis', '可供内部诊断'),
@@ -26,6 +26,58 @@ def classify(findings):
     level = min((r['ceiling'] for r in findings), default=3)
     return dict(level=level, title=LEVELS[level], levels=LEVELS, findings=sorted(findings,key=lambda r:r['ceiling']),
                 engineering_acceptance='NOT_ASSESSED', rule_version=RULE_VERSION)
+
+
+def event_tailwaters(rows):
+    """Report measured boundary intervals only for the verified event to which they belong."""
+    result=[]
+    for row in rows:
+        if row.get('role')!='boundary':continue
+        h,u=row.get('observed_ft'),row.get('uncertainty_ft')
+        usable=(row.get('event_eligible') and not row.get('issues') and row.get('source')
+                and row.get('event') and row.get('date') and row.get('model_datum') and (row.get('location') or {}).get('rs')
+                and row.get('kind') in ('stage','gage_height','boundary_stage')
+                and finite(h) and finite(u) and u>0 and finite(row.get('flow_cfs')) and row['flow_cfs']>0)
+        result.append(dict(event=row.get('event'),date=row.get('date'),rs=(row.get('location') or {}).get('rs'),
+                           flow_cfs=row.get('flow_cfs'),datum=row.get('model_datum'),source=row.get('source'),
+                           issues=row.get('issues',[]),interval_ft=[h-u,h+u] if usable else None))
+    return result
+
+
+def next_actions(findings, alternatives, selection, field_search):
+    """Order decisions without counting an unadopted alternative against the baseline."""
+    actions=[]
+    for row in [*findings,*alternatives]:
+        code=row['code'];facts=row['facts'];target=row['target']
+        reason=row['reason'];order=8;impact=0
+        if row['ceiling'] is not None and row['ceiling']<2:
+            order=0
+        elif code=='BOUNDARY_INFLUENCE':
+            focus=facts.get('area_case') or facts
+            local=focus.get('area') or {}
+            if local.get('affected'):
+                row=dict(row,facts={**facts,**focus,**local})
+            order=1 if local.get('affected') else 4
+            impact=abs(local.get('delta_ft') or facts.get('delta_ft') or 0)
+            if field_search:
+                target='field-search'
+                reason=text('Obtain independent control at the sensitive boundary before repeating this range.',
+                            '先取得敏感边界的独立控制依据，再重算边界范围。')
+        elif code=='FIELD_RESIDUAL':
+            order=2;impact=abs(facts.get('peak_ft') or 0)
+        elif code=='GEOMETRY_FLOW_PATH':
+            if not findings:continue
+            order=3 if facts.get('station') in selection['selected'] else 6
+            before,after=facts.get('baseline_share_pct'),facts.get('alternative_share_pct')
+            if finite(before) and finite(after):impact=abs(after-before)
+        elif code in ('FIELD_SUPPORT','BED_BASIS'):
+            order=5
+            if field_search:target='field-search'
+        elif code in ('WET_ENDS','SPACING','BOUNDARY_SCOPE'):
+            order=7
+        actions.append((order,-impact,dict(row,target=target,reason=reason,
+                       scope='CANDIDATE' if row['ceiling'] is None else 'ADOPTED')))
+    return [entry for _,_,entry in sorted(actions,key=lambda v:v[:2])]
 
 
 def unverified(reason):
@@ -137,9 +189,10 @@ def boundary_findings(studies, hyd, target, inventory, selection):
     affected=[r for r in cases if r['affected']]
     if affected:
         worst=max(affected,key=lambda r:abs(r['delta_ft']))
+        area_case=max(affected,key=lambda c:abs(c['area']['delta_ft'] or 0))
         findings.append(finding('BOUNDARY_INFLUENCE',2,target,
             'Check tailwater or upstream control against independent evidence before using the affected levels.',
-            '核实敏感边界的实测水位或控制条件，再使用受影响断面的水位。',**worst))
+            '核实敏感边界的实测水位或控制条件，再使用受影响断面的水位。',area_case=area_case,**worst))
     regime=hyd.get('flow_regime')
     sides={'subcritical':['downstream'],'supercritical':['upstream'],'mixed':['upstream','downstream']}.get(regime,[])
     missing=[f'{side} / {p}' for side in sides for p in profiles if
@@ -256,7 +309,9 @@ def assess(model, path, summary, diagnostics, studies, guidance):
             findings.append(finding('FIELD_RESIDUAL',2,'observations' if editable else 'qa',
                 'Review held-out residuals and measurement uncertainty for the intended site use.',
                 '核对独立事件的逐站偏差、测量不确定度以及拟用范围。',records=len(outside),
-                missing_uncertainty=len(missing_accuracy), outside_uncertainty=len(exceeds), peak_ft=largest['residual_ft'],station=(largest.get('location') or {}).get('rs')))
+                missing_uncertainty=len(missing_accuracy), outside_uncertainty=len(exceeds), peak_ft=largest['residual_ft'],station=(largest.get('location') or {}).get('rs'),
+                observations=[{k:r.get(k) for k in ('event','date','location','flow_cfs','residual_ft','uncertainty_ft','source')}
+                              for r in outside]))
     result=classify(findings)
     local_findings=[f for f in findings if f['code']!='BOUNDARY_INFLUENCE']
     local_cases=[c for c in cases if c['area']['affected']]
@@ -270,11 +325,11 @@ def assess(model, path, summary, diagnostics, studies, guidance):
                 sensitivity=bool({'BOUNDARY_SCOPE','BOUNDARY_INFLUENCE'} & codes),
                 spacing='SPACING' in codes,spacing_scope='all',maximum_width_ft=river.get('comparison_width_ft'),
                 field_first=bool({'BOUNDARY_INFLUENCE','BED_BASIS','FIELD_SUPPORT'} & codes or candidate_findings))
-    result.update(area=selection,candidate_findings=candidate_findings,recommended_checks=checks,assessed_utc=utc(),summary=model['summary'],run_id=hyd['run_id'],profiles=[p['profile_id'] for p in hyd['profiles']],input_adequacy=gate.get('input_adequacy_status'),
+    result.update(area=selection,candidate_findings=candidate_findings,next_actions=next_actions(findings,candidate_findings,selection,is_river and editable),recommended_checks=checks,assessed_utc=utc(),summary=model['summary'],run_id=hyd['run_id'],profiles=[p['profile_id'] for p in hyd['profiles']],input_adequacy=gate.get('input_adequacy_status'),
         bed_basis=hyd.get('channel_geometry_basis'),diagnostics=dict(records=len(issues) if diagnostics else None,
         native_messages=sum(1 for r in issues if (r.get('evidence') or {}).get('native_message')) if diagnostics else None,
         warning_coverage=(diagnostics or {}).get('warning_coverage'),by_severity=dict(Counter(r['severity'] for r in issues))),
-        qa=review,delivery=delivery,boundary_cases=cases,changed_ends=changed,holdout_observations=len(measured),
+        qa=review,delivery=delivery,boundary_cases=cases,event_tailwaters=event_tailwaters(river.get('events',[])),changed_ends=changed,holdout_observations=len(measured),
         sources=list({e['path']:e for e in sources}.values()))
     result['evidence_hash'] = digest({k:v for k,v in result.items() if k!='assessed_utc'})
     return result
@@ -302,6 +357,10 @@ def save_summary(key, body):
              label('Native messages / combined diagnostic records','原生信息／综合诊断记录')+
              f" · {d['native_messages']} / {d['records']}",
              label('Engineering sign-off remains with the responsible engineer.','工程签发由负责工程师决定。'),'']
+    if a.get('next_actions'):
+        lines.append(label('Recommended action order','建议处理顺序'))
+        for i,row in enumerate(a['next_actions'],1):
+            lines.append(f"{i}. "+row['reason'][language]+' · '+row['scope']+' · '+row['code'])
     for row in a['findings']:
         lines.append(row['reason'][language])
         f = row['facts']
@@ -312,10 +371,25 @@ def save_summary(key, body):
             lines.append(f"{f['profile']} · {f['parameter']} · RS {f['station']} · Δ {f['delta_ft']:+.3f} ft · {f['affected']}/{f['compared']} "+label('sections above','条断面超过')+f" {f['threshold_ft']} ft")
         else:
             for field,value in f.items():
+                if field=='observations':
+                    for obs in value:
+                        rs=(obs.get('location') or {}).get('rs')
+                        uncertainty=obs.get('uncertainty_ft')
+                        u=str(uncertainty)+' ft' if uncertainty and uncertainty>0 else label('accuracy record needed','待补精度记录')
+                        lines.append(f"  {obs.get('date')} · RS {rs} · Δ {obs['residual_ft']:+.3f} ft · {u} · {obs.get('source') or '—'}")
+                    continue
                 if isinstance(value,list):
                     value=', '.join(map(str,value))
                 if value is not None and value!='':
                     lines.append(f'  {field} · {value}')
+        lines.append('')
+    if a.get('event_tailwaters'):
+        lines.append(label('Tailwater for the matched observed event','匹配实测事件的尾水'))
+        for row in a['event_tailwaters']:
+            bounds=row['interval_ft']
+            value=(f"{bounds[0]:.3f}–{bounds[1]:.3f} ft" if bounds else
+                   label('verified interval unavailable','缺少可核验的区间'))
+            lines.append(f"{row['date']} · {row['event']} · RS {row['rs']} · {row['flow_cfs']} cfs · {row['datum']} · {value} · {row['source']}")
         lines.append('')
     scope=a['area']
     lines.append(label('Area of interest','工程关注河段')+f" · RS {scope['selected'][0]}–{scope['selected'][-1]} · L{scope['level']}")
