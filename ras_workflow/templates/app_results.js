@@ -80,7 +80,6 @@ function renderResultTools(parent){
  renderNextReview(parent);
  renderCheckBatch(parent);
  renderResultAtlas(parent);
- if(!current.native_review)parent.append(button('Prepare QA revision suggestions','根据 QA 创建修订建议',prepareQaRevision));
  renderStudy(parent);
  renderSpacing(parent);
  renderCoverage(parent);

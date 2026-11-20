@@ -558,8 +558,12 @@ def view(key,detail=True):
         result['comparison']=compare(m,s)
         if s.get('native_supplement'):
             from .app_outputs import validate as validate_outputs,diagnostics as supplemented_qa
-            result['native_supplement']=validate_outputs(s['native_supplement'])
-            result['results']['diagnostics']=supplemented_qa(h,result['native_supplement'])
+            try:
+                result['native_supplement']=validate_outputs(s['native_supplement'])
+                result['results']['diagnostics']=supplemented_qa(h,result['native_supplement'])
+            except (OSError,KeyError,ValueError) as error:
+                result['results']['diagnostics']=None
+                result['errors']=[*result.get('errors',[]),'Native evidence: '+str(error)]
         if m.get('exports_need_refresh'):
             if not current_refreshed_reports(m):result['report_files']=[]
             result['delivery']=None

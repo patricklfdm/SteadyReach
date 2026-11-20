@@ -1,7 +1,71 @@
 'use strict';
 const guidanceRequests=new Map();
+function assessmentFact(row){
+ const f=row.facts||{},decimal=(v,d)=>Number.isFinite(v)?v.toFixed(d):'—';
+ if(row.code==='GEOMETRY_FLOW_PATH')return 'RS '+f.station+' · '+(f.side==='L'?tr('left','左侧'):tr('right','右侧'))+' '+decimal(f.baseline_share_pct,2)+'% → '+decimal(f.alternative_share_pct,2)+'% · '+tr('new end depth ','新过水端深 ')+decimal(f.end_excess_ft,3)+' ft';
+ if(row.code==='BOUNDARY_INFLUENCE')return f.profile+' · '+sensitivityParameterLabel(f.parameter)+' · RS '+f.station+' · Δ '+decimal(f.delta_ft,3)+' ft · '+f.affected+'/'+f.compared+tr(' sections above ',' 条断面的绝对差超过 ')+f.threshold_ft+' ft';
+ if(f.peak_ft!==undefined)return 'RS '+f.station+' · Δ '+decimal(f.peak_ft,3)+' ft';
+ if(f.screened!==undefined)return tr('Screened observations','已初筛的测点')+' · '+f.screened;
+ if(f.stations)return 'RS '+f.stations.join(', ');
+ if(f.missing)return f.missing.join(', ');
+ if(f.error)return f.error;
+ if(f.errors)return f.errors.join(' · ');
+ if(f.codes)return f.codes.join(' · ');
+ if(f.records!==undefined)return f.records+tr(' diagnostic records',' 条诊断记录');
+ if(f.status)return assessmentState(f.status);
+ return '';
+}
+function assessmentState(value){
+ const labels={VERIFIED_MAPPED:['Both mapped packages verified','两个制图包已核验'],VERIFIED_NATIVE_ONLY:['Native files only','仅有原生文件'],STALE:['Refresh required','需更新'],INCOMPLETE:['Incomplete','未完整生成'],UNVERIFIED:['Unverified','尚未核验'],EDITION_MISMATCH:['Edition mismatch','版本不符'],NO_CURRENT_SUBMISSION:['No bound QA submission','无绑定本次结果的 QA 提交'],REVIEW_IN_PROGRESS:['Review in progress','复核中'],DIFFERENT_ISSUE_INVENTORY:['Reviewed issue list differs','复核问题清单与当前不同'],CLOSED_WITH_RECORDED_CONDITIONS:['Closed with recorded conditions','已记录条件并闭合'],REVIEW_REQUIRED:['Review required','待复核'],NOT_TESTED:['No verified trial','尚无已核验的试算'],NOT_CONVERGED:['Unconverged','未收敛'],PENDING:['Pending','待复核'],NOT_PERFORMED:['Not performed','尚未执行']};
+ return labels[value]?tr(...labels[value]):value||'—';
+}
+function showResultAssessment(box,a){
+ const label=s=>tr(s.en,s.zh),primary=a.findings[0];
+ box.append(el('h2',tr('Delivery assessment','结果交付评估')+' · L'+a.level+' · '+label(a.title)));
+ const use=[
+  tr('Restore calculation evidence before interpreting water levels.','先恢复本次计算证据，再解读水位。'),
+  tr('Use this edition for internal troubleshooting. Resolve the listed evidence or package gaps before handoff.','本版可用于内部排查，交出前先补齐所列证据或交付包。'),
+  tr('Share the model and maps with an engineer for conditional review. Include the limitations below.','可以将本版模型和地图连同下列限制交给工程师复核。'),
+  tr('The technical package can enter sign-off review. The responsible engineer decides suitability and approval.','技术资料可送签审，由负责工程师判断用途与签发。')];
+ box.append(el('p',use[a.level]));
+ function action(parent,row){
+  const f=row.facts||{};
+  parent.append(el('p',label(row.reason)),el('p',assessmentFact(row),'muted'));
+  parent.append(button('Open related tool','打开对应工具',()=>{
+   openGuidanceTool(row.target);
+   if(row.target==='floodplain'&&f.station)document.getElementById('qa-tool-floodplain')?.dispatchEvent(new CustomEvent('steadyreach-inspect-floodplain',{detail:{rs:f.station,geometry:f.case}}));
+  }));
+ }
+ if(primary){const first=el('div');box.append(first);first.append(el('strong',tr('First action','优先处理')));action(first,primary);}
+ if(a.delivery){
+  const d=a.diagnostics,counts=a.delivery.files;
+  box.append(el('p',tr('Delivery files','交付文件')+' · '+assessmentState(a.delivery.status)+(counts?' · Minimal '+counts.minimal+' / Complete '+counts.complete:''),
+   'status'),el('p',tr('Native messages','原生信息')+' '+(d.native_messages??'—')+' · '+tr('Combined diagnostic records','综合诊断记录')+' '+(d.records??'—')+' · QA '+assessmentState(a.qa.status)));
+ }
+ if(a.findings.length>1){const more=details(box,'All remaining findings ('+(a.findings.length-1)+')','其余限制及处理入口（'+(a.findings.length-1)+'）');for(const r of a.findings.slice(1))action(more,r);}
+ if(a.run_id&&!current.native_review){const actions=el('div',undefined,'actions');box.append(actions);
+  actions.append(button('Prepare QA revision suggestions','根据 QA 创建修订建议',prepareQaRevision),button('Open editable revision tool','打开独立修订入口',()=>openGuidanceTool('revision')));}
+ const scope=details(box,'Grading scope and evidence','分级范围与核验依据');
+ for(let i=0;i<a.levels.length;i++)scope.append(el('p','L'+i+' · '+label(a.levels[i])));
+ scope.append(el('p',tr('Grades describe the permitted handoff. Engineering approval and visual map inspection remain separate. Section counts exclude manifest files.','等级描述本版可交付的用途。工程签发和地图目视验收单列判断。文件数不含清单自身。')));
+ if(a.run_id){
+  box.append(button('Save assessment summary (.txt)','保存评估摘要（.txt）',()=>{
+   const lines=['SteadyReach · '+a.run_id,'L'+a.level+' · '+label(a.title),use[a.level],a.assessed_utc,a.summary.sha256,
+    tr('Package verification','交付包核验')+' · '+assessmentState(a.delivery.status)+' · '+tr('Map visual review','地图目视验收')+' · '+assessmentState(a.delivery.visual_review),
+    tr('Issue review','问题处置')+' · '+assessmentState(a.qa.status)+' · '+tr('Diagnostic records','诊断记录')+' '+(a.diagnostics.records??'—'),''];
+   for(const row of a.findings)lines.push(label(row.reason),assessmentFact(row),'');
+   for(const ref of a.sources)lines.push(ref.path+' · '+ref.sha256);
+   const url=URL.createObjectURL(new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/plain;charset=utf-8'}));
+   const link=el('a');link.href=url;link.download='SteadyReach_'+a.run_id+'_'+lang+'.txt';link.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }));
+  scope.append(el('p','Run '+a.run_id+' · '+a.profiles.join(', ')+' · '+a.input_adequacy),
+  el('p',tr('Map visual review recorded in the delivery receipt','交付回执记录的地图目视验收')+' · '+assessmentState(a.delivery.visual_review)));
+  if(a.boundary_cases.length)table(scope,[tr('Parameter / case','参数／工况'),'RS','Δ WSE (ft)',tr('Affected / compared','受影响／已比对')],a.boundary_cases.map(c=>[sensitivityParameterLabel(c.parameter)+' / '+c.profile+' / '+c.case,c.station,c.delta_ft.toFixed(3),c.affected+' / '+c.compared]));
+  const refs=details(scope,'Source files ('+a.sources.length+')','来源文件（'+a.sources.length+'）');
+  for(const ref of a.sources)refs.append(el('p',ref.path+' · '+ref.sha256,'muted'));}
+}
 function openGuidanceTool(key){
- const node=document.getElementById('qa-tool-'+key)||document.getElementById('qa-tool-qa');
+ const node=document.getElementById(key==='observations'?'field-observations':'qa-tool-'+key)||document.getElementById('qa-tool-qa');
  if(!node)throw Error(tr('Reopen this result to load the review tool.','请重新打开结果以加载复核工具。'));
  for(let p=node;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;
  node.scrollIntoView({block:'start',behavior:'smooth'});
@@ -9,19 +73,25 @@ function openGuidanceTool(key){
  notify(tr('Review tool opened. No input changed and no calculation started.','已展开相应复核工具；未修改输入、未启动计算。'));
 }
 function renderGuidance(parent){
- const box=details(parent,'Suggested next steps from this calculation','根据本次计算整理下一步',true);
+ const assessment=el('section',undefined,'result-assessment');parent.append(assessment);
+ const box=details(parent,'Suggested next steps from this calculation','根据本次计算整理下一步');
  const content=el('div');box.append(content);
- const id=current.id,hash=current.summary.sha256;
+ const id=current.id,hash=current.summary.sha256,edition=current.revision;
  async function load(){
+  assessment.setAttribute('aria-live','polite');
+  assessment.replaceChildren(el('p',tr('Assessing native results, warning coverage and both delivery packages…','正在评估原生结果、警告覆盖及两个交付包…'),'status'));
   content.replaceChildren(el('p',tr('Checking result evidence and completed studies…','正在核对结果证据与已完成试算…'),'status'));
   content.setAttribute('aria-busy','true');
   const key=id+'|'+hash+'|'+current.revision;
   try{
    let request=guidanceRequests.get(key);
-   if(!request){request=api('qa-guidance',{id,summary_hash:hash});guidanceRequests.set(key,request);}
+   if(!request){request=api('qa-guidance',{id,summary_hash:hash,include_assessment:true});guidanceRequests.set(key,request);}
    const data=await request;
-   if(!content.isConnected||current?.id!==id||current.summary?.sha256!==hash)return;
+   if(!content.isConnected||current?.id!==id||current.summary?.sha256!==hash||current.revision!==edition)return;
+   assessment.replaceChildren();
+   if(data.assessment)showResultAssessment(assessment,data.assessment);
    content.replaceChildren();
+   if(data.assessment?.level===0){content.append(el('p',tr('Reopen this result and restore the displayed evidence.','请重新打开本次结果，按上方提示恢复证据。')));return;}
    content.append(el('p',tr('Suggested work order, not a risk score. Opening a tool does not accept a change or start the solver.','以下为建议处理顺序，不是风险评分。打开工具不代表接受修改，也不会启动求解器。')),
     el('p',(data.issue_count??'—')+tr(' diagnostic records · ',' 条诊断记录 · ')+data.verified_study_count+tr(' authenticated studies for this calculation.',' 项已核验且属于本次计算的试算。'),'status'));
    if(data.operator_actions){
@@ -65,7 +135,7 @@ function renderGuidance(parent){
     item.append(button('Open relevant review tool','打开对应复核工具',()=>openGuidanceTool(row.target)));
    }
    content.append(el('p',tr('No warning is closed by this list. Input adequacy, hydraulic QA and engineering acceptance remain separate.','此清单不会关闭任何警告；输入充分性、水力 QA 和工程接受仍分别判断。'),'warning'));
-  }catch(error){if(content.isConnected){content.replaceChildren(el('p',tr('Could not organize the next steps: ','暂时无法整理下一步：')+error.message,'warning'),button('Retry next-step guidance','重试整理下一步',load));}}
+  }catch(error){if(content.isConnected){assessment.replaceChildren(el('p',tr('Assessment unavailable. ','评估暂不可用。')+error.message,'warning'),button('Retry assessment','重新评估',load));content.replaceChildren(el('p',tr('Could not organize the next steps: ','暂时无法整理下一步：')+error.message,'warning'),button('Retry next-step guidance','重试整理下一步',load));}}
   finally{guidanceRequests.delete(key);content.removeAttribute('aria-busy');}
  }
  void load();

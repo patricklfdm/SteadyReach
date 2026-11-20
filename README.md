@@ -18,6 +18,8 @@ For a new model, import the available material and check the crossing and terrai
 
 [User manual](docs/USER_GUIDE_EN.md) · [Installation and repair](docs/WINDOWS_SETUP_EN.md) · [Troubleshooting](docs/TROUBLESHOOTING_EN.md) · [Scope and limitations](docs/LIMITATIONS_EN.md)
 
+The Results screen assigns a handoff level, identifies the limiting sections and evidence, and links to the existing QA and revision tools. [Delivery assessment](docs/RESULTS_REVIEW_EN.md#delivery-assessment).
+
 ## What it does
 
 - Supports draggable DEM maps, fine zoom and explicit batch section rotation → real DEM preview → apply, with intersection checks and preserved draft history.

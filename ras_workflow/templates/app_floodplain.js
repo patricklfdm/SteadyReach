@@ -1,8 +1,17 @@
 'use strict';
 function renderFloodplain(parent){
  const box=details(parent,'Inspect floodplain and boundary response by section','按断面查看漫滩和边界影响');
+ box.id='qa-tool-floodplain';
  const out=el('div');box.append(out);let started=false;
- const id=current.id,hash=current.summary.sha256;
+ const id=current.id,hash=current.summary.sha256;let requested=null;
+ box.addEventListener('steadyreach-inspect-floodplain',event=>{
+  requested={rs:String(event.detail.rs),geometry:event.detail.geometry};
+  const station=out.querySelector('#ctx-station'),version=out.querySelector('#ctx-version');
+  if(station&&Array.from(station.options).some(o=>o.value===requested.rs)){
+   if(version&&Array.from(version.options).some(o=>o.value===requested.geometry))version.value=requested.geometry;
+   station.value=requested.rs;station.onchange();requested=null;
+  }
+ });
  async function load(fetchLayers=false){
   out.setAttribute('aria-busy','true');
   const status=el('p',fetchLayers?tr('Loading public road and levee lines…','正在获取公开道路和堤线…'):tr('Reading verified section results and imagery…','正在读取已核验的断面和航片…'),'status');
@@ -11,7 +20,7 @@ function renderFloodplain(parent){
    const data=await api('qa-floodplain',{id,summary_hash:hash,load_layers:fetchLayers});
    if(!out.isConnected||current?.id!==id||current.summary?.sha256!==hash)return;
    const prior={rs:out.querySelector('[data-context-station]')?.value,geometry:out.querySelector('#ctx-version')?.value,profile:out.querySelector('#ctx-profile')?.value,zoom:out.querySelector('#ctx-extent')?.value};
-   out.replaceChildren();renderFloodplainView(out,data,prior);
+   out.replaceChildren();renderFloodplainView(out,data,{...prior,...requested});requested=null;
    if(!fetchLayers&&data.layers.some(s=>s.status==='NOT_LOADED')){await load(true);return;}
    if(data.layers.some(s=>s.status==='NOT_LOADED'||s.status==='UNAVAILABLE')){
     out.append(button('Load or retry public road and levee layers','获取或重试公开道路及堤线',()=>load(true)));

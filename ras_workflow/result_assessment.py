@@ -1,0 +1,235 @@
+"""Current-run delivery uses, ordered by verified prerequisites. Read only."""
+from collections import Counter
+
+from .common import ROOT, finite, intact, read, safe_path, utc
+from .result_guidance import BALANCE, NATIVE_GAPS, WET, text
+from .revision_inputs import station_key
+from .river_review import response
+
+LEVELS = [
+    text('Evidence insufficient', '计算证据不足'),
+    text('Internal diagnosis', '可供内部诊断'),
+    text('Conditional engineering review', '可有条件交工程师复核'),
+    text('Technical package ready for sign-off review', '技术资料可提交签审'),
+]
+FULL = {'ALL_COMPUTED_PROFILES_VERIFIED_SINGLE_REACH', 'ALL_REQUESTED_PROFILES_USER_CONFIRMED',
+        'EXPORTED_SCOPE_OPERATOR_ATTESTED'}
+EVIDENCE_ERRORS = (ValueError, OSError, KeyError, TypeError)
+
+
+def finding(code, ceiling, target, en, zh, **facts):
+    return dict(code=code, ceiling=ceiling, target=target, reason=text(en, zh), facts=facts)
+
+
+def classify(findings):
+    level = min((r['ceiling'] for r in findings), default=3)
+    return dict(level=level, title=LEVELS[level], levels=LEVELS, findings=sorted(findings,key=lambda r:r['ceiling']),
+                engineering_acceptance='NOT_ASSESSED', rule_version=1)
+
+
+def unverified(reason):
+    return classify([finding('NATIVE_IDENTITY',0,'native','Restore the native calculation evidence.',
+                             '恢复可核验的原生计算结果。',error=reason)])
+
+
+def packages(model, path, hyd):
+    from .app_core import current_refreshed_reports
+    from .site_delivery import latest
+    if model.get('exports_need_refresh') or (model.get('latest_reports_binding') and not current_refreshed_reports(model)):
+        return dict(status='STALE')
+    current = model.get('latest_delivery')
+    if not current and model.get('engine_state'):
+        current = read(safe_path(ROOT,model['engine_state'])).get('delivery')
+    if not current or current.get('status') not in ('READY_FOR_REVIEW','READY_NATIVE_ONLY'):
+        return dict(status='INCOMPLETE')
+    receipt = latest(path)  # Rehash both package trees and check their internal native/GIS references.
+    if (not receipt or receipt['summary']!=model['summary'] or receipt['run_id']!=hyd['run_id']
+        or any(current.get(k)!=receipt.get(k) for k in ('summary','run_id','complete','minimal','mapped','status'))):
+        return dict(status='EDITION_MISMATCH')
+    mapped = receipt.get('mapped') is True and receipt['status']=='READY_FOR_REVIEW'
+    counts = {}
+    for kind in ('complete','minimal'):
+        entry = receipt[kind]['manifest']
+        directory = safe_path(ROOT,receipt[kind]['path'])
+        if safe_path(ROOT,entry['path'])!=directory/'PACKAGE_MANIFEST.json':
+            raise ValueError('Manifest path does not match the package')
+        files = read(ROOT/entry['path'])['files']
+        names = {e['path'] for e in files}
+        if not any(e['path'].startswith('HEC_RAS/') and e['path'].lower().endswith('.hdf')
+                   and e['sha256']==hyd['raw_hdf']['sha256'] for e in files):
+            raise ValueError(kind+' package lacks the displayed native result')
+        if mapped:
+            required = {'GIS/Aerial.tif','GIS/Contours.shp','HEC_RAS/Terrain/Terrain.hdf','Graph/Exhibit_EN.pdf'}
+            if kind=='complete':
+                required |= {'GIS_Project.qgz','Graph/Exhibit_CN.pdf'}
+                required |= {'Reports/Report_'+language+ext for language in ('EN','CN') for ext in ('.pdf','.docx')}
+            if required-names or not any(n.lower().endswith('.rasmap') for n in names):
+                raise ValueError(kind+' mapped artifacts missing: '+str(sorted(required-names)))
+        counts[kind]=len(files)
+    return dict(status='VERIFIED_MAPPED' if mapped else 'VERIFIED_NATIVE_ONLY',files=counts,
+                visual_review=receipt.get('visual_review'),receipt=receipt['receipt'])
+
+
+def qa_decisions(model, hyd, issues):
+    from .qa_session import load
+    from .qa_review import validate_decisions, closure_status, issue_key
+    if not model.get('active_project'):
+        return dict(status='NO_CURRENT_SUBMISSION')
+    checkpoint = safe_path(ROOT,model['active_project']).parent/'review_checkpoint.json'
+    if not checkpoint.exists():return dict(status='NO_CURRENT_SUBMISSION')
+    cp=read(checkpoint)
+    if cp.get('summary')!=model['summary'] or cp.get('run_id')!=hyd['run_id'] or not cp.get('session'):
+        return dict(status='NO_CURRENT_SUBMISSION')
+    _,session,packet=load(safe_path(ROOT,cp['session']))
+    if not session.get('submissions'):return dict(status='REVIEW_IN_PROGRESS')
+    last=session['submissions'][-1]
+    if (not intact([last['spec'],last['closure']]) or session['status']!=last['status']
+        or model['summary'] not in packet['sources'] or packet['run_id']!=hyd['run_id']):
+        raise ValueError('QA submission no longer matches this calculation')
+    spec=read(ROOT/last['spec']['path'])
+    validate_decisions(session['packet']['path'],spec)
+    rows=[r['issue'] for r in packet['issues'] if r['observation'] not in ('ABSENT_REQUIRES_REVIEW','NOT_COMPARABLE')]
+    if Counter(map(issue_key,rows))!=Counter(map(issue_key,issues)):
+        return dict(status='DIFFERENT_ISSUE_INVENTORY')
+    return dict(status=closure_status(packet,spec['decisions'])['hydraulic_qa_status'],source=last['spec'])
+
+
+def boundary_findings(studies, hyd, target):
+    from .qa import THRESHOLDS
+    profiles=[p['profile_id'] for p in hyd['profiles']]
+    signed=response(studies)
+    cases=[]
+    directions=set()
+    for study in studies:
+        for case in study['cases']:
+            changes=case.get('changes',[])
+            if len(changes)!=1:continue
+            change=changes[0]
+            path=change['path']
+            if not path.startswith(('boundary_slopes.','boundaries.')):continue
+            before,after=change.get('before'),change.get('after')
+            if not finite(before) or not finite(after) or before==after:continue
+            for row in signed:
+                if row['source']!=study['analysis'] or row['case']!=case['id'] or row['paths']!=[path]:continue
+                if path.startswith('boundaries.') and path.endswith(tuple('.'+str(i) for i in range(len(profiles)))):
+                    if row['profile']!=profiles[int(path.split('.')[-1])]:continue
+                directions.add((path.split('.')[1],row['profile'],after>before))
+                cases.append(dict(profile=row['profile'],case=row['case'],parameter=path,
+                    station=station_key(row['peak_rs']),delta_ft=row['signed_peak_ft'],affected=len(row['affected']),
+                    compared=row['compared'],threshold_ft=row['threshold_ft']))
+    findings=[]
+    affected=[r for r in cases if r['affected']]
+    if affected:
+        worst=max(affected,key=lambda r:abs(r['delta_ft']))
+        findings.append(finding('BOUNDARY_INFLUENCE',2,target,
+            'Check tailwater or upstream control against independent evidence before using the affected levels.',
+            '核实敏感边界的实测水位或控制条件，再使用受影响断面的水位。',**worst))
+    regime=hyd.get('flow_regime')
+    sides={'subcritical':['downstream'],'supercritical':['upstream'],'mixed':['upstream','downstream']}.get(regime,[])
+    missing=[f'{side} / {p}' for side in sides for p in profiles if
+             any((side,p,up) not in directions for up in (False,True))]
+    if missing or not sides:
+        findings.append(finding('BOUNDARY_SCOPE',2,target,'Check the applicable high and low boundary cases.',
+            '补查适用边界的高低两个工况。',missing=missing,threshold_ft=THRESHOLDS['sensitivity_hw_ft']))
+    return findings,cases
+
+
+def assess(model, path, summary, diagnostics, studies, guidance):
+    findings=[]
+    hyd=summary['hydraulics']
+    is_river=hyd.get('model_type')=='river'
+    editable=not model.get('native_review')
+    revise='revision' if editable else 'qa'
+    spatial='floodplain' if editable and is_river else 'atlas'
+    sensitivity='sensitivity' if editable else 'qa'
+    issues=(diagnostics or {}).get('issues',[])
+    sources=list(guidance.get('sources',[]))+[summary['hydraulic_results'],hyd['raw_hdf'],hyd['raw_controller']]
+    if diagnostics:sources+=diagnostics['sources']
+    errors=list(guidance.get('source_errors',[]))
+    try:delivery=packages(model,path,hyd)
+    except EVIDENCE_ERRORS as error:delivery=dict(status='UNVERIFIED',error=str(error))
+    if delivery.get('receipt'):sources.append(delivery['receipt'])
+    try:review=qa_decisions(model,hyd,issues)
+    except EVIDENCE_ERRORS as error:review=dict(status='UNVERIFIED',error=str(error))
+    if review.get('source'):sources.append(review['source'])
+    verified_review=review['status']=='CLOSED_WITH_RECORDED_CONDITIONS'
+    river={}
+    if is_river and editable:
+        from .river_review_report import collect
+        try:
+            river,refs=collect(path,summary)
+            sources.extend(refs)
+            if model.get('latest_geometry_comparison') and 'comparison' not in river:
+                errors.append('Geometry comparison belongs to another result or is incomplete.')
+        except EVIDENCE_ERRORS as error:errors.append(str(error))
+    if errors:
+        findings.append(finding('EVIDENCE_GAPS',1,'qa','Recover unavailable or changed evidence.',
+                                '恢复缺失或已改变的证据。',errors=errors))
+    if delivery['status']!='VERIFIED_MAPPED':
+        findings.append(finding('MAPPED_DELIVERY',1,'delivery','Refresh or repair the matching mapped packages.',
+                               '更新或修复与当前计算对应的两种制图交付包。',**delivery))
+    if not diagnostics or diagnostics.get('warning_coverage') not in FULL or any(r['severity']=='EVIDENCE_GAP' or r['code'] in NATIVE_GAPS for r in issues):
+        findings.append(finding('WARNING_COVERAGE',1,'native','Complete the native warning and output evidence.',
+                                '补齐原生警告表及输出证据。'))
+    balance=[r for r in issues if r['code'] in BALANCE or r['severity']=='ERROR']
+    if balance:
+        findings.append(finding('OUTPUT_CONSISTENCY',1,'qa','Resolve native output or flow consistency before sharing results.',
+                                '交出计算结果前，先解决流量或原生输出不一致。',codes=sorted({r['code'] for r in balance})))
+    gate=summary.get('gate') or {}
+    if hyd.get('case_kind')!='site_conditional' or gate.get('blocking_items') or gate.get('status')!='READY_CONDITIONAL':
+        findings.append(finding('SITE_SCOPE',1,revise,'Verify the site input gate and the scope of this calculation.',
+                                '核实场地输入检查及本次计算用途。',scope=hyd.get('case_kind')))
+    changed=river.get('changed_ends',[])
+    for row in changed[:1]:
+        share=row.get('share');before=row.get('baseline_share')
+        findings.append(finding('GEOMETRY_FLOW_PATH',2,spatial,'Inspect floodplain connectivity at the newly wet section.',
+            '核实几何修订后新过水断面的漫滩连通、道路开口和岸站。',station=station_key(row['rs']),case=row['case'],
+            side=row['side'],baseline_share_pct=before,alternative_share_pct=share,end_excess_ft=row['stage']-row['end'],
+            changed_ends=len(changed)))
+    boundary,cases=boundary_findings(studies,hyd,sensitivity)
+    findings.extend(boundary)
+    wet=sorted({station_key(r['station']) for r in issues if r['code'] in WET and r.get('station') is not None},key=float,reverse=True)
+    if wet:
+        findings.append(finding('WET_ENDS',2,'coverage' if editable and is_river else revise,
+            'Check connected floodplain and section extent before extending or rotating cutlines.',
+            '先核对连通漫滩和断面端点，再决定延伸或旋转。',stations=wet))
+    if (issues and not verified_review) or review['status'] in ('UNVERIFIED','DIFFERENT_ISSUE_INVENTORY','REVIEW_IN_PROGRESS'):
+        findings.append(finding('ISSUE_REVIEW',2,'qa','Review the current warning ledger and preserve its dispositions.',
+                                '复核当前警告和对应的处置记录。',records=len(issues),review=review['status']))
+    if is_river:
+        spacing=next((s for s in reversed(studies) if s.get('convergence')),None)
+        all_intervals=spacing and len(spacing.get('intervals') or [])==spacing['cases'][0].get('section_count',0)-1
+        if (not all_intervals or len(spacing['cases'])<3 or spacing['convergence']['status']!='STABLE_AT_REVIEW_THRESHOLD'
+            or spacing.get('excluded_intervals') or spacing.get('deferred_intervals')
+            or (spacing.get('end_coverage') or {}).get('status')!='ENDS_ABOVE_COMPUTED_WATER'):
+            findings.append(finding('SPACING',2,'spacing' if editable else 'qa','Review spacing, both refinements and wet ends.',
+                                '核对断面加密的连续两级水位变化、未测区间和湿端。',
+                                status=spacing['convergence']['status'] if spacing else 'NOT_TESTED'))
+        if hyd.get('channel_geometry_basis') not in ('surveyed_channel','combined_survey_and_dem'):
+            findings.append(finding('BED_BASIS',2,revise,'Verify the submerged channel bed with survey evidence.',
+                                    '用测量资料核实水下河床。',basis=hyd.get('channel_geometry_basis')))
+    elif gate.get('input_adequacy_status')=='CONDITIONAL_UNVERIFIED':
+        findings.append(finding('STRUCTURE_INPUTS',2,revise,'Verify structure dimensions, inverts and road levels for the intended use.',
+                                '按交付用途核实结构尺寸、涵底和道路高程。'))
+    measured=[r for r in river.get('events',[]) if r.get('role')=='holdout' and finite(r.get('residual_ft'))]
+    if is_river and not measured:
+        findings.append(finding('FIELD_SUPPORT',2,'observations' if editable else 'qa',
+            'Document an independent measured event before submitting a site performance claim for sign-off.',
+            '如需送审场地水位预测，补充独立事件的非边界实测水位，并核对位置与基准。',
+            screened=len(river.get('screen',[]))))
+    elif measured:
+        largest=max(measured,key=lambda r:abs(r['residual_ft']))
+        outside=[r for r in measured if not finite(r.get('uncertainty_ft')) or abs(r['residual_ft'])>r['uncertainty_ft']]
+        if outside:
+            findings.append(finding('FIELD_RESIDUAL',2,'observations' if editable else 'qa',
+                'Review held-out residuals and measurement uncertainty for the intended site use.',
+                '核对独立事件的逐站偏差、测量不确定度以及拟用范围。',records=len(outside),
+                peak_ft=largest['residual_ft'],station=(largest.get('location') or {}).get('rs')))
+    result=classify(findings)
+    result.update(assessed_utc=utc(),summary=model['summary'],run_id=hyd['run_id'],profiles=[p['profile_id'] for p in hyd['profiles']],input_adequacy=gate.get('input_adequacy_status'),
+        bed_basis=hyd.get('channel_geometry_basis'),diagnostics=dict(records=len(issues) if diagnostics else None,
+        native_messages=sum(1 for r in issues if (r.get('evidence') or {}).get('native_message')) if diagnostics else None,
+        warning_coverage=(diagnostics or {}).get('warning_coverage'),by_severity=dict(Counter(r['severity'] for r in issues))),
+        qa=review,delivery=delivery,boundary_cases=cases,changed_ends=changed,holdout_observations=len(measured),
+        sources=list({e['path']:e for e in sources}.values()))
+    return result

@@ -9,7 +9,7 @@ from collections import Counter
 
 import h5py
 
-from .common import ROOT, digest, intact, item, read, rel, safe_path, save, utc
+from .common import ROOT, digest, finite, intact, item, read, rel, safe_path, save, utc
 
 BASE = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles'
 THRESHOLDS = dict(min_error_ft=.3, egl_rise_ft=.05,
@@ -53,14 +53,20 @@ def verified_profiles(hydraulics):
         names = [v.decode().strip() for v in h[BASE + '/Profile Names'][:]]
         if names != [p['profile_id'] for p in hydraulics['profiles']]:
             raise ValueError('Summary profile identities differ from raw HDF')
+        expected=(len(names),len(stations))
+        if (not all(expected) or len(set(stations))!=len(stations) or len(set(names))!=len(names)
+            or any(h[BASE+'/Cross Sections/'+key].shape!=expected for key in ('Flow','Water Surface'))):
+            raise ValueError('Native station/profile inventory does not match the output tables')
         result = {}
         for i, p in enumerate(hydraulics['profiles']):
             flow = h[BASE + '/Cross Sections/Flow'][i]
-            if any(abs(float(v) - p['flow_cfs']) > .002 for v in flow):
+            if not finite(p['flow_cfs']) or p['flow_cfs']<=0 or any(number(v) is None or abs(float(v) - p['flow_cfs']) > .002 for v in flow):
                 raise ValueError('Summary flows differ from raw HDF')
             wse = {rs: float(v) for rs, v in zip(stations, h[BASE + '/Cross Sections/Water Surface'][i])}
+            if any(number(v) is None for v in wse.values()):
+                raise ValueError('Incomplete or nonfinite native water surface')
             for key, rs in [('headwater_wse_ft', p['headwater_rs']), ('tailwater_wse_ft', p['tailwater_rs'])]:
-                if abs(wse[rs] - p['metrics'][key]) > .001:
+                if not finite(p['metrics'][key]) or abs(wse[rs] - p['metrics'][key]) > .001:
                     raise ValueError('Summary water surface differs from raw HDF')
             result[p['profile_id']] = wse
     return result

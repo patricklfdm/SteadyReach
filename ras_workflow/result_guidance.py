@@ -146,13 +146,29 @@ def load_evidence(key, body):
             errors.append('Diagnostic sources changed; regenerate evidence before relying on the action list.')
     if summary.get('native_supplement') and diagnostics:
         from .app_outputs import validate, diagnostics as supplement_diagnostics
-        diagnostics = supplement_diagnostics(hyd, validate(summary['native_supplement']))
+        try:
+            diagnostics = supplement_diagnostics(hyd, validate(summary['native_supplement']))
+        except (OSError, KeyError, ValueError) as error:
+            errors.append('Native supplement: ' + str(error))
+            diagnostics = None
     return m, path, summary, hyd, diagnostics, errors
 
 
 def collect(key, body):
     from .report_studies import collect as collect_studies
-    m, path, summary, hyd, diagnostics, errors = load_evidence(key, body)
+    try:
+        m, path, summary, hyd, diagnostics, errors = load_evidence(key, body)
+    except (KeyError, ValueError, OSError) as error:
+        if not body.get('include_assessment'):
+            raise
+        from . import app_core as core
+        from .result_assessment import unverified
+        m = core.model(key)
+        core.require_idle(m)
+        if (m.get('summary') or {}).get('sha256') != body.get('summary_hash'):
+            raise ValueError('The displayed calculation changed; reopen results') from error
+        return dict(assessment=unverified(str(error)), actions=[], summary=m.get('summary'),
+                    issue_count=None, verified_study_count=0, source_errors=[str(error)])
     try:
         studies, sources = collect_studies(path, summary)
     except (ValueError, OSError, KeyError) as error:
@@ -184,4 +200,13 @@ def collect(key, body):
             result['source_errors'].append(str(error))
         result['parameter_response']=response(studies)
     result.update(summary=m['summary'], sources=[m['summary']]+sources)
+    if body.get('include_assessment'):
+        from .result_assessment import assess
+        assessment = assess(m, path, summary, diagnostics, studies, result)
+        result['assessment'] = assessment
+        if assessment['delivery']['status'] != 'VERIFIED_MAPPED':
+            delivery_action = next(a for a in result['actions'] if a['id']=='delivery')
+            delivery_action.update(title=text('Recover the matching delivery packages','恢复与当前结果对应的交付包'),
+                explanation=text('Check the assessment evidence and use the existing export controls to regenerate from this result.',
+                                 '按评估所列证据排查，再用现有导出入口复用本次结果生成交付包。'), mode='AUTOMATED_EXPORT')
     return result

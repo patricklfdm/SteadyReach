@@ -6,6 +6,21 @@
 
 For a reach without structures, choose **River reach (bridges excluded)** and follow the [river guide](RIVER_REACH_EN.md). It removes culvert/road fields and requires channel-bed representation and active boundary conditions. The crossing-specific steps below apply to culvert projects.
 
+## Delivery assessment
+
+Open the computed edition. The card at the top checks the run and grades what you can hand to another engineer. It gives the reason for the first action, the limiting findings and a link to each existing review tool. Save the assessment as text to retain its timestamp, run ID, summary hash and evidence references.
+
+| Level | Intended use | Evidence |
+|---|---|---|
+| L0 | Recover calculation evidence | The selected run, profile inventory, native HDF, controller or sealed extraction cannot be verified. |
+| L1 | Internal diagnosis | The native result is verified. An incomplete warning export, inconsistent discharge, stale or incomplete mapped packages, failed evidence check or non-site run limits handoff. |
+| L2 | Conditional engineering review | The actual native result and both mapped packages are verified. Give the engineer the findings alongside the model. Typical limitations include wet ends, geometry-dependent overbank flow, boundary influence, unresolved warnings, partial spacing coverage or a surface DEM used for the channel bed. |
+| L3 | Technical package ready for sign-off review | Checks for the applicable scope have supporting evidence. For a river this includes full-reach spacing across two refinements, applicable low/high boundary tests, surveyed bed representation and independent non-boundary event observations. The responsible engineer reviews the intended use and decides approval. |
+
+Boundary effects above the workflow's internal 0.10 ft comparison threshold are listed by profile and station. A downstream stage prescribed in a field test cannot count as a validation point. Signed holdout differences outside the documented measurement uncertainty, or missing uncertainty, require interpretation. That comparison supplies an investigation trigger, not a design tolerance. Missing or mismatched observations remain visible limitations. A conditional culvert with unverified structures stays at L2 or below. QA dispositions must match the same run and issue inventory. A documented conditional explanation can account for individual messages. It cannot override a material flow inconsistency, a failed integrity check or a newly wet end.
+
+For a new wet end, **Open related tool** opens the applicable section and geometry on the floodplain map. For a boundary response, it opens the sensitivity tool; inspect tested cases before rerunning. **Prepare QA revision suggestions** uses the existing independent draft route. **Open editable revision tool** opens the existing revision controls. Neither reading the assessment nor opening a tool starts HEC-RAS. A new calculation still uses the normal parameter confirmation. The assessment rechecks package bytes, Mapper dependencies and the packaged plan HDF against the displayed run. The package receipt's visual-review status appears separately. Engineering approval always belongs to the responsible reviewer.
+
 ## The normal path
 
 For an independently revised model, **Comparison with previous calculation** shows river-specific metrics, every matching section's native WSE change, the largest absolute change and diagnostic counts for both editions. It verifies raw HDF/controller identity before comparing. Added or removed sections and unmatched profiles remain visible. Different discharges, model types, units or datums stop the comparison. A changed endpoint ID suppresses its endpoint delta. Matching RS labels still require checking any changed physical locations. The 0.1 ft flag is a workflow screening threshold. Native-message coverage and combined numerical/native records are listed separately.

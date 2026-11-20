@@ -18,6 +18,8 @@
 
 [用户手册](docs/USER_GUIDE_CN.md) · [安装与修复](docs/WINDOWS_SETUP_CN.md) · [常见问题](docs/TROUBLESHOOTING_CN.md) · [适用范围与限制](docs/LIMITATIONS_CN.md)
 
+结果页会评定本版交付用途、列出限制等级的断面和证据，并直接进入已有 QA 或修订工具。[如何看交付等级](docs/RESULTS_REVIEW_CN.md#结果交付评估)。
+
 ## 主要功能
 
 - 支持 DEM 拖动与细粒度缩放，以及多条断面方向调整 → 真实 DEM 重采样预览 → 明确采用；保留相交检查及旧草稿。
