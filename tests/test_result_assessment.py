@@ -79,6 +79,23 @@ class ResultAssessmentTests(TestCase):
         self.diagnostics['issues'][0]['code']='STRUCTURE_FLOW_IMBALANCE'
         self.assertEqual(self.assess()['level'],1)
 
+    def test_unadopted_wet_candidate_does_not_downgrade_adopted_case(self):
+        self.field['changed_ends']=[dict(rs='200',case='rotated',side='L',stage=12,end=11.9,share=51.,baseline_share=45.)]
+        r=self.assess()
+        self.assertEqual(r['level'],3)
+        self.assertEqual(r['candidate_findings'][0]['facts']['case'],'rotated')
+
+    def test_target_reach_does_not_hide_model_boundary_or_missing_stations(self):
+        from ras_workflow.assessment_area import area
+        inventory={'Q100':{'300':12.,'200':11.,'100':10.}}
+        section=area(inventory,dict(upstream='300',downstream='200'))
+        for comp in self.study['comparisons']:
+            comp['cross_section_differences'].append(dict(profile='Q100',station='300',delta_wse_ft=.01))
+            comp['cross_section_differences'][1]['delta_wse_ft']=2.
+        findings,rows=assess.boundary_findings([self.study],self.hyd,'sensitivity',inventory,section)
+        self.assertEqual([f['code'] for f in findings],['BOUNDARY_INFLUENCE'])
+        self.assertEqual((rows[0]['boundary_delta_ft'],rows[0]['area']['affected'],rows[0]['area']['compared']),(2.,0,2))
+
     def test_partial_boundary_and_missing_study_evidence(self):
         self.study['comparisons'].pop()
         self.assertIn('BOUNDARY_SCOPE',[r['code'] for r in self.assess()['findings']])

@@ -95,11 +95,11 @@ def qa_decisions(model, hyd, issues):
     return dict(status=closure_status(packet,spec['decisions'])['hydraulic_qa_status'],source=last['spec'])
 
 
-def boundary_findings(studies, hyd, target):
-    from .qa import THRESHOLDS, verified_profiles
+def boundary_findings(studies, hyd, target, inventory, selection):
+    from .qa import THRESHOLDS
     profiles=[p['profile_id'] for p in hyd['profiles']]
     signed=response(studies)
-    inventory = verified_profiles(hyd) if signed else {}
+    selected = set(selection['selected'])
     cases=[]
     directions=set()
     for study in studies:
@@ -117,14 +117,21 @@ def boundary_findings(studies, hyd, target):
                     if row['profile']!=profiles[int(path.split('.')[-1])]:continue
                 profile = row['profile']
                 expected = {station_key(rs) for rs in inventory.get(profile,{})}
-                stations = [station_key(r['station']) for comp in study['comparisons'] if comp['case']==case['id']
-                            for r in comp.get('cross_section_differences',[])
-                            if r['profile']==profile and finite(r.get('delta_wse_ft'))]
+                points = [(station_key(r['station']),r['delta_wse_ft']) for comp in study['comparisons'] if comp['case']==case['id']
+                          for r in comp.get('cross_section_differences',[])
+                          if r['profile']==profile and finite(r.get('delta_wse_ft'))]
+                stations = [rs for rs,_ in points]
+                local = [(rs,delta) for rs,delta in points if rs in selected]
+                peak = max(local,key=lambda point:abs(point[1]),default=(None,None))
+                local_stats = dict(station=peak[0],delta_ft=peak[1],compared=len(local),
+                                   affected=sum(abs(delta)>row['threshold_ft'] for _,delta in local))
+                end_rs = selection['stations'][0 if path.split('.')[1]=='upstream' else -1]
                 if expected and len(stations)==len(expected) and set(stations)==expected:
                     directions.add((path.split('.')[1],profile,after>before))
                 cases.append(dict(profile=row['profile'],case=row['case'],parameter=path,
                     station=station_key(row['peak_rs']),delta_ft=row['signed_peak_ft'],affected=len(row['affected']),
-                    compared=row['compared'],threshold_ft=row['threshold_ft']))
+                    compared=row['compared'],threshold_ft=row['threshold_ft'],area=local_stats,
+                    boundary_rs=end_rs,boundary_delta_ft=dict(points).get(end_rs)))
     findings=[]
     affected=[r for r in cases if r['affected']]
     if affected:
@@ -188,19 +195,31 @@ def assess(model, path, summary, diagnostics, studies, guidance):
         findings.append(finding('SITE_SCOPE',1,revise,'Verify the site input gate and the scope of this calculation.',
                                 '核实场地输入检查及本次计算用途。',scope=hyd.get('case_kind')))
     changed=river.get('changed_ends',[])
-    for row in changed[:1]:
+    candidate_findings=[]
+    for row in changed:
         share=row.get('share');before=row.get('baseline_share')
-        findings.append(finding('GEOMETRY_FLOW_PATH',2,spatial,'Inspect floodplain connectivity at the newly wet section.',
-            '核实几何修订后新过水断面的漫滩连通、道路开口和岸站。',station=station_key(row['rs']),case=row['case'],
+        candidate_findings.append(finding('GEOMETRY_FLOW_PATH',None,spatial,'Check the candidate’s newly wet floodplain before adopting it.',
+            '采用该候选前核实新过水断面的漫滩连通、道路开口和岸站。',station=station_key(row['rs']),case=row['case'],
             side=row['side'],baseline_share_pct=before,alternative_share_pct=share,end_excess_ft=row['stage']-row['end'],
             changed_ends=len(changed)))
-    boundary,cases=boundary_findings(studies,hyd,sensitivity)
-    findings.extend(boundary)
+    from .qa import verified_profiles
+    from .assessment_area import current as current_area, area as full_area
+    inventory=verified_profiles(hyd)
+    try:
+        selection=current_area(model,inventory)
+        if model.get('assessment_area'):sources.append(model['assessment_area'])
+    except EVIDENCE_ERRORS as error:
+        selection=full_area(inventory)
+        findings.append(finding('AREA_EVIDENCE',1,'qa','Restore the saved area of interest or select it again.',
+                                '恢复已存关注范围，或重新选择。',error=str(error)))
+    boundary,cases=boundary_findings(studies,hyd,sensitivity,inventory,selection)
+    findings.extend(f for f in boundary if f['code']=='BOUNDARY_INFLUENCE')
     wet=sorted({station_key(r['station']) for r in issues if r['code'] in WET and r.get('station') is not None},key=float,reverse=True)
     if wet:
         findings.append(finding('WET_ENDS',2,'coverage' if editable and is_river else revise,
             'Check connected floodplain and section extent before extending or rotating cutlines.',
             '先核对连通漫滩和断面端点，再决定延伸或旋转。',stations=wet))
+    findings.extend(f for f in boundary if f['code']!='BOUNDARY_INFLUENCE')
     if (issues and not verified_review) or review['status'] in ('UNVERIFIED','DIFFERENT_ISSUE_INVENTORY','REVIEW_IN_PROGRESS'):
         findings.append(finding('ISSUE_REVIEW',2,'qa','Review the current warning ledger and preserve its dispositions.',
                                 '复核当前警告和对应的处置记录。',records=len(issues),review=review['status']))
@@ -234,7 +253,14 @@ def assess(model, path, summary, diagnostics, studies, guidance):
                 '核对独立事件的逐站偏差、测量不确定度以及拟用范围。',records=len(outside),
                 peak_ft=largest['residual_ft'],station=(largest.get('location') or {}).get('rs')))
     result=classify(findings)
-    result.update(assessed_utc=utc(),summary=model['summary'],run_id=hyd['run_id'],profiles=[p['profile_id'] for p in hyd['profiles']],input_adequacy=gate.get('input_adequacy_status'),
+    local_findings=[f for f in findings if f['code']!='BOUNDARY_INFLUENCE']
+    local_cases=[c for c in cases if c['area']['affected']]
+    if local_cases:
+        worst=max(local_cases,key=lambda c:abs(c['area']['delta_ft']))
+        local_findings.append(finding('BOUNDARY_INFLUENCE',2,sensitivity,'Review boundary influence within the selected reach.',
+            '核查边界对所选河段的影响。',**{**worst,**worst['area']}))
+    selection.update(level=classify(local_findings)['level'],blocking_codes=[f['code'] for f in local_findings])
+    result.update(area=selection,candidate_findings=candidate_findings,rule_version=2,assessed_utc=utc(),summary=model['summary'],run_id=hyd['run_id'],profiles=[p['profile_id'] for p in hyd['profiles']],input_adequacy=gate.get('input_adequacy_status'),
         bed_basis=hyd.get('channel_geometry_basis'),diagnostics=dict(records=len(issues) if diagnostics else None,
         native_messages=sum(1 for r in issues if (r.get('evidence') or {}).get('native_message')) if diagnostics else None,
         warning_coverage=(diagnostics or {}).get('warning_coverage'),by_severity=dict(Counter(r['severity'] for r in issues))),
@@ -281,6 +307,16 @@ def save_summary(key, body):
                 if value is not None and value!='':
                     lines.append(f'  {field} · {value}')
         lines.append('')
+    scope=a['area']
+    lines.append(label('Area of interest','工程关注河段')+f" · RS {scope['selected'][0]}–{scope['selected'][-1]} · L{scope['level']}")
+    for case in a['boundary_cases']:
+        lines.append(f"{case['profile']} · {case['case']} · "+label('Boundary','计算边界')+
+                     f" RS {case['boundary_rs']} Δ {case['boundary_delta_ft']} ft · "+
+                     label('Area peak','关注河段峰值')+f" RS {case['area']['station']} Δ {case['area']['delta_ft']} ft")
+    for row in a['candidate_findings']:
+        f=row['facts']
+        lines.append(label('Unadopted candidate','未采用候选')+f" · {f['case']} · RS {f['station']} · {f['side']} · "+
+                     f"{f['baseline_share_pct']}% → {f['alternative_share_pct']}% · {f['end_excess_ft']:.3f} ft")
     lines.append(label('Traceable sources','可追溯来源'))
     lines.extend(entry['path']+' · '+entry['sha256'] for entry in a['sources'])
     destination = folder(key)/'assessment_exports'/unique_id()

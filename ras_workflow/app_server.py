@@ -75,6 +75,9 @@ def create():
                     elif route=='qa-guidance':
                         from .result_guidance import collect
                         result=collect(key,body)
+                    elif route=='qa-assessment-area':
+                        from .assessment_area import select
+                        result=select(key,body)
                     elif route=='qa-assessment-save':
                         from .result_assessment import save_summary
                         result=save_summary(key,body)

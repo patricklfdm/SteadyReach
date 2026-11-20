@@ -70,7 +70,7 @@ def create_draft(parent,body,preparation_task=None):
     save(new_sp.parent/'draft.json',draft)
     m=copy.deepcopy(parent)
     for field in ('summary','engine_state','active_project','latest_reports','latest_delivery','previous_delivery','run_confirmation','pending_review','task','run_scenario','exports_need_refresh','pending_study','active_study','latest_study','latest_spacing','latest_coverage','latest_coverage_exports','automatic_preparation','automatic_options','exit_code','sensitivity_suggestions','latest_reports_binding','pending_check_batch','active_check_batch','latest_check_batch','automatic_next_review',
-                  'latest_geometry_comparison','river_observations','latest_observed_event','observed_event_history','native_export_attempt'):
+                  'latest_geometry_comparison','river_observations','latest_observed_event','observed_event_history','native_export_attempt','assessment_area'):
         m.pop(field,None)
     origin=source['summary'] if source else parent['summary']
     m.update(id=key2,title=c['title'],project=rel(folder/'initial.json'),session=session['session'],revision=0,

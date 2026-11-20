@@ -8,6 +8,8 @@ For a reach without structures, choose **River reach (bridges excluded)** and fo
 
 ## Delivery assessment
 
+The grade applies to the selected computed edition. Open **Unadopted geometry alternatives** to inspect new wet ends and flow splits in the alternatives. Under **Engineering area of interest**, select two native stations to compare boundary, whole-model and local stage responses. Other checks retain their whole-model scope. The saved assessment records both grades and the selected endpoints.
+
 Open the computed edition. The card at the top checks the run and grades what you can hand to another engineer. It gives the reason for the first action, the limiting findings and a link to each existing review tool. Select **Save assessment summary (.txt)** and then **Open saved summary**. The project keeps the dated assessment, run ID, source hashes and findings in its `assessment_exports` folder.
 
 | Level | Intended use | Evidence |

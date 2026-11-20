@@ -43,6 +43,25 @@ function showResultAssessment(box,a){
    'status'),el('p',tr('Native messages','原生信息')+' '+(d.native_messages??'—')+' · '+tr('Combined diagnostic records','综合诊断记录')+' '+(d.records??'—')+' · QA '+assessmentState(a.qa.status)));
  }
  if(a.findings.length>1){const more=details(box,'All remaining findings ('+(a.findings.length-1)+')','其余限制及处理入口（'+(a.findings.length-1)+'）');for(const r of a.findings.slice(1))action(more,r);}
+ if(a.candidate_findings?.length){
+  const candidates=details(box,tr('Unadopted geometry alternatives','未采用的几何候选'), '未采用的几何候选');
+  for(const row of a.candidate_findings)action(candidates,row);
+ }
+ if(a.area&&current.model_type==='river'){
+  const panel=details(box,'Engineering area of interest','工程关注河段');
+  panel.append(el('p',tr('Whole adopted edition','采用版全河段')+' · L'+a.level+' | '+tr('Area of interest','关注河段')+' · RS '+a.area.selected[0]+'–'+a.area.selected.at(-1)+' · L'+a.area.level),
+   el('p',tr('The area grade restricts boundary influence to these stations and retains the other whole-model checks.','关注河段按选定断面评估边界影响，其他检查沿用全模型的结果。')));
+  const options=a.area.stations.map(rs=>[rs,'RS '+rs,'RS '+rs]);
+  const up=field(panel,'assessment-area-us','Upstream end','关注河段上端',a.area.selected[0],'select',options);
+  const down=field(panel,'assessment-area-ds','Downstream end','关注河段下端',a.area.selected.at(-1),'select',options);
+  panel.append(button('Apply review limits','采用关注范围',async()=>{
+   await api('qa-assessment-area',{id:current.id,summary_hash:a.summary.sha256,upstream:up.value,downstream:down.value});
+   await open(current.id);
+  }));
+  const decimal=v=>Number.isFinite(v)?v.toFixed(3):'—';
+  if(a.boundary_cases.length)table(panel,[tr('Case','工况'),tr('Boundary RS / Δ ft','边界 RS／水位差 ft'),tr('Area peak RS / Δ ft','关注河段峰值 RS／水位差 ft'),tr('Affected / compared in area','关注河段超阈／比对数')],
+   a.boundary_cases.map(c=>[c.profile+' / '+c.case,c.boundary_rs+' / '+decimal(c.boundary_delta_ft),(c.area.station??'—')+' / '+decimal(c.area.delta_ft),c.area.affected+' / '+c.area.compared]));
+ }
  if(a.run_id&&!current.native_review){const actions=el('div',undefined,'actions');box.append(actions);
   actions.append(button('Prepare QA revision suggestions','根据 QA 创建修订建议',prepareQaRevision),button('Open editable revision tool','打开独立修订入口',()=>openGuidanceTool('revision')));}
  const scope=details(box,'Grading scope and evidence','分级范围与核验依据');
