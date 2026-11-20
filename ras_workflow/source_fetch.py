@@ -12,7 +12,7 @@ from html.parser import HTMLParser
 from pathlib import PurePosixPath
 
 ALLOWED = ('usgs.gov', 'sciencebase.gov', 'amazonaws.com', 'fema.gov',
-           'hydro.nationalmap.gov', 'tigerweb.geo.census.gov')
+           'hydro.nationalmap.gov', 'tigerweb.geo.census.gov', 'geospatial.sec.usace.army.mil')
 
 def public_url(url):
     p = urllib.parse.urlsplit(url)

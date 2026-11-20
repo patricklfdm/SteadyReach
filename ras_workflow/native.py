@@ -84,9 +84,9 @@ def fixed(values,width=8,perline=10):
     if any(len(v)>width for v in ss):raise ValueError('Native fixed-width value overflow')
     return '\n'.join(''.join(ss[i:i+perline]) for i in range(0,len(ss),perline))+'\n'
 
-def build(folder,c,s,g):
+def build(folder,c,s,g,*,survey_stationing_only=False):
     from .inputs import geometry_errors
-    errors=geometry_errors(g,c.get('case_kind')=='software_validation')
+    errors=geometry_errors(g,c.get('case_kind')=='software_validation',survey_stationing_only=survey_stationing_only)
     if errors:raise ValueError('Native geometry gate: '+'; '.join(errors))
     folder.mkdir(parents=True,exist_ok=False)
     templates=ROOT/'ras_workflow/templates'

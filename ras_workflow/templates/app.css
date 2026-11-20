@@ -12,3 +12,5 @@
 .terrain-viewport .interactive-map{position:absolute;inset:0;max-height:none;height:100%;width:100%}
 
 button.danger{color:#8d2929;border-color:#bd7772}button.danger:hover{background:#fff0ee}
+.context-legend{display:flex;gap:1em;flex-wrap:wrap}.context-legend span{padding-left:.4em}
+.section-context-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:1rem;align-items:start}.section-context-grid>div{min-width:0}.section-context-grid svg{width:100%;height:auto}

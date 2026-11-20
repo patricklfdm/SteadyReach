@@ -2,6 +2,14 @@
 
 [简体中文](RIVER_COMPARISON_CN.md) · [Start with a location](RIVER_REACH_EN.md)
 
+## Inspect a floodplain or a boundary at a section
+
+Open **Inspect floodplain and boundary response by section** on a solved river's results page. Select an RS or click a cutline. The selected geometry drives the aerial map and native ground profile. The table compares left and right overbank shares and water over the surveyed or sampled endpoints. Use **Whole reach** to see a longer flow path. The road and levee queries use the displayed reach footprint. Their results are cached locally. An empty USACE alignment query leaves the presence of local embankments unresolved.
+
+The lower graph shows signed water-level changes for verified boundary trials on the **original geometry**. Read the chosen station and the count exceeding 0.10 ft. Run a boundary sensitivity batch if the pane displays no cases. A road centerline provides a location to inspect. Crest elevations, culverts and low openings require independent evidence.
+
+For a worked comparison using measured flood levels, see the [East Fork River calibration and independent check](../examples/east_fork_wy/README.md).
+
 ## Use the results page
 
 1. Open the solved river edition in **Saved projects**. Confirm the profile, discharge and units. For a California frequency estimate, the reviewed flow source identifies the USGS station, workbook cell and transfer distance.

@@ -1,0 +1,46 @@
+{
+  "date": "1980-06-10",
+  "role": "holdout",
+  "flow_m3s": 19.3,
+  "source": "https://pubs.usgs.gov/of/1982/0359/report.pdf",
+  "sha256": "d0489f340921a87db7d290d4a4cea61a0c1c30b9afa4638dabb7869f333f0ab7",
+  "reference": "Tables 49 and 50, printed pp. 100 and 110. Arithmetic mean of reported left and right staff gage levels above 2150 m NGVD29. Table 50 section 0000 at 1215. Ratings/steady transfer are conditional.",
+  "observations": [
+    {
+      "rs": 516,
+      "time": "1159",
+      "bank_pair_m": [
+        6.7,
+        6.71
+      ],
+      "stage_m": 6.705
+    },
+    {
+      "rs": 421,
+      "time": "1202",
+      "bank_pair_m": [
+        6.67,
+        6.63
+      ],
+      "stage_m": 6.65
+    },
+    {
+      "rs": 301,
+      "time": "1206",
+      "bank_pair_m": [
+        6.58,
+        6.56
+      ],
+      "stage_m": 6.57
+    },
+    {
+      "rs": 220,
+      "time": "1209",
+      "bank_pair_m": [
+        6.48,
+        6.47
+      ],
+      "stage_m": 6.475
+    }
+  ]
+}

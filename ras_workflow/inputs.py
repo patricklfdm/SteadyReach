@@ -59,7 +59,7 @@ def dependencies(path, c):
         if not p.is_file(): raise ValueError('Input missing: ' + rel(p))
     return [item(p,'input') for p in sorted(set(files))]
 
-def geometry_errors(g,allow_synthetic=False):
+def geometry_errors(g,allow_synthetic=False,*,survey_stationing_only=False):
     from .geometry_qa import spatial_issues, review_errors
     errors=[]
     def need(test, msg):
@@ -73,7 +73,10 @@ def geometry_errors(g,allow_synthetic=False):
         value=g.get(key)
         need(isinstance(value,str) and 0<len(value)<=16 and value.isascii() and not any(x in value for x in ',\n\r'),'Native '+key+' name must be ASCII 1..16 characters without commas/newlines')
     try:
-        crs=CRS.from_user_input(g['horizontal_crs']); need(crs.is_projected, 'Projected GIS CRS required')
+        crs=CRS.from_user_input(g['horizontal_crs'])
+        local_survey=(survey_stationing_only and is_river(g) and g.get('channel_geometry_basis')=='surveyed_channel'
+                      and crs.is_engineering and g.get('map_reference')=='local_survey_chainage')
+        need(crs.is_projected or local_survey, 'Projected GIS CRS required for georeferenced work')
     except Exception: errors.append('Invalid horizontal_crs')
     need(g.get('model_type','culvert') in ['culvert','river'],'Unsupported model_type')
     if is_river(g):
