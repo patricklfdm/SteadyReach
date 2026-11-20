@@ -177,6 +177,9 @@ def assess(model, path, summary, diagnostics, studies, guidance):
             if model.get('latest_geometry_comparison') and 'comparison' not in river:
                 errors.append('Geometry comparison belongs to another result or is incomplete.')
         except EVIDENCE_ERRORS as error:errors.append(str(error))
+    from .survey_import import verified_sources
+    try:sources.extend(verified_sources(model))
+    except EVIDENCE_ERRORS as error:errors.append(str(error))
     if errors:
         findings.append(finding('EVIDENCE_GAPS',1,'qa','Recover unavailable or changed evidence.',
                                 '恢复缺失或已改变的证据。',errors=errors))

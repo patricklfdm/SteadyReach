@@ -229,7 +229,11 @@ def rows(m, context=None):
         cls=answer.get('evidence_class')
         if not cls:
             cls='missing' if missing else 'terrain_derived' if f['key'].startswith('g.cross_sections.') and g.get('flowlines') else 'source_input_unverified'
-        f['evidence_class']=cls;f['basis']=answer.get('basis','Original input / generated terrain; verify its applicability.')
+        basis='Original input / generated terrain; verify its applicability.'
+        if m.get('route')=='survey' and not missing and not answer:
+            from .survey_import import parameter_basis
+            cls,basis=parameter_basis(f['key'],c)
+        f['evidence_class']=cls;f['basis']=answer.get('basis',basis)
         f['missing']=missing
         if f['key'] in bank_inventory:f['bank_review']=bank_inventory[f['key']]
         f['parameter_candidates']=[dict(candidate=digest(s),**s) for s in f['suggestions']]+extra.get(f['key'],[])
@@ -325,6 +329,8 @@ def refresh_equivalent_candidates(m):
 
 
 def binding(m):
+    from .survey_import import verified_sources
+    verified_sources(m)
     sources=[item(ROOT/m['project'])]+m.get('attachments',[])+m.get('input_choices',[])
     if m.get('road_sample'):sources.append(m['road_sample'])
     if m.get('source_analysis'):sources.append(m['source_analysis'])

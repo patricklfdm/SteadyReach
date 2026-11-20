@@ -29,7 +29,9 @@ def terrain(raster,output,crs,bounds,factor,datum,vertical_unit):
         if not src.crs or src.count!=1:raise ValueError('Terrain must have one elevation band and a CRS')
         source=horizontal(src.crs)
         if not source.is_projected:raise ValueError('Terrain source needs a projected CRS with known horizontal units')
-        if source.datum!=target.datum:
+        # GeoTIFF WKT1 may spell the same EPSG geodetic CRS as a reference
+        # frame while the projection definition uses its WKT2 datum ensemble.
+        if source.datum != target.datum and not source.geodetic_crs.equals(target.geodetic_crs, ignore_axis_order=True):
             raise ValueError('Terrain and model use different horizontal datums; provide an explicitly reviewed datum transformation')
         resolution=max(src.res)*source.axis_info[0].unit_conversion_factor/target.axis_info[0].unit_conversion_factor
         width=math.ceil((bounds[2]-bounds[0])/resolution);height=math.ceil((bounds[3]-bounds[1])/resolution)

@@ -78,13 +78,19 @@ def create(body):
     title=str(body.get('title','')).strip()
     if not title or len(title)>160:raise ValueError('Enter a project name / 请填写项目名称')
     route=body.get('route','coordinates')
-    if route not in ('coordinates','native'):raise ValueError('Choose coordinates or an existing steady model')
+    survey=None
+    if route == 'survey':
+        from . import survey_import
+        survey=survey_import.parse(body.get('survey_files'))
+        body=dict(body,model_type='river',latitude=survey[0]['location']['latitude'],longitude=survey[0]['location']['longitude'],
+                  flow_cfs=None,channel_n=None,overbank_n=None)
+    if route not in ('coordinates','native','survey'):raise ValueError('Choose coordinates, surveyed river inputs, or an existing steady model')
     lat=number(body.get('latitude'),'Latitude',-90,90);lon=number(body.get('longitude'),'Longitude',-180,180)
     if (lat is None)!=(lon is None) or route=='coordinates' and lat is None:raise ValueError('Supply latitude and longitude / 请填写经纬度')
     model_type=body.get('model_type','culvert')
     if model_type not in ('culvert','river'):raise ValueError('Choose river or culvert analysis')
     if model_type=='river' and route=='native':raise ValueError('River mode currently starts from coordinates and reviewed sections')
-    key='site_'+unique_id().lower();f=folder(key);f.mkdir(parents=True)
+    key='site_'+unique_id().lower();f=folder(key)
     c=template(key,lat if lat is not None else 0.,lon if lon is not None else 0.);c['title']=title;c['model_type']=model_type
     if lat is None:c['location']=None;c['terrain']={'mode':'not_applicable'}
     p=c['scenarios'][0]['profiles'][0]
@@ -93,9 +99,11 @@ def create(body):
     for k in ['channel_n','overbank_n']:
         c['scenarios'][0][k]=number(body.get(k),k,0,1)
     if any(c['scenarios'][0].get(k) is not None for k in ['channel_n','overbank_n']):c['scenarios'][0]['parameter_source']=USER_SOURCE
+    f.mkdir(parents=True)
+    evidence=survey_import.install(f,c,survey) if survey else []
     save(f/'project.json',c);save(f/'initial.json',c)
     m=dict(id=key,title=title,model_type=model_type,route=route,revision=0,status='NEW',phase='CREATED',project=rel(f/'project.json'),
-        scenario='q100',created_utc=utc(),gis=bool(body.get('gis',lat is not None)),metadata={},attachments=[],
+        scenario=c['scenarios'][0]['id'],created_utc=utc(),gis=bool(body.get('gis',lat is not None)),metadata={},attachments=evidence,
         engineering_acceptance='NOT_ASSESSED',policy=POLICY,errors=[])
     for k in ['native_length_unit','vertical_datum','horizontal_crs','dem_vertical_unit','dem_vertical_datum']:
         if body.get(k):m['metadata'][k]=str(body[k])
@@ -399,7 +407,9 @@ def worker(record):
                 try:prepare(key)
                 finally:
                     from .app_acquisition import analyze
-                    if model(key).get('session'):analyze(key,network=not model(key).get('source_analysis'))
+                    prepared=model(key)
+                    if prepared.get('session') and prepared.get('route')!='survey':
+                        analyze(key,network=not prepared.get('source_analysis'))
             elif job['action'] in ('acquire','analyze'):
                 from .app_acquisition import analyze
                 analyze(key,network=job['action']=='acquire')

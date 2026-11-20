@@ -16,6 +16,8 @@ Under **Saved projects**, each project you create has one collapsed entry. Expan
 
 ## 2. Choose your starting information
 
+**Surveyed river package.** If a surveyor supplied `survey.json`, its GeoTIFF and the cited originals, select them together on the project page. [Preparing and using a surveyed river package](SURVEYED_RIVER_EN.md).
+
 **Coordinates or partial information:** enter a project name, WGS84 latitude and longitude in decimal degrees. Longitude is negative in the western United States. Enter discharge in cfs only if known; optional Manning n values can also be supplied. Leave unknown fields blank. Select Prepare project. The program queries/downloads USGS terrain and reads available metadata; it then pauses with the model inputs that still need attention.
 
 **Existing model:** select the `.prj`, selected `.pNN`, corresponding `.gNN` and `.fNN` together. A local `.prj` path is an alternative if file selection fails. Type the intended plan, such as `p01`, if the source's saved plan is different or unavailable. The preview shows both saved and selected plans. Previous result files are not needed or imported. Coordinates are needed for automatic map acquisition; if no map is required, omit coordinates and uncheck GIS.

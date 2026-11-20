@@ -84,6 +84,15 @@ def fixed(values,width=8,perline=10):
     if any(len(v)>width for v in ss):raise ValueError('Native fixed-width value overflow')
     return '\n'.join(''.join(ss[i:i+perline]) for i in range(0,len(ss),perline))+'\n'
 
+def discharge_field(flow):
+    """Preserve the most significant digits that fit the native eight-column field."""
+    for precision in range(8, 0, -1):
+        text = format(flow, f'.{precision}g')
+        if len(text) <= 8:
+            return text.rjust(8)
+    raise ValueError('Flow fixed width overflow')
+
+
 def build(folder,c,s,g,*,survey_stationing_only=False):
     from .inputs import geometry_errors
     errors=geometry_errors(g,c.get('case_kind')=='software_validation',survey_stationing_only=survey_stationing_only)
@@ -150,8 +159,7 @@ def build(folder,c,s,g,*,survey_stationing_only=False):
     (folder/'Model.p01').write_text(plan,encoding='ascii')
     pp=s['profiles'];flow='Flow Title=Workflow '+s['id']+'\nNumber of Profiles= '+str(len(pp))+'\nProfile Names='+','.join(p['id'] for p in pp)+'\n'
     flow+=f"River Rch & RM={river},{reachname},{xs[0]['rs']:.2f}\n"
-    vals=[f"{p['flow_cfs']:8g}" for p in pp]
-    if any(len(v)>8 for v in vals):raise ValueError('Flow fixed width overflow')
+    vals=[discharge_field(p['flow_cfs']) for p in pp]
     flow+='\n'.join(''.join(vals[i:i+10]) for i in range(0,len(vals),10))+'\n'
     for i in range(len(pp)):
         flow+=f"Boundary for River Rch & Prof#={river},{reachname}, {i+1}\n"
