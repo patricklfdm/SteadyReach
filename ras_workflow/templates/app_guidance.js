@@ -32,10 +32,11 @@ function showFieldSearch(box,a){
    for(const r of packet.field_requests)result.append(el('p','RS '+r.rs+' · '+r.latitude+', '+r.longitude+' · '+tr(r.need.en,r.need.zh)+' '+tr(r.decision.en,r.decision.zh)));
    if(packet.worksheet){const link=el('a',tr('Open observation candidate CSV','打开观测候选 CSV'));link.href='file/'+packet.worksheet.path.split('/').map(encodeURIComponent).join('/');link.download='Observation_candidates.csv';result.append(link,
     el('p',tr('Check gage zero, date, simultaneity and uncertainty, then import the reviewed rows under Field observations.','核实水尺零点、同期性、日期和误差后，在实测资料面板导入已核对的行。')),button('Open field observations','打开实测资料',()=>openGuidanceTool('observations')));}
-   const groups={gage:['Streamgages','河道测站'],rating:['Stage–discharge ratings','水位流量关系'],peak:['Annual peak records','历史洪峰'],catalog:['Public survey records','公开测量目录'],linear_context:['Road or levee context','附近道路或堤线'],local_document:['Project documents','项目文件'],screened_observation:['Screened field records','已初筛的观测']};
+   const groups={gage:['Streamgages','河道测站'],gage_history:['Gage datum and station history','水尺基准与站点历史'],rating:['Stage–discharge ratings','水位流量关系'],peak:['Annual peak records','历史洪峰'],catalog:['Public survey records','公开测量目录'],linear_context:['Road or levee context','附近道路或堤线'],local_document:['Project documents','项目文件'],screened_observation:['Screened field records','已初筛的观测']};
    for(const [kind,names] of Object.entries(groups)){
     const rows=packet.candidates.filter(r=>r.kind===kind);if(!rows.length)continue;
     const sub=details(result,names[0]+' ('+rows.length+')',names[1]+'（'+rows.length+'）');
+    if(kind==='gage_history')sub.append(el('p',tr('Check that the gage zero and location apply on the observation date.','请核对观测当日适用的水尺零点和测站位置。')));
     for(const r of rows){
      const line=[r.name,r.station,r.date,r.parameter,r.value,r.unit,r.qualifier,r.rs?'RS '+r.rs:null,r.vertical_datum,
       r.distance_to_section_m!=null?tr('Section distance ','距断面 ')+r.distance_to_section_m+' m':null,
@@ -43,6 +44,7 @@ function showFieldSearch(box,a){
       r.datum_matches===false?tr('Check vertical datum','需核对高程基准'):null,r.position_accuracy,
       r.min_cfs!=null?r.min_cfs+'–'+r.max_cfs+' cfs':null,r.profile_in_range?Object.entries(r.profile_in_range).map(([p,v])=>p+' '+(v?tr('inside range','在曲线流量范围内'):tr('outside range','超出曲线流量范围'))).join(', '):null,...(r.validity||[]),...(r.issues||[])].filter(v=>v!=null&&v!=='');
      const p=el('p',line.join(' · '));sub.append(p);
+     if(r.statement)p.append(' · ',r.statement);
      if(r.landing||r.url){const link=el('a',tr('Official record','官方记录'));link.href=r.landing||r.url;link.target='_blank';link.rel='noopener';p.append(' · ',link);}
     }
    }

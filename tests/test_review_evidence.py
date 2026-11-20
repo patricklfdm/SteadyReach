@@ -1,5 +1,24 @@
 from unittest import TestCase
-from ras_workflow.review_evidence import rating
+from ras_workflow.review_evidence import gage_manuscript, rating
+
+
+class GageManuscriptTests(TestCase):
+    raw = (b'<USGS><Manuscript><site_no>12345678</site_no><agency_cd>USGS</agency_cd>'
+           b'<Element><name>GAGE</name><info>Datum history. &lt;span&gt;Moved in 2001.'
+           b'&lt;/span&gt;&amp;nbsp;Check leveling.</info></Element></Manuscript></USGS>')
+
+    def test_preserves_historical_qualifications_as_text(self):
+        self.assertEqual(gage_manuscript(self.raw, '12345678'), [
+            dict(kind='gage_history', station='12345678',
+                 statement='Datum history. Moved in 2001. Check leveling.')])
+
+    def test_missing_gage_section_is_not_a_source_match(self):
+        self.assertEqual(gage_manuscript(self.raw.replace(b'GAGE', b'LOCATION'), '12345678'), [])
+
+    def test_wrong_gage_or_unreadable_document_is_unavailable(self):
+        for source in [self.raw.replace(b'12345678', b'12345679'), b'<html', b'<notice/>']:
+            with self.assertRaises(ValueError):
+                gage_manuscript(source, '12345678')
 
 
 class RatingTests(TestCase):

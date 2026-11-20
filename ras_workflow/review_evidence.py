@@ -1,10 +1,12 @@
 """Find public field evidence for the physical questions raised by this edition."""
 import csv
 import io
+from html import unescape
 import json
 import math
 import re
 from urllib.parse import urlencode
+from xml.etree import ElementTree
 
 from pyproj import CRS, Transformer
 import numpy as np
@@ -38,6 +40,28 @@ def rating(raw, station, discharges):
     low,high=min(flows),max(flows)
     return dict(min_cfs=low,max_cfs=high,profile_in_range={k:low<=q<=high for k,q in discharges.items()},
                 validity=[s.lstrip('# /') for s in lines if 'RATING_DATETIME' in s or 'RATING REMARKS' in s])
+
+
+def gage_manuscript(raw, station):
+    """Return the USGS station's gage statement for human date and datum review."""
+    try:
+        manuscript = ElementTree.fromstring(raw).find('Manuscript')
+    except ElementTree.ParseError as exc:
+        raise ValueError('USGS station manuscript is not valid XML') from exc
+    if (manuscript is None or manuscript.findtext('agency_cd') != 'USGS'
+            or manuscript.findtext('site_no') != station):
+        raise ValueError('USGS manuscript does not identify the requested station')
+    records = []
+    for element in manuscript.findall('Element'):
+        if (element.findtext('name') or '').strip().upper() != 'GAGE':
+            continue
+        info = element.find('info')
+        if info is not None:
+            statement = unescape(re.sub(r'</?[a-zA-Z][^>]*>', ' ', ' '.join(info.itertext())))
+            statement = ' '.join(statement.split())
+            if statement:
+                records.append(dict(kind='gage_history', station=station, statement=statement))
+    return records
 
 
 def observation_candidates(evidence,directory):
@@ -77,7 +101,7 @@ def search(key,body):
         ref=read(pointer)
         if intact([ref]):
             previous=read(ROOT/ref['path'])
-            if previous.get('schema_version')==2 and previous['assessment']==a['evidence_hash'] and intact(previous['sources']):return previous
+            if previous.get('schema_version')==3 and previous['assessment']==a['evidence_hash'] and intact(previous['sources']):return previous
     out=folder/unique_id();out.mkdir(parents=True)
     summary=read(ROOT/model['summary']['path'])
     _,geom,sources=bound_inputs(summary)
@@ -150,6 +174,8 @@ def search(key,body):
         ordered=sorted(gages,key=lambda g:(g['station'] not in rated,g['distance_to_boundary_m']))
         for gage in ordered[:4]:
             station=gage['station']
+            manuscript_url='https://sims-manuscripts-bucket.s3.us-west-2.amazonaws.com/sims_USGS_'+station+'.xml'
+            request('gage_history',manuscript_url,lambda data:gage_manuscript(data,station))
             request('rating',WATER+'/stac-files/ratings/USGS.'+station+'.exsa.rdb',
                     lambda data:[dict(kind='rating',station=station,**rating(data,station,discharges))])
             def peaks(data):
@@ -189,7 +215,7 @@ def search(key,body):
             evidence.append(dict(kind='screened_observation',name=row.get('event'),date=row.get('date'),issues=row.get('issues'),source=screened))
     worksheet=observation_candidates(evidence,out)
     if worksheet:sources.append(worksheet)
-    packet=dict(schema_version=2,worksheet=worksheet,summary=model['summary'],assessment=a['evidence_hash'],created_utc=utc(),model_datum=geom['vertical_datum'],
+    packet=dict(schema_version=3,worksheet=worksheet,summary=model['summary'],assessment=a['evidence_hash'],created_utc=utc(),model_datum=geom['vertical_datum'],
                 field_requests=jobs,searches=requests,candidates=evidence,sources=list({r['path']:r for r in sources}.values()),
                 limitations=text('Nearby records, road lines and catalog footprints require an applicability check. Peak stage and peak flow may occur at different times.','附近测站、道路线与目录覆盖范围仍需核实。最高水位与最大流量可能不同步。'))
     path=out/'search.json';save(path,packet);save(pointer,item(path));return packet
