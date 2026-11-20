@@ -192,7 +192,7 @@ def propose_reach(geometry, locked=None):
                 support = match.get('scale_support',0)
                 side_evidence[side]=dict(selected_ft=value['stations'][side_index],alternate_ft=alternate,
                                          conditional_cost_margin=gap,scale_support=support,
-                                         distinct=support==3 and (gap is None or gap>=1.))
+                                         distinct=bool(support==3 and (gap is None or gap>=1.)))
             if local[index].get('selected_indices')!=value['indices']:
                 reasons.append('REACH_CONTINUITY_CHANGED_LOCAL_CHOICE')
                 summary['changed_local_choices'].append(index)

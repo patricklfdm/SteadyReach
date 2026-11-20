@@ -32,6 +32,17 @@ class ReachBanks(unittest.TestCase):
         self.assertEqual(summary['proposed_pairs'],3)
         self.assertEqual([r['selected_indices'] for r in result],[[20,80]]*3)
 
+    def test_competing_bank_evidence_can_be_saved_with_geometry(self):
+        import json
+        choice=local()
+        choice['left'].append(dict(index=30,station_ft=30.,score=.9,scale_support=3))
+        with patch.object(bank_reach,'propose',side_effect=[choice,choice,choice]):
+            results,_=bank_reach.propose_reach(geometry(),[])
+        side=results[1]['continuity']['side_evidence']['left']
+        self.assertIsNotNone(side['conditional_cost_margin'])
+        self.assertIs(type(side['distinct']),bool)
+        json.dumps(results,allow_nan=False)
+
     def test_single_missing_interior_pair_has_explicit_assumption(self):
         g=geometry()
         with patch.object(bank_reach,'propose',side_effect=[local(),local(None),local()]):

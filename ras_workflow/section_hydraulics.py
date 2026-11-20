@@ -48,10 +48,12 @@ def errors(section):
 
 def cards(section,fixed):
     if not any(section.get('ineffective_'+side) for side in ['left','right']):return ''
-    values=[]
-    for side in ['left','right']:
-        v=section.get('ineffective_'+side)
-        values.extend(([0.,v[0],v[1]] if side=='left' else [v[0],0.,v[1]]) if v else [0.,None,None])
+    # Normal edge cards use three fields per side. An absent limit and
+    # elevation must stay blank, including the first field on the right.
+    left = section.get('ineffective_left')
+    right = section.get('ineffective_right')
+    values = [0., left[0], left[1]] if left else [0., None, None]
+    values.extend([right[0], 0., right[1]] if right else [None, 0., None])
     row=''.join(' '*8 if v is None else fixed([v]).rstrip('\n') for v in values)
     return '#XS Ineff= 2 , 0\n'+row+'\nPermanent Ineff=\n       F       F\n'
 
