@@ -30,7 +30,7 @@ def edition_record(record):
         path = ref.get('path', '') if isinstance(ref, dict) else ''
         parts = Path(path).parts
         return len(parts) > 2 and parts[0] == 'projects' and parts[1] != record['id']
-    for field in ('river_observations', 'latest_observed_event', 'latest_geometry_comparison'):
+    for field in ('river_observations', 'latest_observed_event', 'latest_geometry_comparison', 'latest_warning_study'):
         if inherited(record.get(field)):
             record.pop(field)
     if 'observed_event_history' in record:
@@ -452,7 +452,7 @@ def worker(record):
 
 def report_refresh_binding(m):
     binding={key:m.get(key) for key in ('summary','latest_study','latest_spacing','latest_coverage','latest_coverage_exports')}
-    for key in ('river_observations','observed_event_history','latest_geometry_comparison'):
+    for key in ('river_observations','observed_event_history','latest_geometry_comparison','latest_warning_study'):
         if m.get(key):binding[key]=m[key]
     return binding
 
@@ -507,6 +507,9 @@ def view(key,detail=True):
             records={row['id']:row for row in journal['cases']}
         cases=plan['cases']
         waiting='QUEUED'
+        if plan.get('analysis_kind')=='native_warning_review':
+            cases=[dict(id=f'trial_{i:02d}') for i in range(1,plan['policy']['maximum_rounds']+1)]
+            if journal.get('stop'):waiting='SKIPPED'
         if plan.get('analysis_kind')=='coverage_repair':
             cases=[dict(id='repair_'+str(i)) for i in range(1,plan['policy']['maximum_rounds']+1)]
             prepared={case['id']:case for case in journal.get('prepared_cases',[])}
@@ -544,6 +547,10 @@ def view(key,detail=True):
         if comparison.get('table'):evidence.append(comparison['table'])
         if comparison.get('summaries',{}).get('baseline')==m.get('summary') and intact(evidence):
             result['geometry_comparison']=comparison
+    if m.get('latest_warning_study') and intact([m['latest_warning_study']]):
+        warning_study=read(ROOT/m['latest_warning_study']['path'])
+        if warning_study['baseline']==m.get('summary') and intact([warning_study['study'],warning_study['review'],warning_study['execution']]+[c['audit'] for c in warning_study['cases']]):
+            result['warning_study']=warning_study
     if m.get('latest_spacing') and intact([m['latest_spacing']]):result['spacing_result']=read(ROOT/m['latest_spacing']['path'])
     if m.get('latest_coverage') and intact([m['latest_coverage']]):result['coverage_result']=read(ROOT/m['latest_coverage']['path'])
     if m.get('latest_coverage_exports') and intact([m['latest_coverage_exports']]):

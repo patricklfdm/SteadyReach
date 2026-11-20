@@ -9,7 +9,7 @@ from .study import reviewed
 
 def resolve(parent, body):
     kind = body.get('study_kind')
-    field = {'coverage': 'latest_coverage', 'spacing': 'latest_spacing'}.get(kind)
+    field = {'coverage': 'latest_coverage', 'spacing': 'latest_spacing', 'warning_review': 'latest_warning_study'}.get(kind)
     entry = parent.get(field) if field else None
     if not entry or entry['sha256'] != body.get('study_token') or not intact([entry]):
         raise ValueError('Study result changed; reopen the current result before continuing')
@@ -19,7 +19,7 @@ def resolve(parent, body):
         from .spacing_cycle import verify
         cycle_sources = verify(analysis)
     _, plan, _, _ = reviewed(analysis['study']['path'], analysis['review']['path'])
-    expected_kind = {'coverage': 'coverage_repair', 'spacing': 'section_spacing'}[kind]
+    expected_kind = {'coverage': 'coverage_repair', 'spacing': 'section_spacing', 'warning_review': 'native_warning_review'}[kind]
     if plan.get('analysis_kind') != expected_kind or parent['summary'] not in plan['evidence']:
         raise ValueError('Study belongs to a different baseline or analysis kind')
     if not intact([analysis['study'], analysis['review'], analysis['execution']]):
@@ -28,12 +28,24 @@ def resolve(parent, body):
     if journal['study'] != analysis['study'] or journal['review'] != analysis['review']:
         raise ValueError('Study execution identity differs')
     cases = journal['prepared_cases'] if kind == 'coverage' else plan['cases']
+    if kind == 'warning_review':
+        from .section_spacing import confirm_geometry
+        attempt = next((a for a in analysis['attempts'] if a['id']==body.get('case_id')),None)
+        if not attempt or not intact([attempt['proposal']]):raise ValueError('Select a computed warning trial')
+        dest = (ROOT/attempt['proposal']['path']).parent
+        original = read(dest/'geometry.json')
+        confirmed = read(dest/read(dest/'project.json')['geometry'])
+        if confirmed!=confirm_geometry(original,analysis['review'],read(ROOT/analysis['review']['path'])['basis']):
+            raise ValueError('Prepared and computed warning geometries differ')
+        cases=[dict(id=attempt['id'],draft=item(dest/'project.draft.json'),geometry=item(dest/'geometry.json'))]
     matches = [c for c in cases if c['id'] == body.get('case_id')]
     records = [r for r in journal['cases'] if r['id'] == body.get('case_id')]
     if len(matches) != 1 or len(records) != 1 or records[0]['status'] != 'COMPUTED':
         raise ValueError('Select one successfully computed case')
     case, record = matches[0], records[0]
     analysis_rows = [r for r in analysis['cases'] if r['id'] == case['id']]
+    if kind=='warning_review' and len(analysis_rows)==1 and intact([analysis_rows[0]['audit']]):
+        analysis_rows=[read(ROOT/analysis_rows[0]['audit']['path'])]
     if len(analysis_rows) != 1 or analysis_rows[0].get('summary') != record['summary']:
         raise ValueError('Selected case differs from the displayed study result')
     if not intact([record['summary'], case['draft'], case['geometry']]):

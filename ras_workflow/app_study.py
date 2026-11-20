@@ -14,6 +14,9 @@ def prepare_model(m,body,verified_changes=None):
     if body.get('revision')!=m['revision']:raise ValueError('Project changed; reload')
     if not m.get('active_project') or not m.get('summary') or not intact([m['summary']]):raise ValueError('Compute a baseline before preparing a sensitivity batch')
     if m.get('native_review'):raise ValueError('This batch editor currently supports workflow-built geometry only')
+    if body.get('kind')=='warning_review':
+        from .warning_study import prepare as prepare_warnings
+        return prepare_warnings(m,body)
     if body.get('kind')=='observed_event':
         from .observed_event import prepare as prepare_event
         return prepare_event(m,body)
@@ -108,6 +111,8 @@ def confirmation(m,entry):
         packet=current(m)
         if not packet or packet['source']!=plan['event']['observations']:raise ValueError('The reviewed observation table changed; prepare the event again')
         review['basis']='Confirmed the displayed event date, observed discharge and downstream boundary for an independent event computation.'
+    if plan.get('analysis_kind')=='native_warning_review':
+        review['basis']='Confirmed bounded terrain-only warning trials, inferred floodplain directions and bank-aligned DEM midpoints. Flow, boundaries and original banks remain fixed.'
     if plan.get('analysis_kind')=='river_geometry_comparison':
         review['basis']='Displayed fixed-direction extension and rotation-enabled geometry and bank candidates confirmed for two independent Q100 calculations with the original hydraulic inputs.'
     if plan.get('coverage_policy'):
@@ -131,7 +136,7 @@ def execute(key):
     result=study.run(active['study']['path'],active['review']['path'])
     path=(ROOT/active['study']['path']).parent/'analysis.json'
     entry=item(path)
-    result_field={'section_spacing':'latest_spacing','coverage_repair':'latest_coverage','river_geometry_comparison':'latest_geometry_comparison','river_observed_event':'latest_observed_event'}.get(result.get('analysis_kind'),'latest_study')
+    result_field={'native_warning_review':'latest_warning_study','section_spacing':'latest_spacing','coverage_repair':'latest_coverage','river_geometry_comparison':'latest_geometry_comparison','river_observed_event':'latest_observed_event'}.get(result.get('analysis_kind'),'latest_study')
     m.update(status='RESULTS_READY',phase='STUDY_FINISHED',errors=[])
     m[result_field]=entry
     if result.get('analysis_kind')=='river_observed_event' and result['status']!='INCOMPLETE':
@@ -146,7 +151,7 @@ def execute(key):
             exports=read(ROOT/m['latest_coverage_exports']['path'])
             if exports['delivery']['status']=='READY_FOR_REVIEW':m.pop('pending_study',None)
         m.update(status='RESULTS_READY',phase='STUDY_FINISHED')
-    elif result['status']!='INCOMPLETE' or result.get('analysis_kind') not in ('river_geometry_comparison','river_observed_event'):
+    elif result['status']!='INCOMPLETE' or result.get('analysis_kind') not in ('river_geometry_comparison','river_observed_event','native_warning_review'):
         m.pop('pending_study',None)
     m['exports_need_refresh']=True
     core.persist(m,'SENSITIVITY_FINISHED',dict(status=result['status'],analysis=entry))

@@ -161,10 +161,10 @@ def run_case(sp, study, rp, review, case, journal, journal_path, timeout):
     from .cli import execute
     dest = (ROOT/case['draft']['path']).parent; c = read(ROOT/case['draft']['path'])
     geometry_hash=case['geometry']['sha256']
-    if study.get('analysis_kind') in ('section_spacing','coverage_repair','river_geometry_comparison'):
+    if study.get('analysis_kind') in ('section_spacing','coverage_repair','river_geometry_comparison','native_warning_review'):
         from .section_spacing import confirm_geometry
         geometry=confirm_geometry(read(ROOT/case['geometry']['path']),item(rp),
-                basis=review['basis'] if study.get('analysis_kind') in ('coverage_repair','river_geometry_comparison') else None)
+                basis=review['basis'] if study.get('analysis_kind') in ('coverage_repair','river_geometry_comparison','native_warning_review') else None)
         target=dest/'geometry.confirmed.json'
         if target.exists() and read(target)!=geometry:raise ValueError('Confirmed spacing geometry changed')
         if not target.exists():save(target,geometry)
@@ -217,6 +217,9 @@ def run_case(sp, study, rp, review, case, journal, journal_path, timeout):
 
 def run(study_path, review_path, timeout=180):
     sp, study, rp, review = reviewed(study_path, review_path); folder = sp.parent
+    if study.get('analysis_kind')=='native_warning_review':
+        from .warning_study import run as run_warnings
+        return run_warnings(sp,study,rp,review,timeout)
     if study.get('analysis_kind')=='coverage_repair':
         from .coverage_study import run as run_coverage
         return run_coverage(sp, study, rp, review, timeout)

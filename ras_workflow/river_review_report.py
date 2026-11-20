@@ -56,5 +56,25 @@ def collect(summary_path, summary):
             data['comparison_width_ft']=read(ROOT/result['study']['path']).get('maximum_width_ft')
             data['changed_ends']=[dict(rs=r['rs'],case=k,side=side,stage=v['stage_ft'],end=v['ends_ft'][i],delta=v['delta_wse_ft'],share=v['ob_percent'][i],baseline_share=r['variants']['baseline']['ob_percent'][i]) for r in rows for k,v in r['variants'].items() for i,side in enumerate(('L','R')) if v['new_wet'][i]]
             data['new_ends']={k:[r['rs']+' '+side for r in rows for side,new in zip(('L','R'),r['variants'][k]['new_wet']) if new] for k in ('fixed','rotated')}
+    if model.get('latest_warning_study'):
+        result=load(model['latest_warning_study'])
+        if result.get('baseline')==ref and result.get('status')=='REVIEW_REQUIRED':
+            from .warning_study import assessment
+            reviewed(result['study']['path'],result['review']['path'])
+            sources.extend([result[k] for k in ('study','review','execution')])
+            records={c['id']:c for c in result['cases']}
+            frames=[]
+            baseline_stages=None
+            for key in dict.fromkeys(('baseline',result['lowest_count'],result['recommended'])):
+                saved=load(records[key]['audit'])
+                native=load(saved['summary'])
+                actual=assessment(native,saved['summary'],baseline_stages)
+                if actual!=saved or saved['metrics']!=records[key]['metrics']:
+                    raise ValueError('Warning review differs from native evidence')
+                if key=='baseline':
+                    baseline_stages=saved['stages']
+                sources.extend([saved['hdf'],saved['native_file'],native['hydraulics']['raw_controller']])
+                frames.append(dict(id=key,metrics=actual['metrics']))
+            data['warning_review']=dict(frames=frames,lowest=result['lowest_count'],recommended=result['recommended'])
     if sources and not intact(sources):raise ValueError('River review source is incomplete or has changed')
     return data,list({x['path']:x for x in sources}.values())

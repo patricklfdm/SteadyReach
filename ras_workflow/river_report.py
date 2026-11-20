@@ -180,6 +180,13 @@ def build(data, plots, folder, language='en', detail='full', details=None):
               row.get('diagnostics',{}).get('native_messages','—'),n(row.get('max_wse_change_ft'))] for row in result['cases']],
             [1.6,1.2,1.3,2.6])
     checks=data.get('river_checks') or {}
+    if checks.get('warning_review'):
+        warning=checks['warning_review']
+        d.add_heading(tr('Native warning review at fixed hydraulic inputs','固定水力输入的原生警告复核'),2)
+        p('Suggested case for engineering review: '+warning['recommended']+'. Lowest warning count among the tested cases: '+warning['lowest']+'.',
+          '建议工程复核工况为 '+warning['recommended']+'。已试工况中警告数最低的是 '+warning['lowest']+'。')
+        table(d,[tr('Case','工况'),tr('Warnings','警告'),tr('Wet ends','湿端'),tr('Min margin ft','最小余高 ft'),tr('Max |ΔWSE| ft','最大水位差 ft')],
+              [[r['id'],r['metrics']['warnings'],r['metrics']['wet_ends'],n(r['metrics']['min_margin_ft']),n(r['metrics']['max_wse_delta_ft'])] for r in warning['frames']],[1.5,.9,.9,1.6,1.8])
     if checks.get('comparison'):
         d.add_heading(tr('Geometry alternatives at the same discharge','同流量下的几何修订比选'),2)
         table(d,[tr('Case','方案'),tr('Wet sections','湿端断面数'),tr('Cleared ends','消除端点数'),tr('New wet ends (RS / side)','新增湿端（RS／左右侧）')],
