@@ -30,6 +30,7 @@ function showCrossingRepair(parent,pairs,rows,map,initial){
 function renderAutoGeometry(parent){
  const isInitial=!current.intake?.section_count,project=current.id;
  const box=details(parent,'Automatic DEM layout / QA repair','自动提出 DEM 布置／QA 修正',isInitial||!!current.parent_revision);
+ box.id='dem-layout';
  const reach=current.reach_proposal;
  let reachChoice=null;
  if(isInitial && reach && !(current.map_picks?.river?.length)){

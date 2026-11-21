@@ -1,6 +1,7 @@
 'use strict';
 function renderSectionRepair(parent){
  const area=details(parent,'Adjust section directions / DEM preview','调整断面方向／DEM 预览',false),header=el('p',tr('Loading section checks…','正在读取断面检查…'),'status');area.append(header);
+ area.id='section-repair';
  const project=current.id;let state=null,changes=new Map(),preview=null,selected=0,controlsDirty=false;
  const controls=el('div'),list=el('div'),result=el('div');area.append(controls,list,result);
  const names=issues=>issues.filter(q=>(q.sections||[]).length).map(q=>(q.sections||[]).map(i=>'RS '+(state?.sections.find(s=>s.index===i)?.rs??i)).join(' ↔ ')).join('; ');

@@ -12,10 +12,95 @@ function renderParameterNavigator(parent,fields){
  function draw(){list.replaceChildren();const q=search.value.toLowerCase();const selected=fields.filter(f=>(!q||(f.key+' '+f.label.en+' '+f.label.zh).toLowerCase().includes(q))&&(filter.value==='all'||filter.value==='missing'&&f.missing&&f.required||filter.value==='conflict'&&f.source_conflict||filter.value==='candidate'&&f.parameter_candidates?.length));if(!selected.length)list.append(el('p',tr('No matching items.','没有符合条件的项目。')));for(const f of selected){const row=el('div',undefined,'parameter-link');row.append(button(tr(f.label.en,f.label.zh),tr(f.label.en,f.label.zh),async()=>focusParameter(f.key)),el('small',(f.missing?'—':format(f.value,f.kind).slice(0,100))+' · '+sourceStatus(f.acquisition?.status||'')));list.append(row);}}
  search.oninput=draw;filter.onchange=draw;draw();
 }
-function downloadParameterTemplate(){
- const fields=current.intake?.fields||[];const quote=v=>'"'+String(v??'').replaceAll('"','""')+'"';
- const csv=['field,value,unit,datum,evidence_class,source',...fields.map(f=>[f.key,'',f.unit||'','','reported',''].map(quote).join(','))].join('\r\n');
- const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));const a=el('a');a.href=url;a.download='parameter_import.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify(tr('Template downloaded. Empty rows are ignored; existing project values will not be overwritten.','模板已下载。空行会忽略，导入后不会自动覆盖已有参数。'));
+function preparationActions(model){
+ const intake=model.intake;
+ if(!intake||model.native||model.results||model.feasibility?.state==='outside')return [];
+ const fields=intake.fields||[], actions=[];
+ function group(kind,rows){if(rows.length)actions.push({kind,fields:rows});}
+ const remaining=fields.filter(f=>f.required&&f.missing&&!f.source_conflict);
+ const physical=key=>/^c\.scenarios\.\d+\.profiles\.\d+\.flow_cfs$/.test(key)
+  ||/^g\.structure\.groups\.\d+\.(shape|count|span_ft|rise_ft|length_ft|us_invert_ft|ds_invert_ft|depth_blocked_ft|bottom_type|inlet_description)$/.test(key)
+  ||/^g\.structure\.road\.(width_ft|elevation_ft|station_ft|downstream_station_ft|downstream_elevation_ft)$/.test(key)
+  ||key==='g.vertical_datum';
+ const geometry=intake.geometry_review?.issues||[];
+ const blocking=(model.automation?.checks?.issues||[]).filter(issue=>issue.blocking&&!geometry.some(
+  spatial=>spatial.code===issue.code&&JSON.stringify(spatial.sections)===JSON.stringify(issue.sections)));
+ if(!intake.section_count)actions.push({kind:'layout',fields:[]});
+ else if(geometry.length)actions.push({kind:'repair',fields:[],geometry});
+ if(blocking.length)actions.push({kind:'dependencies',fields:[],issues:blocking});
+ group('conflict',fields.filter(f=>f.source_conflict));
+ group('source',remaining.filter(f=>physical(f.key)&&!f.parameter_candidates?.length));
+ group('banks',remaining.filter(f=>f.key.endsWith('.bank_stations_ft')));
+ group('candidates',remaining.filter(f=>!f.key.endsWith('.bank_stations_ft')&&f.parameter_candidates?.length));
+ group('judgment',remaining.filter(f=>!physical(f.key)&&!f.key.endsWith('.bank_stations_ft')&&!f.parameter_candidates?.length));
+ if(!actions.length&&model.missing?.length)actions.push({kind:'checks',fields:[]});
+ return actions;
+}
+
+function scopedParameterCsv(fields){
+ const quote=value=>'"'+String(value??'').replaceAll('"','""')+'"';
+ return ['field,value,unit,datum,evidence_class,source,parameter_en,parameter_zh',
+  ...fields.map(f=>[f.key,'',f.unit||'','','reported','',f.label?.en,f.label?.zh].map(quote).join(','))].join('\r\n');
+}
+function downloadParameterTemplate(fields=current.intake?.fields||[],name='parameter_import.csv'){
+ const url=URL.createObjectURL(new Blob(['\ufeff'+scopedParameterCsv(fields)],{type:'text/csv;charset=utf-8'}));
+ const link=el('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ notify(fields.length+tr(' rows exported. Enter values, units, elevation datum where applicable, and the source; mark estimates as assumed. Import the CSV in Site materials to review the candidates.',' 行已导出。请填写数值、单位、适用的高程基准和来源，估计值标为 assumed；将 CSV 导回现场资料后核对候选。'));
+}
+
+function renderPreparationActions(parent,actions){
+ if(!actions.length)return;
+ const labels={
+  layout:['Lay out the river and cross sections','布置河线和断面'],
+  repair:['Resolve section geometry','修正断面几何'],
+  dependencies:['Resolve blocking model checks','处理阻塞计算的模型检查'],
+  conflict:['Resolve conflicting sources','核对有冲突的来源'],
+  source:['Find missing site or design data','补充缺少的现场或设计资料'],
+  banks:['Locate missing banks','核对缺少的岸站'],
+  candidates:['Review available parameter candidates','核对已有候选值'],
+  judgment:['Complete remaining hydraulic settings','补齐其余水力设置'],
+  checks:['Inspect remaining input checks','定位其余输入检查']
+ };
+ const box=el('section',undefined,'card');parent.append(box);
+ box.append(el('h2',tr('What should I do next?','现在先做什么？')));
+ const show=async key=>{
+  if(!document.getElementById('input-'+key))await showFinalReview();
+  revealParameter(key);
+ };
+ function render(host,action){
+  const rows=action.fields,kind=action.kind;
+  host.append(el('strong',tr(...labels[kind])+(rows.length?' · '+rows.length:'')));
+  if(kind==='layout'){
+   host.append(el('p',tr('Preview the channel and section positions on the DEM, then check their direction and coverage. A drawing or survey can be added at any time.','在 DEM 上预览河线与断面，核对方向和覆盖范围。已有图纸或测量资料时可随时补充。')),
+    button('Open DEM layout','打开 DEM 布置',()=>openModelTool('dem-layout')));
+  }else if(kind==='repair'){
+   host.append(el('p',action.geometry.length+tr(' spatial checks. Open the section tools and inspect the affected cuts before changing hydraulic inputs.',' 项断面空间检查。请先定位受影响的断面并预览修正。')),
+    button('Open section repair','打开断面修正',()=>openModelTool('section-repair')));
+  }else if(kind==='dependencies'){
+   for(const issue of action.issues)host.append(el('p',tr(issue.message,issue.zh)));
+   host.append(button('Open model checks','打开模型检查',()=>openModelTool('model-automation')));
+  }else if(kind==='checks'){
+   host.append(button('Locate the failed checks','定位检查项',showFinalReview));
+  }else{
+   if(kind==='source'){
+    host.append(el('p',tr('These required fields lack a usable candidate. Check hydrology records, drawings or survey first. You can send a worksheet with just these fields and import the reply here.','这些必填字段还没有可用候选。先查水文原件、竣工图或测量记录；可只导出这些缺项，将填好的表导回此项目。')),
+     button('Add a source or returned worksheet','导入资料或填好的缺项表',()=>openModelTool('site-file-import')),
+     button('Export missing site data (CSV)','导出待索取资料（CSV）',()=>downloadParameterTemplate(rows,'missing_site_data.csv')));
+   }else if(kind==='banks'){
+    host.append(button('Inspect bank profiles','查看岸站剖面',()=>openModelTool('bank-profiles')));
+   }else{
+    const first=rows[0];host.append(button('Review '+first.label.en,'核对'+first.label.zh,()=>show(first.key)));
+   }
+   const list=details(host,'Fields in this group','查看本组字段');for(const f of rows){
+    list.append(button(f.label.en,f.label.zh,()=>show(f.key)));
+   }
+  }
+ }
+ render(box,actions[0]);
+ if(actions.length>1){
+  const rest=details(box,'Other preparation tasks ('+(actions.length-1)+')','其他准备事项（'+(actions.length-1)+' 组）');
+  for(const action of actions.slice(1)){const section=el('section',undefined,'parameter');rest.append(section);render(section,action);}
+ }
 }
 function renderFisSelection(parent) {
  const fields = current.intake?.fields || [];
