@@ -42,11 +42,48 @@ async function showFinalReview(){
  finalReview=review;renderFinalReview();
  notify(review.ready?tr('Changes saved. Review the complete inputs and highlighted assumptions before running.','更改已保存。请核对完整输入和标出的假设，再确认运行。'):tr('Changes saved. Resolve the listed inputs before running.','更改已保存。请处理列出的输入问题后再运行。'));
 }
+function surveyPriorities(fields){
+ const groups=[
+  {title:['Interior inverts','进出口内涵底'],match:/^g\.structure\.groups\.\d+\.(us_invert_ft|ds_invert_ft)$/,
+   instruction:['Level the inside floor at both ends of each opening and record the vertical datum. These elevations control slope and headwater.','同一高程基准下测每组洞口两端的内底，记录基准。它们影响涵底坡降和上游水位。']},
+  {title:['Opening geometry and usable area','洞身尺寸与有效开口'],match:/^g\.structure\.groups\.\d+\.(length_ft|count|span_ft|rise_ft|depth_blocked_ft)$/,
+   instruction:['Check as-builts first. Confirm the barrel length along its axis, clear dimensions and the depth and extent of any fill. They control capacity and head loss.','先查竣工图；核对沿洞轴的涵长、孔数和净尺寸，量淤积深度与延伸范围。这些值影响过流能力与水头损失。']},
+  {title:['Road low points and overflow paths','道路低点与溢流路径'],match:/^g\.structure\.road\.(elevation_ft|downstream_elevation_ft|width_ft)$/,
+   instruction:['Survey crest breaks and bypass low points in the model datum. Trace where overflow goes before judging overtopping.','按模型基准联测路顶变坡点、低点和绕流口，查明溢流水去向，再判断是否漫顶。']},
+  {title:['Submerged channel','水下河槽'],match:/^g\.channel_geometry_basis$/,
+   instruction:['Survey the submerged bed and banks at controlling sections, tied to the DEM datum, before relying on conveyance or design levels.','在控制断面补测水下河床及岸坡并与 DEM 基准联测，再用其评价过流能力或设计水位。']}
+ ];
+ return groups.map(group=>({...group,fields:fields.filter(f=>{
+  if(!group.match.test(f.key)||f.missing&&!f.required)return false;
+  return !!(f.missing||f.source_conflict||['assumed','inferred','terrain_derived','user_entered','source_input_unverified'].includes(f.evidence_class)||f.key==='g.channel_geometry_basis'&&f.value==='conditional_surface_dem');
+ })})).filter(group=>group.fields.length);
+}
+
+function renderSurveyPriorities(parent,review){
+ const groups=surveyPriorities(review.fields);
+ if(!groups.length)return;
+ const panel=el('section',undefined,'card');parent.append(panel);
+ panel.append(el('h2',tr('Which estimates need field verification?','哪些关键估计需要补测？')),
+  el('p',tr('For a screening run you may retain marked assumptions after review. For design use, obtain applicable survey or as-built records for the items below.','做条件性初筛，可以核对后保留假设。若要用于设计，请先查对应竣工图或测量记录，资料不足再补测。')));
+ for(const group of groups){
+  const box=details(panel,...group.title,group===groups[0]);
+  box.append(el('p',tr(...group.instruction)));
+  for(const f of group.fields){
+   const value=f.missing?'—':Array.isArray(f.value)?f.value.length+tr(' samples',' 个采样点'):typeof f.value==='number'?String(Number(f.value.toFixed(3))):format(f.value,f.kind);
+   const row=el('p',tr(f.label.en,f.label.zh)+' · '+value+(f.unit&&!Array.isArray(f.value)?' '+f.unit:'')+' · '+originName(f.evidence_class));
+   if(f.source_conflict)row.append(el('small',tr('Sources disagree','来源有冲突')));
+   const edit=button('Check or edit value','核对／修改此值',()=>revealParameter(f.key));
+   edit.setAttribute('aria-label',tr('Check or edit ','核对／修改：')+tr(f.label.en,f.label.zh));row.append(edit);box.append(row);
+  }
+ }
+ panel.append(button('Add a drawing or survey record','补充图纸或测量资料',()=>openModelTool('site-file-import')));
+}
 function renderFinalReview(){
  const review=finalReview;rememberView({project:current.id,page:'confirm'});shell(2);window.scrollTo(0,0);const screen=$('#screen');screen.append(el('h1',tr('Confirm calculation inputs','开算前确认')),el('p',current.title,'status'),
  el('p',tr('Nothing has been solved yet. Edit any field; changes cancel this confirmation. No name, reason, or signature is required.','尚未开始求解。可以修改任意字段，修改后本次确认会失效。无需姓名、理由或签名。')),
  button('← Back to preparation','← 返回准备页面',async()=>{await save();finalReview=null;await open(current.id);}));
  const state=el('p',review.ready?tr('Technical input checks passed. Assumptions remain conditional.','必要输入检查通过。假设仍属于条件性输入。'):tr('Fill the items below, then refresh this list. The solver is paused.','请补齐下列项目并刷新清单，求解器处于等待状态。'),review.ready?'status':'warning');state.id='review-state';screen.append(state);
+ if(!review.native)renderSurveyPriorities(screen,review);
  if(review.run_readiness){
   const r=review.run_readiness,labels={CHECKED:tr('Checks passed','检查通过'),BLOCKED:tr('Action needed','需处理'),EXTENT_PENDING:tr('Confirm extent after compilation','原生几何编译后核对范围'),NOT_REQUESTED:tr('Not requested','未选择')};
   table(screen,[tr('Before calculating','开算前预检'),tr('Status','状态')],[[tr('HEC-RAS installation and session','HEC-RAS 安装与会话'),labels[r.solver.status]],[tr('Report tools','报告工具'),labels[r.reports.status]],['GIS / Mapper',labels[r.gis.status]]]);
@@ -367,6 +404,7 @@ function riverBendIndex(points,point){
  return index;
 }
 function renderRiverMap(parent){
+ parent.id='river-anchor-map';
  let points=structuredClone(current.map_picks?.river||[]),selecting=false,insertBend=false,timer=null,promise=null,coordinateText=null;
  const actions=el('div',undefined,'actions'),state=el('p','', 'status'),canvas=el('div');parent.append(el('p',tr('Start with two points, just below the upstream bridge and just above the downstream bridge. The DEM search follows bends between them. Add ordered bend points if the path is uncertain or follows the wrong channel.','先点上游桥下游侧，再点下游桥上游侧。程序会在两点间搜索弯曲河道。若提示不确定或走错支汊，请按流向补充弯道点。')),actions,state,canvas);
  async function commit(){clearTimeout(timer);if(promise)await promise;await save();promise=api('geometry/picks',{id:current.id,revision:current.revision,picks:{river:points},parameters:{}});try{current=await promise;pendingMapSave=null;mapDirty=false;if(coordinateText&&!pendingChanges.has('river-coordinates'))coordinateText.value=points.map(p=>p.join(', ')).join('\n');state.textContent=points.length+tr(' reach anchors saved',' 个河段锚点已保存');}finally{promise=null;}}

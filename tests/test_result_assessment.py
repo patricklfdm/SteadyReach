@@ -35,6 +35,17 @@ class ResultAssessmentTests(TestCase):
              patch.object(qa,'verified_profiles',return_value={'Q100':{'200':11.,'100':10.}}):
             return assess.assess(self.model,Path('test'),self.summary,self.diagnostics,[self.study,self.spacing],{'source_errors':errors})
 
+    def test_use_guidance_tracks_lowest_applicable_ceiling_and_language(self):
+        for level in range(4):
+            findings = [] if level == 3 else [assess.finding('LIMIT', level, 'qa', 'limit', '限制')]
+            result = assess.classify(findings)
+            self.assertEqual(result['level'], level)
+            self.assertEqual(result['use_guide']['allowed'], assess.USE_GUIDE[level][0])
+            self.assertEqual(result['use_guide']['deferred'], assess.USE_GUIDE[level][1])
+            for wording in result['use_guide'].values():
+                self.assertTrue(wording['en'] and wording['zh'])
+        self.assertEqual(assess.unverified('missing HDF')['use_guide']['allowed'], assess.USE_GUIDE[0][0])
+
     def test_highest_technical_level_never_signs_design(self):
         r=self.assess()
         self.assertEqual((r['level'],r['engineering_acceptance']),(3,'NOT_ASSESSED'))

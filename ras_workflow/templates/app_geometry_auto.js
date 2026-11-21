@@ -1,4 +1,32 @@
 'use strict';
+function crossingPairs(issues,sections){
+ return (issues||[]).filter(issue=>issue.code==='INTERSECTING_SECTIONS')
+  .map(issue=>(issue.sections||[]).map(index=>sections[index]))
+  .filter(pair=>pair.length===2&&pair.every(row=>row?.cutline_xy?.length));
+}
+function showCrossingRepair(parent,pairs,rows,map,initial){
+ if(!pairs.length)return;
+ const panel=el('section',undefined,'card');parent.append(panel);
+ panel.append(el('h3',tr('Repair intersecting cross sections','修复相交断面')),
+  el('p',pairs.length+tr(' intersecting pairs. Inspect one pair on the DEM, then correct the flow path or section direction.',' 对候选断面相交。先在 DEM 上定位一对，再修正河线或断面方向。')));
+ const title=pair=>pair.map(row=>'RS '+row.rs).join(' ↔ ');
+ const selector=field(panel,'conflict-pair','Section pair','相交断面对','0','select',pairs.map((pair,i)=>[String(i),title(pair),title(pair)]));
+ const message=el('p','', 'status');message.setAttribute('aria-live','polite');
+ panel.append(button('Locate this pair on the DEM','在 DEM 定位这对断面',async()=>{
+  const pair=pairs[Number(selector.value)];map.setPreview(rows,pair);await map.fit('conflict');
+  message.textContent=title(pair)+tr(' highlighted with solid red lines. Compare their crossing with the channel bend.',' 已用红色实线标出。请对照交点与河道弯道的位置。');
+ }),message);
+ if(initial){
+  const river=current.model_type==='river';
+  panel.append(el('p',river?tr('At the bend, add an anchor on the channel centerline between the two saved anchors. Check upstream-to-downstream order and generate a new layout.','在弯道主槽中心补一个锚点，确认上下游顺序，再重新提出锚点与断面。'):
+   tr('Use the photo to locate inlet and outlet. Mark each exterior reach along the channel in flow order. Generate candidate sections, then prepare the automatic draft again.','对照照片标进口、出口，再分别沿流向点出上下游明槽。生成候选断面，然后重新准备自动草稿。')),
+   button(river?'Edit river anchors':'Mark exterior channels on the map',river?'修改河道锚点':'在地图上标注外部明槽',()=>openModelTool(river?'river-anchor-map':'crossing-map')));
+ }else{
+  panel.append(el('p',tr('Open section adjustment at the selected river station. Try the suggested rotation at the existing width and preview the DEM.','打开所选河站的断面调整，先保持宽度尝试建议转向，再预览 DEM。')),
+   button('Adjust first section in this pair','调整这对中的第一条断面',()=>sectionRepairController.selectStation(pairs[Number(selector.value)][0].rs)));
+ }
+ panel.append(el('small',tr('Before adopting: all intersections resolved, elevations present across each cut, channel crossed once and connected floodplain still covered. Shortening a cut can omit flow.','采用前检查：相交已解决、全断面有高程、每条线只横穿主槽一次，且仍覆盖连通漫滩。缩短断面可能漏算过流。')));
+}
 function renderAutoGeometry(parent){
  const isInitial=!current.intake?.section_count,project=current.id;
  const box=details(parent,'Automatic DEM layout / QA repair','自动提出 DEM 布置／QA 修正',isInitial||!!current.parent_revision);
@@ -58,9 +86,8 @@ function renderAutoGeometry(parent){
   detail.append(el('p',tr('Basis: ','依据：')+(v.seed?.basis||'QA / DEM')));
   for(const w of v.warnings||[])detail.append(el('p',tr(w==='REFERENCE_WSE_COVERAGE_SCREEN'?'Reference water levels screen coverage. Review section correspondence, datum and floodplain flow paths; site water levels require computation.':w,symbols[w]||w),'warning'));
   detail.append(el('p',v.changed_sections.length+tr(' proposed section changes',' 条断面改动提案')+' · '+(v.issues?.length||0)+tr(' geometry checks',' 项几何问题')+' · '+(v.unresolved?.length||0)+tr(' other review items',' 项其他待复核事项')));
-  if(proposal.mode==='initial'&&!v.can_apply&&current.model_type!=='river'&&v.issues?.length){
-   detail.append(el('p',tr('This layout cannot be adopted. On the map, mark each exterior channel from upstream to downstream. Set the section spacing and width using the site material, generate sections, then run automatic draft preparation to check and repair them.','当前布置无法采用。可在地图上分别沿流向点选上下游外部明槽，按现场资料选取断面间距和宽度，生成断面后运行自动准备草稿，程序会重新检查并尝试修正。'),'warning'),button('Mark exterior channels on the map','在地图上标注外部明槽',()=>openModelTool('crossing-map')));
-  }
+  const conflicts=crossingPairs(v.issues,rows);
+  if(!conflicts.length&&proposal.mode==='initial'&&!v.can_apply&&current.model_type!=='river'&&v.issues?.length)detail.append(button('Mark exterior channels on the map','在地图上标注外部明槽',()=>openModelTool('crossing-map')));
   showEndpointSearch(detail,v.endpoint_search);
   const directions=v.joint_search?.directions||[];
   if(directions.length){
@@ -91,7 +118,9 @@ function renderAutoGeometry(parent){
   const canvas=el('div');detail.append(canvas);const anchorsPreview=Object.fromEntries((v.anchors||[]).map(r=>[r.id,r.anchors_xy]));
   const riverLines=v.geometry.model_type==='river'?(v.geometry.flowlines||[]).map(line=>line.xy):undefined;
   const map=terrainMap(canvas,{riverLines,getAnchors:()=>anchorsPreview,getMode:()=>null,onPoint:()=>{},detached:true,viewKey:project+'|auto-preview'});map.setPreview(rows);
-  detail.append(button('Fit proposed sections','显示提案断面范围',()=>map.fit('preview')));
+  const repairGuide=el('div');detail.insertBefore(repairGuide,canvas);
+  showCrossingRepair(repairGuide,conflicts,rows,map,isInitial);
+  detail.append(button('Fit proposed sections','显示提案断面范围',()=>{map.setPreview(rows);return map.fit('preview');}));
   const actionLabel=action=>({JOINT_ROTATION_AND_COVERAGE:tr('Rotate and check extent','转向并检查范围'),EXTEND_WET_ENDS:tr('Extend wet section ends','延伸过水端点'),EXTEND_REFERENCE_COVERAGE:tr('Extend to reference coverage','延伸参考水位覆盖范围')})[action]||action;
   table(detail,['RS',tr('Width ft','宽度 ft'),tr('Change / screen','改动／筛查'),tr('Bank confidence','岸站识别置信度')],rows.map((r,i)=>[r.rs,(r.station_ft.at(-1)-r.station_ft[0]).toFixed(1),actionLabel(v.changes?.find(c=>c.rs===r.rs)?.action)||r.position_basis||tr('Retained','保留'),r.bank_stations_ft?tr('Existing plan positions retained','保留原岸站实际位置'):r.bank_candidates?.confidence]));
   if(rows.some(r=>!r.bank_stations_ft&&r.bank_candidates?.confidence==='LOW'))detail.append(el('p',tr('LOW bank confidence: expand the section profiles to compare the proposed banks with other slope breaks.','岸站置信度 LOW 表示把握较低。展开断面剖面，对照其他坡折位置再决定是否采用。')));

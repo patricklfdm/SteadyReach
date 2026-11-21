@@ -71,15 +71,24 @@ function showFieldSearch(box,a){
 function showResultAssessment(overview,a,box=overview){
  const label=s=>tr(s.en,s.zh),ordered=a.next_actions||a.findings,primary=ordered[0];
  overview.append(el('h2',tr('Delivery assessment','结果交付评估')+' · L'+a.level+' · '+label(a.title)));
- const use=[
-  tr('Restore calculation evidence before interpreting water levels.','先恢复本次计算证据，再解读水位。'),
-  tr('Use this edition for internal troubleshooting. Resolve the listed evidence or package gaps before handoff.','本版可用于内部排查，交出前先补齐所列证据或交付包。'),
-  tr('Share the model and maps with an engineer for conditional review. Include the limitations below.','可以将本版模型和地图连同下列限制交给工程师复核。'),
-  tr('The technical package can enter sign-off review. The responsible engineer decides suitability and approval.','技术资料可送签审，由负责工程师判断用途与签发。')];
- overview.append(el('p',use[a.level]));
+ if(a.use_guide){
+  const panel=el('section',undefined,'card');overview.append(panel);
+  panel.append(el('h3',tr('What can I use this run for?','这次计算可以用到什么程度？')),
+   el('strong',tr('Use now','当前可用')),el('p',label(a.use_guide.allowed)),
+   el('strong',tr('Hold for review','暂缓用途')),el('p',label(a.use_guide.deferred)));
+  const limits=(a.findings||[]).filter(row=>row.ceiling===a.level);
+  if(limits.length){
+   const reason=details(panel,'Why this level? ('+limits.length+')','为什么是这个等级？（'+limits.length+' 项）');
+   for(const row of limits)reason.append(el('p',label(row.reason)));
+  }
+ }
  function action(parent,row){
   const f=row.facts||{};
   parent.append(el('p',(row.scope==='CANDIDATE'?tr('Unadopted alternative · ','未采用方案 · '):'')+label(row.reason)),el('p',assessmentFact(row),'muted'));
+  if(row.code==='FLOW_SPLIT_COVERAGE'){
+   parent.append(el('p',tr('For the same profile, compare total discharge with the culvert, road and bypass entries in HEC-RAS. A blank road entry leaves overtopping unresolved.','对同一工况，逐项对照 HEC-RAS 的总流量、涵孔流量、路面与绕流流量。路面栏空白时，是否漫顶仍待核实。')),
+    button('Inspect native structure output','查看原生结构输出',()=>openGuidanceTool('native')));
+  }
   if(row.code==='FIELD_RESIDUAL'&&f.observations?.length){
    const detailsBox=details(parent,'Independent observations needing field records','需补现场记录的独立事件测点');
    table(detailsBox,[tr('Event / date','事件／日期'),'RS',tr('Residual (ft)','偏差（ft）'),tr('Survey uncertainty (ft)','实测不确定度（ft）'),tr('Source','来源')],f.observations.map(o=>[o.event+' / '+o.date,o.location?.rs??'—',o.residual_ft.toFixed(3),o.uncertainty_ft>0?o.uncertainty_ft:tr('Request survey record','待补联测或精度记录'),o.source||'—']));

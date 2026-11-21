@@ -4,7 +4,7 @@ const terrainViews=new Map();
 function terrainMap(canvas,options){
  const project=current.id,viewKey=options.viewKey||project,viewport=el('div',undefined,'terrain-viewport'),message=el('p','', 'muted');
  viewport.tabIndex=0;viewport.setAttribute('role','region');viewport.setAttribute('aria-label',tr('DEM map: drag to pan, scroll to zoom; arrows and + / − also work','DEM 地图：拖动平移，滚轮缩放，也可用方向键及加减键'));
- canvas.replaceChildren(viewport,message);let data=null,requested=null,serial=0,timer=null,drag=null,suppressUntil=0,selected=null,preview=[];
+ canvas.replaceChildren(viewport,message);let data=null,requested=null,serial=0,timer=null,drag=null,suppressUntil=0,selected=null,preview=[],highlighted=new Set();
  function clamp(bounds){
   if(!data)return bounds;const e=data.terrain_bounds,min=data.min_span,max=data.max_span;
   const span=Math.max(min,Math.min(max,Math.max(bounds[2]-bounds[0],bounds[3]-bounds[1])));
@@ -20,9 +20,9 @@ function terrainMap(canvas,options){
  }
  function schedule(bounds){requested=clamp(bounds);++serial;clearTimeout(timer);timer=setTimeout(()=>load(requested),140);}
  function zoom(factor,at=[.5,.5]){if(!data)return load();const b=requested||data.bounds,s=b[2]-b[0],next=Math.max(data.min_span,Math.min(data.max_span,s*factor)),x=b[0]+s*at[0],y=b[3]-s*at[1];schedule([x-next*at[0],y-next*(1-at[1]),x+next*(1-at[0]),y+next*at[1]]);}
- function fit(kind){if(!data)return load();let points=[];if(kind==='preview')points=preview.flatMap(r=>r.cutline_xy);if(kind==='sections')points=(data.section_items||[]).flatMap(r=>r.cutline_xy);if(!points.length){const b=data.terrain_bounds;points=[[b[0],b[1]],[b[2],b[3]]];}const x=points.map(p=>p[0]),y=points.map(p=>p[1]);const cx=(Math.min(...x)+Math.max(...x))/2,cy=(Math.min(...y)+Math.max(...y))/2,span=Math.max(Math.max(...x)-Math.min(...x),Math.max(...y)-Math.min(...y))*1.12;return load(clamp([cx-span/2,cy-span/2,cx+span/2,cy+span/2]));}
+ async function fit(kind){if(!data){await load();if(!data)return;}let points=[];if(kind==='preview')points=preview.flatMap(r=>r.cutline_xy);if(kind==='conflict')points=preview.filter(r=>highlighted.has(r)).flatMap(r=>r.cutline_xy);if(kind==='sections')points=(data.section_items||[]).flatMap(r=>r.cutline_xy);if(!points.length){const b=data.terrain_bounds;points=[[b[0],b[1]],[b[2],b[3]]];}const x=points.map(p=>p[0]),y=points.map(p=>p[1]);const cx=(Math.min(...x)+Math.max(...x))/2,cy=(Math.min(...y)+Math.max(...y))/2,span=Math.max(Math.max(...x)-Math.min(...x),Math.max(...y)-Math.min(...y))*1.12;return load(clamp([cx-span/2,cy-span/2,cx+span/2,cy+span/2]));}
  function focus(index){selected=index;draw();}
- function setPreview(rows){preview=rows||[];draw();}
+ function setPreview(rows,focusRows=[]){preview=rows||[];highlighted=new Set(focusRows);draw();}
  function draw(){
   if(!data)return;viewport.replaceChildren();const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 650 650');svg.classList.add('map','interactive-map');viewport.append(svg);
   const group=svgEl(svg,'g',{});svgEl(group,'image',{href:'data:image/png;base64,'+data.background,width:650,height:650});
@@ -30,7 +30,13 @@ function terrainMap(canvas,options){
   const tb=data.terrain_bounds,a=xy([tb[0],tb[3]]),b=xy([tb[2],tb[1]]);svgEl(group,'rect',{x:a[0],y:a[1],width:b[0]-a[0],height:b[1]-a[1],fill:'none',stroke:'#657577','stroke-dasharray':'5 4','pointer-events':'none'});
   const bad=new Set((data.spatial_issues||[]).flatMap(q=>q.sections));
   for(const row of data.section_items||[]){const pts=row.cutline_xy.map(xy),color=row.index===selected?'#005bbb':bad.has(row.index)?'#c52e2e':'#7750aa';const path=svgEl(group,'polyline',{points:pts.map(p=>p.join(',')).join(' '),fill:'none',stroke:color,'stroke-width':row.index===selected?4:2,tabindex:0,role:'button','aria-label':`XS ${row.rs}`});path.style.cursor='pointer';const pick=e=>{if(options.getMode()||busy)return;e.stopPropagation();selected=row.index;sectionRepairController?.select(row.index);draw();};path.onclick=pick;path.onkeydown=e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();pick(e);}};svgEl(group,'text',{x:pts[0][0]+4,y:pts[0][1]-5,fill:color,'font-size':12,'pointer-events':'none'}).textContent=`RS ${row.rs}`;}
-  for(const row of preview)svgEl(group,'polyline',{points:row.cutline_xy.map(xy).map(p=>p.join(',')).join(' '),fill:'none',stroke:'#007641','stroke-width':3,'stroke-dasharray':'8 5','pointer-events':'none'});
+  function drawPreview(row,active){
+   const pts=row.cutline_xy.map(xy);
+   svgEl(group,'polyline',{points:pts.map(p=>p.join(',')).join(' '),fill:'none',stroke:active?'#a52518':'#007641','stroke-width':active?5:3,'stroke-dasharray':active?'':'8 5','pointer-events':'none'});
+   if(active)svgEl(group,'text',{x:pts[0][0]+4,y:pts[0][1]-4,fill:'#78190f',stroke:'white','stroke-width':3,'paint-order':'stroke','pointer-events':'none'}).textContent='RS '+row.rs;
+  }
+  for(const row of preview)if(!highlighted.has(row))drawPreview(row,false);
+  for(const row of highlighted)drawPreview(row,true);
   const lines=options.riverLines ?? data.river_lines ?? [];
   for(const line of lines)svgEl(group,'polyline',{points:line.map(xy).map(p=>p.join(',')).join(' '),fill:'none',stroke:'#005aab','stroke-width':3,'pointer-events':'none'});
   const anchors=options.getAnchors();

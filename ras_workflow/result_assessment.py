@@ -6,13 +6,24 @@ from .result_guidance import BALANCE, NATIVE_GAPS, WET, text
 from .revision_inputs import station_key
 from .river_review import response
 
-RULE_VERSION = 6
+RULE_VERSION = 7
 LEVELS = [
     text('Evidence insufficient', '计算证据不足'),
     text('Internal diagnosis', '可供内部诊断'),
     text('Conditional engineering review', '可有条件交工程师复核'),
     text('Technical package ready for sign-off review', '技术资料可提交签审'),
 ]
+USE_GUIDE = [
+    (text('Identify the missing run evidence and restore the matching files.', '定位缺失的计算证据，恢复与本次运行匹配的文件。'),
+     text('Water levels, velocities and maps need a verified calculation before interpretation.', '待本次计算得到核验，再解读水位、流速和地图。')),
+    (text('Use the model internally to trace warnings, compare inputs and plan measurements.', '在团队内部核查警告、对照输入，确定补测位置。'),
+     text('Hold external flood levels, capacity and design decisions until the controlling gaps below are resolved.', '对外引用洪水位、判断过流能力和设计取值，须先解决下列限制。')),
+    (text('Send the model and reports to an engineer for conditional technical review, with the assumptions and study limits attached.', '可将模型和报告连同假设、研究范围交给工程师做条件性技术复核。'),
+     text('Design adoption and sign-off still require resolution or documented acceptance of the outstanding limitations.', '设计取值和签发须由负责工程师处理仍存的限制并记录适用条件。')),
+    (text('Submit this exact technical package and evidence to the responsible engineer for sign-off review.', '可将本版本技术包和证据提交负责工程师签审。'),
+     text('Release for the stated design purpose requires the responsible engineer’s approval.', '按拟定设计用途正式出具成果，仍需负责工程师签发。')),
+]
+
 FULL = {'ALL_COMPUTED_PROFILES_VERIFIED_SINGLE_REACH', 'ALL_REQUESTED_PROFILES_USER_CONFIRMED',
         'EXPORTED_SCOPE_OPERATOR_ATTESTED'}
 EVIDENCE_ERRORS = (ValueError, OSError, KeyError, TypeError)
@@ -25,6 +36,7 @@ def finding(code, ceiling, target, en, zh, **facts):
 def classify(findings):
     level = min((r['ceiling'] for r in findings), default=3)
     return dict(level=level, title=LEVELS[level], levels=LEVELS, findings=sorted(findings,key=lambda r:r['ceiling']),
+                use_guide=dict(allowed=USE_GUIDE[level][0], deferred=USE_GUIDE[level][1]),
                 engineering_acceptance='NOT_ASSESSED', rule_version=RULE_VERSION)
 
 
@@ -398,6 +410,8 @@ def save_summary(key, body):
              label('Native messages / combined diagnostic records','原生信息／综合诊断记录')+
              f" · {d['native_messages']} / {d['records']}",
              label('Engineering sign-off remains with the responsible engineer.','工程签发由负责工程师决定。'),'']
+    lines.extend([label('Current use', '当前可用范围')+' · '+a['use_guide']['allowed'][language],
+                  label('Hold for review', '暂缓用途')+' · '+a['use_guide']['deferred'][language], ''])
     if a.get('next_actions'):
         lines.append(label('Recommended action order','建议处理顺序'))
         for i,row in enumerate(a['next_actions'],1):

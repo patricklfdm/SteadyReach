@@ -1,8 +1,15 @@
 'use strict';
 // Proposals are editable and require an explicit local choice. No reviewer form.
-function revealParameter(key){const input=document.getElementById('input-'+key);let p=input;while(p){if(p.tagName==='DETAILS')p.open=true;p=p.parentElement;}input?.scrollIntoView({block:'center'});input?.focus();}
+function revealParameter(key){
+ const input=document.getElementById('input-'+key);
+ if(!input)return;
+ for(let p=input;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;
+ input.scrollIntoView({block:'center'});
+ // Navigation buttons temporarily disable form controls; focus after the action releases them.
+ requestAnimationFrame(()=>{if(input.isConnected&&!input.disabled)input.focus({preventScroll:true});});
+}
 async function openModelTool(id){
- if(finalReview){await saveAll();finalReview=null;await open(current.id);}
+ if(finalReview||document.getElementById('confirm-run')){await saveAll();finalReview=null;await open(current.id);}
  const node=document.getElementById(id);
  if(!node)throw Error(tr('Reopen model preparation to load this tool.','请重新打开模型准备页以载入此工具。'));
  for(let p=node;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;
