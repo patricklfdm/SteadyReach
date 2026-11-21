@@ -76,6 +76,7 @@ class CandidateRefresh(unittest.TestCase):
              patch.object(app_parameters, 'item', return_value={'sha256':'token'}), \
              patch.object(app_parameters, 'rel', return_value='parameters.json'), \
              patch('ras_workflow.app_automation.preflight', return_value={'issues':[]}), \
+             patch('ras_workflow.run_readiness.for_review', return_value={'issues':[]}), \
              patch('ras_workflow.app_core.require_idle'), \
              patch('ras_workflow.app_core.folder', return_value=Path('test')), \
              patch('ras_workflow.app_core.persist'):

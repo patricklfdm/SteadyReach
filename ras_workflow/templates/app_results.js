@@ -76,13 +76,14 @@ function renderRevisionComparison(parent,comparison){
 }
 
 function renderResultTools(parent){
- if(current.model_type==='river'&&!current.native_review){renderWarningStudy(parent);renderFloodplain(parent);renderRiverComparison(parent);renderRiverObservations(parent);renderFieldFeedback(parent);}
  renderNextReview(parent);
- renderCheckBatch(parent);
- renderResultAtlas(parent);
- renderStudy(parent);
- renderSpacing(parent);
- renderCoverage(parent);
+ const advanced=details(parent,'Investigate the results and compare scenarios','深入核查结果与比较工况');
+ if(current.model_type==='river'&&!current.native_review){renderWarningStudy(advanced);renderFloodplain(advanced);renderRiverComparison(advanced);renderRiverObservations(advanced);renderFieldFeedback(advanced);}
+ renderCheckBatch(advanced);
+ renderResultAtlas(advanced);
+ renderStudy(advanced);
+ renderSpacing(advanced);
+ renderCoverage(advanced);
  if(current.delivery?.mapped&&!current.exports_need_refresh)parent.append(button('Open QGIS review copy','打开 QGIS 复核副本',async()=>{const r=await api('qgis-preview',{id:current.id});notify(tr('Opened a separate preview copy: ','已打开独立复核副本：')+r.path);}));
  const box=details(parent,'Complete native outputs / refresh deliverables','补齐原生输出／更新交付包',!!current.exports_need_refresh||['UNAVAILABLE','COMPLETE_WITH_DIFFERENCES'].includes(current.automatic_native_outputs?.status));box.id='qa-tool-native';
  const deliveryAnchor=el('div');guidanceTarget(deliveryAnchor,'delivery');box.append(deliveryAnchor);

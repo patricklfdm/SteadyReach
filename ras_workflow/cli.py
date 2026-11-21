@@ -114,7 +114,19 @@ def execute(path,scenario_id,fresh=False,timeout=180,receipt_path=None):
                 save((ROOT/session['session']).parent/'geometry_checkpoint.json',dict(status='WAITING_FOR_INPUT',error=str(e)))
                 print('Geometry: WAITING_FOR_INPUT '+str(e),flush=True)
         terrain_metadata_ready=c['terrain'].get('vertical_unit') in ['m','US survey foot','international foot'] and c['terrain'].get('vertical_datum') not in [None,'','unknown','unreviewed']
-        if c['terrain'].get('create_native') and terrain_metadata_ready and t.get('status')=='READY_WITH_LIMITATIONS' and engine.get('status')=='READY':
+        if gate['status']=='READY_CONDITIONAL' and not cancelled:
+            from .run_readiness import evaluate
+            from .site_delivery import settings_for
+            settings=settings_for(path)
+            mapped=settings.get('enabled',True) and settings.get('mapping_enabled',True) and c['terrain'].get('mode')!='not_applicable'
+            readiness=evaluate(path,dict(c,delivery=settings),g or {},mapped,raster=t.get('raster'),engine=engine)
+            save(folder/'run_readiness.json',readiness)
+            if readiness['issues']:
+                gate['status']='BLOCKED'
+                gate['blocking_items'].extend(i['en'] for i in readiness['issues'])
+                save(folder/'input_gate.json',gate)
+                errors.extend(i['en'] for i in readiness['issues'])
+        if gate['status']=='READY_CONDITIONAL' and c['terrain'].get('create_native') and terrain_metadata_ready and t.get('status')=='READY_WITH_LIMITATIONS' and engine.get('status')=='READY':
             try:nt=stage(state,folder,'native_terrain',digest([terrain_key,sha(ROOT/'ras_workflow/ras_terrain.py'),engine['selected']]),lambda d:ras_terrain.create(path,c,engine,d))
             except Exception as e:errors.append('Native terrain: '+str(e))
         if gate['status']=='READY_CONDITIONAL' and engine.get('status')=='READY':

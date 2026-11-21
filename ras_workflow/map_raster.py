@@ -14,6 +14,30 @@ def horizontal(value):
     return crs.sub_crs_list[0] if crs.is_compound else crs.to_2d()
 
 
+def map_bounds(bounds, margin=.08):
+    margin=float(margin)
+    if not 0<=margin<=.5:
+        raise ValueError('map_margin_fraction must be between 0 and 0.5')
+    x0,y0,x1,y1=bounds
+    if x1<=x0 or y1<=y0:
+        raise ValueError('Degenerate geographic extent')
+    cx,cy=(x0+x1)/2,(y0+y1)/2
+    radius=max(x1-x0,y1-y0)*(.5+margin)
+    return [cx-radius,cy-radius,cx+radius,cy+radius]
+
+
+def terrain_crs(src,target):
+    if not src.crs or src.count!=1:
+        raise ValueError('Terrain must have one elevation band and a CRS')
+    source=horizontal(src.crs)
+    if not source.is_projected:
+        raise ValueError('Terrain source needs a projected CRS with known horizontal units')
+    # WKT1 and WKT2 can use different spellings of the same geodetic CRS.
+    if source.datum!=target.datum and not source.geodetic_crs.equals(target.geodetic_crs,ignore_axis_order=True):
+        raise ValueError('Terrain and model use different horizontal datums; provide an explicitly reviewed datum transformation')
+    return source
+
+
 def terrain(raster,output,crs,bounds,factor,datum,vertical_unit):
     """Automatic projection conversion is allowed only within the same datum.
 
@@ -26,13 +50,7 @@ def terrain(raster,output,crs,bounds,factor,datum,vertical_unit):
         raise ValueError('Invalid map extent')
     if not math.isfinite(factor) or factor<=0:raise ValueError('Invalid reviewed vertical unit conversion')
     with rasterio.open(raster) as src:
-        if not src.crs or src.count!=1:raise ValueError('Terrain must have one elevation band and a CRS')
-        source=horizontal(src.crs)
-        if not source.is_projected:raise ValueError('Terrain source needs a projected CRS with known horizontal units')
-        # GeoTIFF WKT1 may spell the same EPSG geodetic CRS as a reference
-        # frame while the projection definition uses its WKT2 datum ensemble.
-        if source.datum != target.datum and not source.geodetic_crs.equals(target.geodetic_crs, ignore_axis_order=True):
-            raise ValueError('Terrain and model use different horizontal datums; provide an explicitly reviewed datum transformation')
+        source=terrain_crs(src,target)
         resolution=max(src.res)*source.axis_info[0].unit_conversion_factor/target.axis_info[0].unit_conversion_factor
         width=math.ceil((bounds[2]-bounds[0])/resolution);height=math.ceil((bounds[3]-bounds[1])/resolution)
         if width*height>25_000_000:raise ValueError('Map crop exceeds 25 million cells; review the extent/resolution')
@@ -45,6 +63,9 @@ def terrain(raster,output,crs,bounds,factor,datum,vertical_unit):
             data=warped.read(1,masked=True)
         good=~np.ma.getmaskarray(data)&np.isfinite(data.data)
         if good.mean()<.98:raise ValueError(f'Terrain covers only {good.mean():.2%} of the map; extend terrain or review extent')
+        if output is None:
+            return dict(bounds=list(bounds),width=width,height=height,valid_fraction=float(good.mean()),
+                        source_crs=source.to_string(),target_crs=target.to_string())
         values=np.where(good,data.data.astype('float64')*factor,-9999).astype('float32')
         with rasterio.open(output,'w',driver='GTiff',crs=target.to_wkt(),count=1,width=width,height=height,transform=transform,
                            dtype='float32',nodata=-9999,compress='deflate') as dst:

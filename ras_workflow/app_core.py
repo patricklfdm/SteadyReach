@@ -325,11 +325,7 @@ def start(key,body):
             last.get('confirmed_review')==body['review_token'] and last.get('status') in ('RUNNING','FINISHED')):
             if last['status']=='FINISHED' or task_alive(last):
                 return dict(id=key,status=m['status'],task=pointer,reused_request=True)
-    require_idle(m)
-    from . import app_parameters
-    app_parameters.confirm(m,body.get('review_token'))
-    persist(m,'START_REQUEST',dict(policy=POLICY,metadata=m['metadata'],gis=m['gis'],revision=m['revision'],named_engineering_review=False))
-    return launch(key,'run')
+    return launch(key,'run',run_review=body.get('review_token'))
 
 def compile_native(m):
     from . import native_review,intake
@@ -393,7 +389,7 @@ def run(key):
         except Exception:
             traceback.print_exc()  # Preserve the completed solver/export outcome.
 
-def launch(key,action):
+def launch(key,action,*,run_review=None):
     if action not in ('prepare','run','report','delivery','acquire','analyze','study','catalog','native-export','automatic-prepare','check-batch','next-review','field-run'):raise ValueError('Unknown task')
     global_state=ROOT/'status/app/active.json'
     with lock(ROOT/'status/app/launch.lock'):
@@ -403,6 +399,10 @@ def launch(key,action):
             if previous.get('record') and (ROOT/previous['record']).exists():
                 prev=read(ROOT/previous['record'])
                 if prev['status']=='RUNNING' and task_alive(prev):raise ValueError('Another project is processing; keep this draft and wait')
+        if action=='run':
+            from . import app_parameters
+            app_parameters.confirm(m,run_review)
+            persist(m,'START_REQUEST',dict(policy=POLICY,metadata=m['metadata'],gis=m['gis'],revision=m['revision'],named_engineering_review=False))
         f=folder(key)/'tasks'/unique_id();f.mkdir(parents=True)
         record=f/'task.json';job=dict(project_id=key,action=action,status='RUNNING',started_utc=utc(),log=rel(f/'task.log'))
         if action=='run' and m.get('pending_review'):job['confirmed_review']=m['pending_review']['sha256']

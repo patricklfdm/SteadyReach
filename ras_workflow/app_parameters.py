@@ -432,7 +432,10 @@ def review(m):
                            zh='请先解决模型和地形垂直基准冲突。'))
     if not automatic_settled:
         errors.append(dict(code='AUTOMATIC_INPUTS_UNSETTLED',en='Automatic values did not settle. Review conflicting dependencies before calculation.',zh='自动推导尚未稳定，请核对关联参数后再计算。'))
-    packet=dict(schema_version='parameter_review_1',project_id=m['id'],revision=m['revision'],fingerprint=digest(data),
+    from .run_readiness import for_review
+    readiness=for_review(m,data)
+    errors.extend(readiness['issues'])
+    packet=dict(run_readiness=readiness,schema_version='parameter_review_1',project_id=m['id'],revision=m['revision'],fingerprint=digest(data),
         inputs=data,fields=fields,native=native,errors=errors,ready=not errors,created_utc=utc(),engineering_acceptance='NOT_ASSESSED',
         refreshed_equivalent_fields=[change['field'] for change in refreshed],
         attention=[] if native else attention(m, fields), feasibility=feasibility)
@@ -448,6 +451,8 @@ def verify(m,token):
     if not entry or not intact([entry]) or token!=entry['sha256']:raise ValueError('Open the complete parameter review before confirming / 请先打开完整参数核对页')
     packet=read(ROOT/entry['path'])
     if packet['fingerprint']!=digest(binding(m)):raise ValueError('Parameters changed after review; review them again / 参数已改变，请重新核对确认')
+    if not packet.get('run_readiness'):
+        raise ValueError('Refresh the parameter review to check solver and delivery readiness / 请刷新参数页以运行开算预检')
     if not packet['ready']:raise ValueError('Required inputs remain unresolved / 必要输入尚未补齐')
     return packet
 

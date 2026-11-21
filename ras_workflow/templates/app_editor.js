@@ -47,10 +47,16 @@ function renderFinalReview(){
  el('p',tr('Nothing has been solved yet. Edit any field; changes cancel this confirmation. No name, reason, or signature is required.','尚未开始求解。可以修改任意字段，修改后本次确认会失效。无需姓名、理由或签名。')),
  button('← Back to preparation','← 返回准备页面',async()=>{await save();finalReview=null;await open(current.id);}));
  const state=el('p',review.ready?tr('Technical input checks passed. Assumptions remain conditional.','必要输入检查通过。假设仍属于条件性输入。'):tr('Fill the items below, then refresh this list. The solver is paused.','请补齐下列项目并刷新清单，求解器处于等待状态。'),review.ready?'status':'warning');state.id='review-state';screen.append(state);
+ if(review.run_readiness){
+  const r=review.run_readiness,labels={CHECKED:tr('Checks passed','检查通过'),BLOCKED:tr('Action needed','需处理'),EXTENT_PENDING:tr('Confirm extent after compilation','原生几何编译后核对范围'),NOT_REQUESTED:tr('Not requested','未选择')};
+  table(screen,[tr('Before calculating','开算前预检'),tr('Status','状态')],[[tr('HEC-RAS installation and session','HEC-RAS 安装与会话'),labels[r.solver.status]],[tr('Report tools','报告工具'),labels[r.reports.status]],['GIS / Mapper',labels[r.gis.status]]]);
+  if(!current.gis)screen.append(button('Include GIS and check again','加入 GIS 并再次预检',async()=>{await saveAll();current.gis=true;mark();await save();await showFinalReview();}));
+  if(r.gis.status==='BLOCKED'&&current.gis)screen.append(button('Switch to hydraulic results and reports only','改为仅交付水力结果和报告',async()=>{await saveAll();current.gis=false;mark();await save();await showFinalReview();}));
+ }
  renderFeasibility(screen,review.feasibility);
  if(showAcquisitionGaps(screen,current.acquisition))screen.append(button('Review source coverage and local files','查看来源覆盖和本地文件',async()=>{
   await save();finalReview=null;await open(current.id);
-  document.querySelector('.source-hub')?.scrollIntoView({block:'start'});
+  const hub=document.querySelector('.source-hub');for(let p=hub;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;hub?.scrollIntoView({block:'start'});
  }));
  if(!review.ready&&current.intake?.fields.some(f=>f.missing&&f.parameter_candidates?.length)){
   screen.append(button('Choose source candidates for missing inputs','集中选择缺项的资料候选',async()=>{
@@ -66,7 +72,7 @@ function renderFinalReview(){
  if(review.refreshed_equivalent_fields?.length)screen.append(el('p',review.refreshed_equivalent_fields.length+tr(' unchanged derived values were rebound to the current geometry. Values, ranges and sources are listed below.',' 项数值及依据均相同的推导值已自动关联当前几何。请在下方核对数值、范围和来源。'),'status'));
  renderDependencyReview(screen,review);
  const context=details(screen,'Project, map settings and source files','项目、地图设置和来源文件',false);table(context,[tr('Setting','设置'),tr('Value','数值')],[[tr('Coordinates','坐标'),JSON.stringify(review.inputs.configuration?.location||current.native?.location||'see input source')],['GIS / Mapper',String(review.inputs.gis)],...Object.entries(review.inputs.metadata)]);table(context,[tr('Source','来源'), 'SHA-256'],review.inputs.sources.map(s=>[s.path,s.sha256]));
- if(review.native){const d=details(screen,'Complete native model inspection','完整原生模型输入',true);d.append(el('pre',JSON.stringify(review.inputs.native,null,2)),el('p',tr('For native-file edits, change the source in HEC-RAS and import that version again. This review binds the exact input files.','原生文件参数需在 HEC-RAS 中修改后重新读取；本次核对绑定确切的输入文件。')));}
+ if(review.native){const d=details(screen,'Complete native model inspection','完整原生模型输入',false);d.append(el('pre',JSON.stringify(review.inputs.native,null,2)),el('p',tr('For native-file edits, change the source in HEC-RAS and import that version again. This review binds the exact input files.','原生文件参数需在 HEC-RAS 中修改后重新读取；本次核对绑定确切的输入文件。')));}
  else{
   const assumptions=review.fields.filter(f=>!f.missing&&['assumed','inferred'].includes(f.evidence_class));screen.append(el('p',`${review.fields.length} `+tr('input fields · ','项输入 · ')+assumptions.length+tr(' marked estimates/assumptions.','项标为估计／假设。'),'status'));
   if(assumptions.length){const a=details(screen,'Estimates / assumptions ('+assumptions.length+')','估计／假设（'+assumptions.length+'）',false);parameterTable(a,assumptions);}
@@ -199,7 +205,7 @@ function renderFeasibility(parent,data,editable=false){
   scopeFields(card,data.scope);
   if(data.state!=='outside'&&current.intake)card.append(button('Open site materials and public search','打开本站资料与公开搜索',async()=>{
    const dest=document.querySelector('.source-hub');
-   if(dest){if(dest.tagName==='DETAILS')dest.open=true;dest.scrollIntoView({block:'start'});}
+   if(dest){for(let p=dest;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;dest.scrollIntoView({block:'start'});}
    else notify(tr('Use the source-material panel on this project.','请打开本项目的资料面板。'));
   }));
  }
@@ -209,7 +215,8 @@ function renderManual(screen){
  if(current.model_type==='river'){renderRiverManual(screen);return;}
  const intake=current.intake;if(!intake){screen.append(button('Prepare terrain and inputs','准备地形与输入',async()=>{await api('prepare',{id:current.id});await open(current.id);}));return;}
  screen.append(el('h2',tr('Build from site materials','从现场资料建立模型')),el('p',tr('Import site materials and check the crossing on the DEM, then prepare an automatic draft. Review the highlighted uncertainties and remaining inputs together before confirming the calculation.','导入现场资料并在 DEM 上核对设施位置，然后自动准备草稿。集中核对标出的不确定项与剩余输入，再确认运算。')));
- renderSources(screen);renderAutomation(screen);renderAutoGeometry(screen);renderParameterNavigator(screen,intake.fields);
+ const sources=intake.section_count?details(screen,'Review or add source material','查看或补充资料'):screen;
+ renderSources(sources);renderAutomation(screen);renderAutoGeometry(screen);renderParameterNavigator(screen,intake.fields);
  const guide=details(screen,'What materials are useful?','准备哪些资料？',false);
  table(guide,[tr('Input','输入'),tr('Preferred material / what automation can do','优先资料／可自动处理的部分')],[
  [tr('Flow and roughness','流量与糙率'),tr('Applicable StreamStats / hydrology report; channel/overbank photos. DEM does not determine design flow.','本站 StreamStats／水文报告；河槽与漫滩照片。DEM 不能确定设计流量。')],
@@ -278,11 +285,13 @@ function renderRiverManual(screen){
  const intake=current.intake;if(!intake){screen.append(button('Prepare terrain and inputs','准备地形与输入',async()=>{await api('prepare',{id:current.id});await open(current.id);}));return;}
  screen.append(el('h2',tr('River reach between bridges','桥间纯河道')),
  el('p',tr('Place the upstream end below the upstream bridge and the downstream end above the downstream bridge. Bridge backwater can still affect the boundary. Select a defensible flow and boundary condition before solving.','上端设在上游桥下游侧，下端设在下游桥上游侧。桥梁壅水仍可能影响边界；计算前需选定有依据的流量与边界条件。')));
- renderSources(screen);
+ const sources=intake.section_count?details(screen,'Review or add source material','查看或补充资料'):screen;
+ renderSources(sources);
  const map=details(screen,'Reach extent and DEM','河段范围与 DEM',!intake.section_count);metadata(map,false);renderTerrainExtent(map);renderRiverMap(map);
  renderAutomation(screen);renderAutoGeometry(screen);renderParameterNavigator(screen,intake.fields);
  if(intake.section_count){const sections=details(screen,'Section and bank adjustments','断面和岸站调整');renderSectionRepair(sections);if(intake.geometry_review?.sections?.length)renderBanks(sections,intake.geometry_review);}
- const cats={flow:details(screen,'Flow and roughness','流量与糙率'),boundary:details(screen,'Channel bed and boundaries','河槽与边界'),sections:details(screen,'All section data','全部断面数据')},xs={};
+ const fullEditor=details(screen,'Edit individual hydraulic inputs','逐项编辑水力参数');
+ const cats={flow:details(fullEditor,'Flow and roughness','流量与糙率'),boundary:details(fullEditor,'Channel bed and boundaries','河槽与边界'),sections:details(fullEditor,'All section data','全部断面数据')},xs={};
  for(const f of intake.fields){if(f.key.endsWith('.source')||f.key.endsWith('.parameter_source')||f.key==='g.functional_section_basis'||f.key.endsWith('.reach_length_basis'))continue;
   let target=f.key.startsWith('c.scenarios.')?cats.flow:f.key.startsWith('g.cross_sections.')?cats.sections:cats.boundary;
   if(target===cats.sections){const i=f.key.split('.')[2];target=xs[i]||(xs[i]=details(target,'Cross section '+(Number(i)+1),'断面 '+(Number(i)+1)));}parameterInput(target,f);

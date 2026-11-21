@@ -263,15 +263,8 @@ def generate(summary_path,output,reuse_package=None,refresh_imagery_extent=False
             crs_value=settings.get('horizontal_crs') or geometry.get('horizontal_crs')
             if not crs_value:raise ValueError('Delivery needs a reviewed geometry horizontal_crs')
             crs=CRS.from_user_input(crs_value);data=spatial.extract(ROOT/h['raw_hdf']['path'],crs)
-            bounds=data['bounds'];margin=float(settings.get('map_margin_fraction',.08))
-            if not 0<=margin<=.5:raise ValueError('map_margin_fraction must be between 0 and 0.5')
-            padx=(bounds[2]-bounds[0])*margin;pady=(bounds[3]-bounds[1])*margin
-            bounds=[bounds[0]-padx,bounds[1]-pady,bounds[2]+padx,bounds[3]+pady]
-            # Both print maps are square. Crop for their actual display extent,
-            # not only the narrower XS envelope (which would leave blank bands).
-            cx=(bounds[0]+bounds[2])/2;cy=(bounds[1]+bounds[3])/2
-            radius=max(bounds[2]-bounds[0],bounds[3]-bounds[1])/2
-            bounds=[cx-radius,cy-radius,cx+radius,cy+radius]
+            from .map_raster import map_bounds
+            bounds=map_bounds(data['bounds'],settings.get('map_margin_fraction',.08))
             raster=terrain_config.get('raster')
             if not raster:raise ValueError('Review and apply the acquired terrain raster before Mapper delivery')
             raster=safe_path(cp.parent,raster);unit=terrain_config['vertical_unit'];datum=terrain_config['vertical_datum']

@@ -1,6 +1,6 @@
 # Local production review
 
-[简体中文](LOCAL_RELEASE_CN.md)
+[简体中文](LOCAL_RELEASE_CN.md) · [Production priorities and acceptance criteria](PRODUCTION_ROADMAP_EN.md)
 
 Open **Handoff, local files and optional pilot timing** on the project page. Inspect the registered attachments and their inclusion in each package, additional sources, coordinates and PDFs. If a single PDF changes, restore its registered bytes using the button beside its name. The model and other exports keep the same run ID. For older deliveries without an identical copy, restore a verified backup or publish a new edition. Original project files and re-downloadable setup archives appear separately.
 
