@@ -57,7 +57,10 @@ function renderAutoGeometry(parent){
   const symbols={VERIFY_BRIDGE_BOUNDARY_EFFECTS:'核对边界断面及桥梁壅水影响',VERIFY_SUBMERGED_CHANNEL_GEOMETRY:'核对水下河槽测量／地表 DEM 假设',DIRECTION_AND_CROSSING_UNCONFIRMED:'流向／设施位置仍需确认',BOUNDARY_REACH_EXTENT_NOT_HYDRAULICALLY_VERIFIED:'外部边界距离尚未经过水力验证',PRIOR_WSE_IS_A_SCREEN_NOT_NEW_HYDRAULICS:'前次水位仅作筛查，需新计算验证',REFERENCE_WSE_COVERAGE_SCREEN:'参考水位用于断面范围筛查；请核对断面对应位置、基准和漫滩过流路径。本站水位待真实计算。'};
   detail.append(el('p',tr('Basis: ','依据：')+(v.seed?.basis||'QA / DEM')));
   for(const w of v.warnings||[])detail.append(el('p',tr(w==='REFERENCE_WSE_COVERAGE_SCREEN'?'Reference water levels screen coverage. Review section correspondence, datum and floodplain flow paths; site water levels require computation.':w,symbols[w]||w),'warning'));
-  detail.append(el('p',v.changed_sections.length+tr(' proposed section changes',' 条断面改动提案')+' · '+(v.unresolved?.length||0)+tr(' unresolved items',' 项仍需处理')));
+  detail.append(el('p',v.changed_sections.length+tr(' proposed section changes',' 条断面改动提案')+' · '+(v.issues?.length||0)+tr(' geometry checks',' 项几何问题')+' · '+(v.unresolved?.length||0)+tr(' other review items',' 项其他待复核事项')));
+  if(proposal.mode==='initial'&&!v.can_apply&&current.model_type!=='river'&&v.issues?.length){
+   detail.append(el('p',tr('This layout cannot be adopted. On the map, mark each exterior channel from upstream to downstream. Set the section spacing and width using the site material, generate sections, then run automatic draft preparation to check and repair them.','当前布置无法采用。可在地图上分别沿流向点选上下游外部明槽，按现场资料选取断面间距和宽度，生成断面后运行自动准备草稿，程序会重新检查并尝试修正。'),'warning'),button('Mark exterior channels on the map','在地图上标注外部明槽',()=>openModelTool('crossing-map')));
+  }
   showEndpointSearch(detail,v.endpoint_search);
   const directions=v.joint_search?.directions||[];
   if(directions.length){

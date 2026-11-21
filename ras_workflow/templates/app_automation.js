@@ -1,9 +1,16 @@
 'use strict';
 // Proposals are editable and require an explicit local choice. No reviewer form.
 function revealParameter(key){const input=document.getElementById('input-'+key);let p=input;while(p){if(p.tagName==='DETAILS')p.open=true;p=p.parentElement;}input?.scrollIntoView({block:'center'});input?.focus();}
+async function openModelTool(id){
+ if(finalReview){await saveAll();finalReview=null;await open(current.id);}
+ const node=document.getElementById(id);
+ if(!node)throw Error(tr('Reopen model preparation to load this tool.','请重新打开模型准备页以载入此工具。'));
+ for(let p=node;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;
+ node.tabIndex=-1;node.focus({preventScroll:true});node.scrollIntoView({block:'center'});
+}
 function renderAutomation(parent){
  const data=current.automation;if(!data)return;
- const card=el('section',undefined,'card automation');parent.append(card);
+ const card=el('section',undefined,'card automation');card.id='model-automation';parent.append(card);
  if(current.model_type==='river'){renderRiverAutomation(card,data);return;}
  card.append(el('h2',tr('Prepare together, confirm once','集中准备，运算前统一确认')),el('p',tr('Associate opening points → inspect early geometry checks → review derived values and bank profiles. Saved values stay selected. No HEC-RAS run starts here.','关联洞口测点 → 提前检查几何 → 集中核对推导值和岸站。默认保留已保存的数值，此处不启动 HEC-RAS。')));
  const checks=data.checks,issues=checks.issues||[];
@@ -42,6 +49,9 @@ function renderPreparationAttention(parent,notices){
  const box=details(parent,'Check these interpretations before confirming','确认前集中核对这些判断',true);
  for(const notice of notices){
   const row=el('p',tr(notice.en,notice.zh),'warning');box.append(row);
+  if(['AUTOMATIC_BANK_DRAFT','UNCERTAIN_BANK_INTERPRETATION'].includes(notice.code)&&current.intake?.geometry_review?.sections?.length){
+   row.append(button('Review bank profiles on the DEM','查看 DEM 岸站剖面',()=>openModelTool('bank-profiles')));
+  }
   if(notice.fields?.length){
    const target=notice.fields.length>6?details(box,'Affected parameters ('+notice.fields.length+')','相关参数（'+notice.fields.length+'）'):row;
    const links=el('div',undefined,'actions');target.append(links);
@@ -123,7 +133,7 @@ function bankVisible(filter,review,selected){return selected||filter==='all'||fi
 
 function renderBankBatch(parent,review){
  review=structuredClone(review);
- const box=details(parent,'Bank-profile gallery / batch selection','岸站剖面总览／集中选择');
+ const box=details(parent,'Bank-profile gallery / batch selection','岸站剖面总览／集中选择');box.id='bank-profiles';
  box.append(el('p',tr('Saved banks are retained by default. Check uncertain profiles together; select only the changes you want to save. Clicking a dot changes the chosen left/right bank. This is a terrain interpretation, not engineering acceptance.','默认保留已存岸站。集中查看不确定剖面，只勾选需要保存的更改；选左／右岸后点击采样点。此处是地形解释，不是工程验收。')));
  renderBankReassessment(box,review);
  const inventory=review.bank_review;

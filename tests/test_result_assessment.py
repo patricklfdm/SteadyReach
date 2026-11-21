@@ -79,6 +79,14 @@ class ResultAssessmentTests(TestCase):
         self.diagnostics['issues'][0]['code']='STRUCTURE_FLOW_IMBALANCE'
         self.assertEqual(self.assess()['level'],1)
 
+    def test_missing_discharge_does_not_invalidate_verified_warning_table(self):
+        self.diagnostics['issues']=[dict(code='FLOW_SPLIT_NOT_FULLY_OBSERVED',severity='EVIDENCE_GAP',station='100')]
+        result=self.assess()
+        self.assertEqual(result['level'],1)
+        codes={r['code'] for r in result['findings']}
+        self.assertIn('FLOW_SPLIT_COVERAGE',codes)
+        self.assertNotIn('WARNING_COVERAGE',codes)
+
     def test_unadopted_wet_candidate_does_not_downgrade_adopted_case(self):
         self.field['changed_ends']=[dict(rs='200',case='rotated',side='L',stage=12,end=11.9,share=51.,baseline_share=45.)]
         r=self.assess()

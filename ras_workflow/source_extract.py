@@ -10,7 +10,7 @@ import zipfile
 from importlib.metadata import PackageNotFoundError, version
 import xml.etree.ElementTree as ET
 
-EXTRACTOR_VERSION = 4
+EXTRACTOR_VERSION = 5
 PDF_PAGE_LIMIT = 200
 PDF_OCR_PAGE_LIMIT = 40
 PDF_TEXT_LIMIT = 600_000
@@ -182,7 +182,13 @@ def document_text(path, scratch, ocr=True):
                     coverage=dict(total_pages=len(reader.pages), inspected_pages=len(methods), ocr_pages=ocr_pages,
                                   status='PARTIAL' if incomplete else 'COMPLETE_TEXT_PASS'))
     if suffix in ('.jpg', '.jpeg', '.png', '.tif', '.tiff'):
-        return dict(text=image_text(path, scratch) if ocr else '', method='Windows OCR',
+        from .local_ocr import NoReadableText
+        try:
+            text=image_text(path,scratch) if ocr else ''
+        except NoReadableText:
+            return dict(text='',method='Windows OCR',visual_only=True,
+                        warnings=['No readable text. Inspect the original image for visible site features.'])
+        return dict(text=text, method='Windows OCR',
                     warnings=['Photo / handwriting recognition is unverified; feature identity requires review'])
     return dict(text='', method='unsupported', warnings=['No extractor for this file type; original retained'])
 

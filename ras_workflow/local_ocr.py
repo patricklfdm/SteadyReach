@@ -7,6 +7,10 @@ from pathlib import Path
 from .common import ROOT, runtime_scratch
 
 
+class NoReadableText(ValueError):
+    """OCR completed but found no text in the image."""
+
+
 async def recognize(path):
     from winrt.windows.storage import StorageFile, FileAccessMode
     from winrt.windows.graphics.imaging import BitmapDecoder, BitmapPixelFormat, BitmapAlphaMode
@@ -35,7 +39,7 @@ def image_text(path,scratch):
         capture_output=True,timeout=35,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
     if result.returncode:raise ValueError('Local OCR unavailable: '+result.stderr.decode('utf-8',errors='replace')[-700:])
     record=json.loads(result.stdout.decode('utf-8-sig'))
-    if not record['text'].strip():raise ValueError('OCR returned no readable text; inspect the retained original or supply a text/CSV transcription')
+    if not record['text'].strip():raise NoReadableText('OCR returned no readable text; inspect the retained original or supply a text/CSV transcription')
     return record['text']
 
 

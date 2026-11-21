@@ -6,7 +6,7 @@ from .result_guidance import BALANCE, NATIVE_GAPS, WET, text
 from .revision_inputs import station_key
 from .river_review import response
 
-RULE_VERSION = 5
+RULE_VERSION = 6
 LEVELS = [
     text('Evidence insufficient', '计算证据不足'),
     text('Internal diagnosis', '可供内部诊断'),
@@ -264,10 +264,17 @@ def assess(model, path, summary, diagnostics, studies, guidance):
     if delivery['status']!='VERIFIED_MAPPED':
         findings.append(finding('MAPPED_DELIVERY',1,'delivery','Refresh or repair the matching mapped packages.',
                                '更新或修复与当前计算对应的两种制图交付包。',**delivery))
-    if not diagnostics or diagnostics.get('warning_coverage') not in FULL or any(r['severity']=='EVIDENCE_GAP' or r['code'] in NATIVE_GAPS for r in issues):
+    if not diagnostics or diagnostics.get('warning_coverage') not in FULL or any(r['code'] in NATIVE_GAPS for r in issues):
         findings.append(finding('WARNING_COVERAGE',1,'native','Complete the native warning and output evidence.',
                                 '补齐原生警告表及输出证据。'))
-    balance=[r for r in issues if r['code'] in BALANCE or r['severity']=='ERROR']
+    if any(r['code']=='FLOW_SPLIT_NOT_FULLY_OBSERVED' for r in issues):
+        findings.append(finding('FLOW_SPLIT_COVERAGE',1,'qa','Check culvert, roadway and other flow paths in the same run. An unreported discharge remains unknown.',
+                                '核对同次计算的涵洞、路面及其他过流路径。缺失流量须保留为未知。',codes=['FLOW_SPLIT_NOT_FULLY_OBSERVED']))
+    other_gaps=sorted({r['code'] for r in issues if r['severity']=='EVIDENCE_GAP' and r['code'] not in NATIVE_GAPS|BALANCE})
+    if other_gaps:
+        findings.append(finding('OUTPUT_EVIDENCE',1,'qa','Inspect the missing diagnostic evidence listed here.',
+                                '请核查下列诊断缺少的证据。',codes=other_gaps))
+    balance=[r for r in issues if r['code']!='FLOW_SPLIT_NOT_FULLY_OBSERVED' and (r['code'] in BALANCE or r['severity']=='ERROR')]
     if balance:
         findings.append(finding('OUTPUT_CONSISTENCY',1,'qa','Resolve native output or flow consistency before sharing results.',
                                 '交出计算结果前，先解决流量或原生输出不一致。',codes=sorted({r['code'] for r in balance})))

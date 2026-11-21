@@ -224,6 +224,12 @@ function renderManual(screen){
  const intake=current.intake;if(!intake){screen.append(button('Prepare terrain and inputs','准备地形与输入',async()=>{await api('prepare',{id:current.id});await open(current.id);}));return;}
  screen.append(el('h2',tr('Build from site materials','从现场资料建立模型')),el('p',tr('Import site materials and check the crossing on the DEM, then prepare an automatic draft. Review the highlighted uncertainties and remaining inputs together before confirming the calculation.','导入现场资料并在 DEM 上核对设施位置，然后自动准备草稿。集中核对标出的不确定项与剩余输入，再确认运算。')));
  const groups=modelPreparationGroups(screen,intake);
+ if(!intake.section_count){
+  const related=!!current.attachments?.length;
+  const next=el('div',undefined,'actions');screen.insertBefore(next,groups.sources.parentElement);
+  if(!related)next.append(button('Add site files','添加现场资料',()=>openModelTool('site-file-import')));
+  next.append(button('Go to automatic draft preparation','前往自动准备草稿',()=>openModelTool('model-automation')));
+ }
  renderSources(groups.sources);renderAutoGeometry(groups.geometry);renderAutomation(groups.inputs);renderParameterNavigator(groups.inputs,intake.fields);
  const guide=details(groups.sources,'What materials are useful?','准备哪些资料？',false);
  table(guide,[tr('Input','输入'),tr('Preferred material / what automation can do','优先资料／可自动处理的部分')],[
@@ -250,9 +256,10 @@ function renderManual(screen){
  const imp=details(screen,'Alternatively, use an existing HEC-RAS model','也可改用已有 HEC-RAS 工程');nativeSelector(imp);
 }
 function renderMapEditor(parent){
+ parent.id='crossing-map';
  anchors={upstream:[],downstream:[],inlet:[],outlet:[],road:[],...(current.map_picks||{})};anchorMode=null;
  const intro=el('p',tr('Pick each exterior reach upstream → downstream (at least two points each). Inlet/outlet picks are optional group centers. Pick the road crest left → right looking downstream. Map points are saved automatically.','上下游外部河段各按流向点选至少两点。进出口为可选的涵孔组中心；路面高点线面向下游从左到右。点位会自动保存。'));parent.append(intro);
- const actions=el('div',undefined,'actions'),canvas=el('div'),status=el('p','', 'status');parent.append(actions,status,canvas);let pointsTimer=null,pointsPromise=null;
+ const actions=el('div',undefined,'actions'),canvas=el('div'),status=el('p','', 'status');parent.append(actions,status,canvas);let pointsTimer=null,pointsPromise=null,pointVersion=0;
  const params=el('div',undefined,'grid');parent.append(params);
  const width=field(params,'xs-width','Section width (ft)','断面宽度（ft）',current.sampling_parameters?.section_width_ft??200,'number');
  const spacing=field(params,'xs-spacing','Section spacing (ft)','断面间距（ft）',current.sampling_parameters?.section_spacing_ft??40,'number');
@@ -263,9 +270,30 @@ function renderMapEditor(parent){
  field(params,'map-opening-group','Opening group for inlet / outlet picks','进出口点选所属涵孔组',0,'select',(current.automation?.groups||[{index:0}]).map(g=>[g.index,'Group '+(g.index+1),'组 '+(g.index+1)]),v=>task(async()=>{await savePoints();groupIndex=Number(v);const saved=groupPicks[String(groupIndex)]||{};anchors.inlet=saved.inlet||[];anchors.outlet=saved.outlet||[];draw();notify(tr('Pick inlet/outlet centers for group ','请点选此组进出口中心：')+(groupIndex+1));}));
  parent.append(el('small',tr('200/40 ft are editable sampling proposals, not site dimensions. Blank wall spacing stays unknown.','200/40 ft 仅为可改的采样建议，不是本站尺寸；空白墙厚保持未知。')));
  const modes=[];
- async function savePoints(){clearTimeout(pointsTimer);if(pointsPromise)await pointsPromise;await save();const picks=JSON.parse(JSON.stringify(anchors));pointsPromise=api('geometry/picks',{id:current.id,revision:current.revision,group_index:groupIndex,picks,wall_gap_ft:gap.value===''?null:Number(gap.value),parameters:{section_width_ft:Number(width.value),section_spacing_ft:Number(spacing.value)}});try{current=await pointsPromise;groupPicks[String(groupIndex)]={inlet:picks.inlet,outlet:picks.outlet};pendingMapSave=null;mapDirty=false;status.textContent=tr('Map points saved. ','地图点位已保存。')+counts();refreshCandidateControls();}finally{pointsPromise=null;}}
+ async function savePoints(){
+  clearTimeout(pointsTimer);
+  if(pointsPromise)return pointsPromise;
+  async function write(){
+   await save();
+   let sent;
+   do{
+    sent=pointVersion;
+    const picks=structuredClone(anchors);
+    current=await api('geometry/picks',{id:current.id,revision:current.revision,group_index:groupIndex,picks,wall_gap_ft:gap.value===''?null:Number(gap.value),parameters:{section_width_ft:Number(width.value),section_spacing_ft:Number(spacing.value)}});
+    groupPicks[String(groupIndex)]={inlet:picks.inlet,outlet:picks.outlet};
+   }while(sent!==pointVersion);
+   clearTimeout(pointsTimer);pendingMapSave=null;mapDirty=false;
+   status.textContent=tr('Map points saved. ','地图点位已保存。')+counts();refreshCandidateControls();
+  }
+  pointsPromise=write();
+  try{await pointsPromise;}finally{pointsPromise=null;}
+ }
  const counts=()=>Object.entries(anchors).map(([k,v])=>`${tr({upstream:'Upstream',downstream:'Downstream',inlet:'Inlet',outlet:'Outlet',road:'Road'}[k],{upstream:'上游',downstream:'下游',inlet:'进口',outlet:'出口',road:'路面'}[k])}: ${v.length}`).join(' · ');
- function queuePoints(){pendingMapSave=savePoints;mapDirty=true;status.textContent=tr('Saving map points… ','正在保存点位… ')+counts();clearTimeout(pointsTimer);pointsTimer=setTimeout(()=>{if(!busy)task(savePoints,tr('Save map points','保存地图点位'));else queuePoints();},700);}
+ function queuePoints(){
+  pointVersion++;pendingMapSave=savePoints;mapDirty=true;
+  status.textContent=tr('Saving map points… ','正在保存点位… ')+counts();clearTimeout(pointsTimer);
+  pointsTimer=setTimeout(()=>savePoints().catch(error=>{status.textContent=tr('Points retained here. Save again: ','点位仍在页面，请重新保存：')+error.message;notify(status.textContent,true);}),700);
+ }
  for(const input of [width,spacing,gap])input.onchange=queuePoints;
  for(const[k,en,zh]of [['upstream','Pick upstream reach','点选上游河段'],['downstream','Pick downstream reach','点选下游河段'],['inlet','Pick inlet center','点选进口组中心'],['outlet','Pick outlet center','点选出口组中心'],['road','Pick road crest','点选路面高点线']]){const b=button(en,zh,async()=>{anchorMode=anchorMode===k?null:k;draw();notify(anchorMode?tr('Click the map to add a point: ','点击地图添加：')+tr(en,zh):tr('Point selection cancelled.','已取消点选状态。'));});b.dataset.mode=k;modes.push(b);actions.append(b);}
  let controller=null;async function load(bounds){return controller.load(bounds);}

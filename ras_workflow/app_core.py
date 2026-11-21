@@ -264,7 +264,8 @@ def prepare(key):
             c=copy.deepcopy(c)
             c['terrain']['buffer_m']=max(c['terrain']['buffer_m'],candidate['buffer_m'])
         persist(m,'PUBLIC_REACH_SEARCH',dict(candidate=entry,status=candidate['status']))
-    t=terrain.acquire(cp,c,dest/'terrain');m['terrain']=t
+    from .app_acquisition import progress
+    t=terrain.acquire(cp,c,dest/'terrain',progress=lambda label:progress(m,label));m['terrain']=t
     records=[]
     try:
         if t.get('products'):records=terrain_metadata.fetch_products(dest/'terrain/terrain.json',dest/'metadata')

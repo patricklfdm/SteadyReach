@@ -74,6 +74,21 @@ class RefreshTests(unittest.TestCase):
             app_core.regenerate('test', 'unexpected')
 
 
+class SitePhotoTests(unittest.TestCase):
+    def test_empty_ocr_is_visual_evidence_but_ocr_failure_remains_an_error(self):
+        from ras_workflow.local_ocr import NoReadableText
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/'site.jpg'
+            with patch.object(source_extract,'image_text',side_effect=NoReadableText('no text')):
+                result=source_extract.document_text(path,temp)
+            self.assertTrue(result['visual_only'])
+            self.assertEqual(result['text'],'')
+            self.assertTrue(result['warnings'])
+            with patch.object(source_extract,'image_text',side_effect=ValueError('OCR unavailable')):
+                with self.assertRaisesRegex(ValueError,'OCR unavailable'):
+                    source_extract.document_text(path,temp)
+
+
 class PdfExtractionTests(unittest.TestCase):
     def extract(self, count, text='Hydraulic source text. ' * 8, **limits):
         pages = [SimpleNamespace(extract_text=lambda: text) for _ in range(count)]

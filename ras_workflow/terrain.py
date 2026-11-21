@@ -4,6 +4,7 @@ Coordinate-only terrain is exploratory until vertical metadata and alignment
 are reviewed. Downloads never become culvert dimensions or flood estimates.
 """
 from contextlib import ExitStack
+from time import monotonic
 import urllib.request, urllib.parse, ssl, json, math, os
 import numpy as np
 import rasterio
@@ -12,7 +13,7 @@ from rasterio.transform import from_origin
 from pyproj import CRS, Transformer, Geod
 from .common import *
 
-def fetch(url,path,budget):
+def fetch(url,path,budget,progress=None):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True);receipt=path.with_name(path.name+'.request.json')
     if receipt.exists() and path.exists():
         old=read(receipt)
@@ -29,10 +30,14 @@ def fetch(url,path,budget):
         declared=int(response.headers.get('Content-Length','0'))
         if declared>budget:raise ValueError(f'File exceeds remaining download budget: {Path(parsed.path).name} requires {declared:,} bytes; {budget:,} bytes remain')
         with part.open('wb') as f:
+            last_update=monotonic()
             while chunk:=response.read(1024*1024):
                 total+=len(chunk)
                 if total>budget:raise ValueError('Stream exceeded download budget')
                 f.write(chunk)
+                if progress and monotonic()-last_update>=5:
+                    progress(total,declared)
+                    last_update=monotonic()
         if declared and total!=declared:raise ValueError('Incomplete Content-Length')
         record=dict(url=url,resolved_url=response.url,time_utc=utc(),size_bytes=total,sha256=sha(part),
                     content_type=response.headers.get('Content-Type'),tls_verification=True)
@@ -140,13 +145,14 @@ def mosaic(files,bbox):
     return dest,crs,transform,overlap
 
 
-def acquire(path,c,folder):
+def acquire(path,c,folder,progress=None):
     t=c.get('terrain',{})
     if t.get('mode')=='not_applicable':
         result=dict(status='NOT_APPLICABLE',reason=t.get('reason') or ('Official 1D benchmark has native station-elevation sections; no georeferenced terrain is asserted' if c.get('case_kind')=='official_benchmark' else 'Terrain acquisition is explicitly disabled in this configuration; no geographic coverage is asserted'))
         save(folder/'terrain.json',result);return result
     if t.get('mode')=='local':return local_info(path,c,folder)
     if t.get('mode')!='usgs':raise ValueError('Unknown terrain mode')
+    if progress:progress('Querying USGS DEM catalog / 正在查询 USGS 地形目录')
     catalog=candidates(path,c,folder/'catalog');budget=t['max_download_bytes'];remaining=budget;network_bytes=0
     groups={};best_fraction=-1.;best=None
     for p in catalog['products']:
@@ -154,7 +160,17 @@ def acquire(path,c,folder):
         if suffix not in ['.tif','.tiff']:raise ValueError('Only actual GeoTIFF products supported; no archive guessed')
         cache=ROOT/'data/workflow_cache'/hashlib.sha256(url.encode()).hexdigest()[:20]/Path(urllib.parse.urlparse(url).path).name
         cached=cache.is_file() and cache.with_name(cache.name+'.request.json').is_file()
-        receipt=fetch(url,cache,remaining);remaining-=receipt['size_bytes']
+        label=('Checking cached DEM / 正在核验缓存地形' if cached else 'Downloading DEM / 正在下载地形')+' · '+cache.name
+        def report_bytes(received,declared):
+            size=f'{received/1048576:.1f}' + (f' / {declared/1048576:.1f}' if declared else '')+' MiB'
+            progress(label+' · '+size)
+        if progress:
+            progress(label)
+            receipt=fetch(url,cache,remaining,progress=report_bytes)
+            progress('Checking elevation coverage / 正在检查高程覆盖 · '+cache.name)
+        else:
+            receipt=fetch(url,cache,remaining)
+        remaining-=receipt['size_bytes']
         if not cached:network_bytes+=receipt['size_bytes']
         if remaining<0:raise ValueError('Aggregate selection exceeds configured download budget')
         metadata=None
