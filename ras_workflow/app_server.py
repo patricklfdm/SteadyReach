@@ -70,6 +70,9 @@ def create():
                     elif route in ('handoff-inspect','handoff-repair'):
                         from . import handoff
                         result=(handoff.inspection if route=='handoff-inspect' else handoff.repair)(key,body)
+                    elif route=='handoff-export':
+                        from .recipient_handoff import export
+                        result=export(key,body)
                     elif route=='pilot-clock':
                         from .pilot_session import update
                         result=update(key,body)
@@ -163,6 +166,9 @@ def create():
                         from .app_revision import create as revise
                         result=revise(key,body)
                     elif route=='start':result=core.start(key,body)
+                    elif route=='recover-run':
+                        from .calculation_recovery import request
+                        result=request(key,body)
                     elif route=='review':
                         from .app_parameters import review
                         result=review(core.model(key))

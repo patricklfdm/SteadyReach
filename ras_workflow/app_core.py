@@ -356,7 +356,7 @@ def compile_native(m):
     return cp
 
 def run(key):
-    from . import cli,intake
+    from . import intake
     from . import app_parameters
     app_parameters.verify_execution(model(key))
     m=model(key);errors=check(m)
@@ -372,9 +372,15 @@ def run(key):
         result=intake.apply(ROOT/m['session'],read((ROOT/m['session']).parent/'draft.json')['revision'],direct_start=True,mapping_enabled=m['gis'])
         if result['status']!='APPLIED':raise ValueError(str(result['errors']))
         cp=ROOT/result['project'];m['run_scenario']=m['scenario']
+    from .calculation_recovery import seal
+    m['compiled_checkpoint']=seal(m,cp)
     m['active_project']=rel(cp);m['phase']='HEC_RAS_REPORTS_DELIVERY';persist(m)
-    # Preserve engine ownership protection and force new plan results.
-    code=cli.execute(cp,m['run_scenario'],fresh=True,timeout=240)
+    execute_approved(m,cp,fresh=True)
+
+def execute_approved(m,cp,*,fresh):
+    from . import cli
+    key=m['id']
+    code=cli.execute(cp,m['run_scenario'],fresh=fresh,timeout=240)
     state=read(cp.parent/'state.json');m['engine_state']=rel(cp.parent/'state.json');m['summary']=state.get('latest_summary')
     m.pop('exports_need_refresh',None)
     m.pop('native_export_attempt',None)
@@ -391,7 +397,7 @@ def run(key):
             traceback.print_exc()  # Preserve the completed solver/export outcome.
 
 def launch(key,action,*,run_review=None):
-    if action not in ('prepare','run','report','delivery','acquire','analyze','study','catalog','native-export','automatic-prepare','check-batch','next-review','field-run'):raise ValueError('Unknown task')
+    if action not in ('prepare','run','resume-run','report','delivery','acquire','analyze','study','catalog','native-export','automatic-prepare','check-batch','next-review','field-run'):raise ValueError('Unknown task')
     global_state=ROOT/'status/app/active.json'
     with lock(ROOT/'status/app/launch.lock'):
         m=model(key);require_idle(m)
@@ -406,6 +412,7 @@ def launch(key,action,*,run_review=None):
             persist(m,'START_REQUEST',dict(policy=POLICY,metadata=m['metadata'],gis=m['gis'],revision=m['revision'],named_engineering_review=False))
         f=folder(key)/'tasks'/unique_id();f.mkdir(parents=True)
         record=f/'task.json';job=dict(project_id=key,action=action,status='RUNNING',started_utc=utc(),log=rel(f/'task.log'))
+        if action=='resume-run':job['resume_of']=m.get('task')
         if action=='run' and m.get('pending_review'):job['confirmed_review']=m['pending_review']['sha256']
         save(record,job)
         with (f/'task.log').open('wb') as log:
@@ -466,6 +473,9 @@ def worker(record):
                 from .app_next_review import execute
                 execute(key)
             elif job['action']=='run':run(key)
+            elif job['action']=='resume-run':
+                from .calculation_recovery import execute
+                execute(key)
             elif job['action']=='native-export':
                 from .app_outputs import retry
                 retry(key)
@@ -557,6 +567,10 @@ def view(key,detail=True):
     if result['status']=='PROCESSING':
         result.update(missing=[],native=None)
         return result
+    if (result.get('job',{}).get('action') in ('run','resume-run') and
+            (result['status'] in ('INTERRUPTED','NEEDS_ATTENTION') or result.get('job',{}).get('status') in ('FAILED','INTERRUPTED'))):
+        from .calculation_recovery import inspect
+        result['calculation_recovery']=inspect(m)
     if m.get('catalog_attempt') and intact([m['catalog_attempt']]):result['catalog_result']=read(ROOT/m['catalog_attempt']['path'])
     if m.get('latest_study') and intact([m['latest_study']]):result['study_result']=read(ROOT/m['latest_study']['path'])
     if m.get('sensitivity_suggestions'):

@@ -31,6 +31,11 @@ test('a ready draft has no artificial outstanding tasks',()=>{
  assert.equal(ui.preparationActions(model).length,0);
  assert.equal(ui.preparationActions({...model,missing:['issue']})[0].kind,'checks');
 });
+test('a coordinate draft with prepared sections offers automatic derivation once before requesting site data',()=>{
+ const draft={route:'coordinates',automation:{},intake:{section_count:8,fields:[field('c.scenarios.0.profiles.0.flow_cfs',null)]}};
+ assert.equal(ui.preparationActions(draft)[0].kind,'derive');
+ assert.equal(ui.preparationActions({...draft,preparation_result:{}})[0].kind,'source');
+});
 test('blocking automation checks remain visible on complete fields and spatial checks appear once',()=>{
  const crossing={code:'INTERSECTING_SECTIONS',sections:[1,2]};
  const dependency={code:'DERIVED_INPUT_CHANGED',blocking:true,field:'g.structure.road.width_ft'};

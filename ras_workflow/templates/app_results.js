@@ -1,5 +1,36 @@
 'use strict';
 function guidanceTarget(node,key){node.id='qa-tool-'+key;return node;}
+function renderTaskRecovery(parent,m){
+ const plan=m.calculation_recovery,job=m.job||{};
+ if(!m.errors?.length&&!plan)return;
+ if(m.errors?.length)parent.append(el('p',m.errors.join('\n'),'warning'));
+ const retry=async(route,body={})=>{await api(route,{id:m.id,revision:m.revision,...body});await open(m.id);};
+ if(plan){
+  if(plan.mode==='RESTORE_EVIDENCE'){
+   parent.append(el('p',tr('Restore the matching approved files, then reopen the project. ','请恢复匹配的已确认文件，然后重新打开项目。')+plan.error,'warning'));
+  }else if(plan.mode==='REVIEW_INPUTS'){
+   parent.append(button('Review inputs before restarting','重新开始前核对输入',showFinalReview));
+  }else if(plan.mode==='RESTORE_RESULT'){
+   parent.append(button('Recover saved solver result without recalculating','恢复已保存求解结果（无需重算）',()=>retry('recover-run',{mode:plan.mode,task:m.task}),'primary'));
+  }else if(plan.mode==='RESUME_COMPUTATION'){
+   parent.append(el('p',tr('The saved inputs and original confirmation match. Resume the approved computation after checking the error above.','已核验封存输入和原确认记录。请查看错误详情，然后继续本次已确认的计算。')),
+    button('Confirm and resume approved computation','确认继续已批准的计算',()=>retry('recover-run',{mode:plan.mode,task:m.task,confirmed:true}),'primary'));
+  }
+  return;
+ }
+ if(m.feedback_spec||!['FAILED','INTERRUPTED'].includes(job.status)&&m.status!=='INTERRUPTED')return;
+ const steps={
+  prepare:['Retry terrain and input preparation','重试地形与输入准备'],analyze:['Retry parsing saved materials','重新解析已保存资料'],
+  acquire:['Retry public data lookup','重试公共资料查询'],'automatic-prepare':['Retry automatic draft preparation','重试自动准备草稿'],
+  report:['Retry reports from saved results','用已保存结果重试报告'],delivery:['Retry delivery from saved results','用已保存结果重试交付'],
+  'native-export':['Retry native table export','重试原生结果表导出'],'next-review':['Prepare the next review again','重新准备下一轮复核']};
+ if(steps[job.action])parent.append(button(...steps[job.action],()=>retry(job.action)));
+ else if(job.action==='catalog'&&m.selected_catalog)parent.append(button('Retry the selected catalog record','重试所选资料目录',()=>retry('catalog-import',{url:m.selected_catalog})));
+ else if(job.action==='study'||job.action==='check-batch'){
+  const batch=job.action==='check-batch',entry=batch?m.active_check_batch?.plan:m.active_study?.study;
+  if(entry)parent.append(button('Resume the previously confirmed batch','继续此前确认的批次',()=>retry(batch?'checks-start':'study-start',{token:entry.sha256,confirmed:true,retry:true})));
+ }
+}
 function renderDeliveryRecovery(parent,delivery){
  if(!delivery?.error)return;
  parent.append(el('p',tr('Calculation and reports are saved. Resolve the export error below, then retry delivery without solving. A temporary map-service failure may only need a retry.','计算和报告已保存。请处理下方导出错误，再单独重试交付包，无需重新求解。地图服务临时故障可先重试。'),'warning'),
@@ -14,8 +45,22 @@ function renderRevisionComparison(parent,comparison){
   return;
  }
  const old=comparison.diagnostics?.previous,now=comparison.diagnostics?.current;
- if(old?.status==='VERIFIED'&&now?.status==='VERIFIED'&&(now.counts?.WET_SECTION_EDGE||0)>(old.counts?.WET_SECTION_EDGE||0)){
-  box.append(el('p',tr('More section ends are wet after this revision. Check the new locations against the previous calculation before selecting this geometry.','修订后的湿端增加。选用本版几何前，请对照前次计算核查新增湿端位置。'),'warning'));
+ const review=comparison.review;
+ if(review){
+  const metric=(d,key)=>d?.severity?.[key]??'—';
+  table(box,[tr('Review before choosing an edition','选用版本前核对'),tr('Previous','上次'),tr('Current','本次')],[
+   [tr('Native warnings (all profiles)','原生警告（全部工况）'),metric(old,'WARNING'),metric(now,'WARNING')],
+   [tr('Native errors','原生错误'),metric(old,'ERROR'),metric(now,'ERROR')],
+   [tr('Wet ends across profiles','各工况过水端点数'),old?.wet_ends?.length??'—',now?.wet_ends?.length??'—']]);
+  for(const item of review.actions)box.append(el('p',tr(item.en,item.zh),'warning'));
+  const peak=review.maximum_at_verified_center;
+  if(peak)box.append(el('p',peak.profile+' · RS '+peak.station+tr(' · signed WSE change ',' · 水位变化（含方向）')+format(peak.change)+' ft'));
+  if(review.increased_control_codes.length)box.append(el('small',review.increased_control_codes.join(', ')));
+  if(now?.wet_ends?.length){
+   const wet=details(box,'Locate current wet ends','定位本次过水端点');
+   table(wet,[tr('Profile','工况'),'RS',tr('Side','岸侧'),tr('Water above endpoint (ft)','高于端点（ft）')],now.wet_ends.map(e=>
+    [e.profile,e.station,e.side==='left'?tr('Left','左'):tr('Right','右'),format(e.excess_ft)]));
+  }
  }
  const context=comparison.input_context;
  if(context?.status==='VERIFIED'){
@@ -69,7 +114,8 @@ function renderRevisionComparison(parent,comparison){
    [tr('Combined diagnostic records','合并诊断记录'),old.issue_count,now.issue_count]]);
   const codes=[...new Set([...Object.keys(old.counts),...Object.keys(now.counts)])].sort();
   const counts=details(box,'Diagnostic changes by category','按类别查看诊断变化');
-  table(counts,[tr('Category','类别'),tr('Previous','上次'),tr('Current','本次')],codes.map(code=>[code,old.counts[code]||0,now.counts[code]||0]));
+  const amount=(d,code)=>d.counts[code]??(code.startsWith('NATIVE_')&&d.severity==null?'—':0);
+  table(counts,[tr('Category','类别'),tr('Previous','上次'),tr('Current','本次')],codes.map(code=>[code,amount(old,code),amount(now,code)]));
  }else box.append(el('p',tr('Diagnostic comparison is incomplete. ','诊断对比尚不完整。')+[old?.error,now?.error].filter(Boolean).join(' '),'warning'));
  box.append(el('p',tr('Matched section IDs use hash-verified native water levels. Review any changed section positions. The workflow flags changes above ','匹配断面编号采用已核验哈希的原生水位。请核对断面位置改动。工作流将超过 ')+
   comparison.threshold_ft+tr(' ft for review. This threshold supports screening. Hydraulic convergence, source adequacy and engineering acceptance require separate assessment.',' ft 的变化标为待复核，此阈值用于筛查。水力收敛、资料充分性与工程验收仍需分别判断。')));

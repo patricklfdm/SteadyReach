@@ -59,19 +59,31 @@ class RevisionComparison(unittest.TestCase):
         result=self.compare(new=new,water=[{'Q100':{'200':20.}},{'Q200':{'200':21.}}])
         self.assertEqual(result['status'],'COMPARISON_INCOMPATIBLE')
 
+    def test_station_formatting_matches_but_ambiguous_pairs_are_withheld(self):
+        result=self.compare(water=[{'Q100':{'200.0':20.}},{'Q100':{'200.00':20.25}}])
+        self.assertEqual(result['profiles'][0]['matched_sections'],1)
+        self.assertEqual(result['profiles'][0]['added_stations'],[])
+        result=self.compare(water=[{'Q100':{'200':20.,'200.0':21.}},{'Q100':{'200.00':20.25}}])
+        self.assertEqual(result['status'],'COMPARISON_INCOMPATIBLE')
+
     def test_native_supplement_counts_replace_partial_diagnostics(self):
         current=summary();current['hydraulics']['diagnostics']=dict(path='qa.json')
         current['native_supplement']={}
         # A real manifest is truthy. The fixture isolates the diagnostic routing.
         current['native_supplement']['path']='native.json'
-        full=dict(counts={'NATIVE_WARNING':4},issues=[{}]*4,warning_coverage='FULL')
+        current['hydraulics']['run_id']='current'
+        scope='ALL_COMPUTED_PROFILES_VERIFIED_SINGLE_REACH'
+        full=dict(counts={'NATIVE_WARNING':4},issues=[{}]*4,warning_coverage=scope)
+        supplement=dict(summary=dict(path='bound.json'),warning_scope=scope,
+                        warnings=dict(records=[{}]*4,counts={'WARNING':3,'NOTE':1}))
         with patch.object(app_revision,'intact',return_value=True), \
-             patch.object(app_revision,'read',return_value={}), \
-             patch('ras_workflow.app_outputs.validate',return_value=dict(warnings=dict(records=[{}]*4))), \
+             patch.object(app_revision,'read',side_effect=[dict(run_id='current',sources=[{}]),current]), \
+             patch('ras_workflow.app_outputs.validate',return_value=supplement), \
              patch('ras_workflow.app_outputs.diagnostics',return_value=full):
             result=app_revision._diagnostic_summary(current)
         self.assertEqual(result['native_messages'],4)
-        self.assertEqual(result['warning_coverage'],'FULL')
+        self.assertEqual(result['warning_coverage'],scope)
+        self.assertEqual(result['severity'],dict(WARNING=3,NOTE=1,ERROR=0))
         self.assertEqual(result['counts'],{'NATIVE_WARNING':4})
 
 

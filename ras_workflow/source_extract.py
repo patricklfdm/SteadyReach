@@ -30,7 +30,7 @@ def runtime_signature():
 def reuse_document(cached, reuse_failed, runtime):
     if not cached or cached.get('extractor_version') != EXTRACTOR_VERSION:
         return False
-    partial_ocr = any('ocr failed' in warning.lower() for warning in cached.get('warnings', []))
+    partial_ocr = any(isinstance(warning,str) and 'ocr failed' in warning.lower() for warning in cached.get('warnings', []))
     if cached.get('status') == 'INSPECTED' and not partial_ocr:
         return True
     return reuse_failed and cached.get('extraction_runtime') == runtime
@@ -258,7 +258,10 @@ def parameter_rows(rows,allowed):
             if f['kind']=='choice' and value not in f['options']:raise ValueError('Unsupported choice')
             required_unit=f.get('unit') or ''
             if required_unit and r.get('unit','').strip()!=required_unit:raise ValueError('Unit must explicitly match '+required_unit)
-            result.append(dict(field=key,value=value,row=i+2,evidence_class='assumed' if r.get('evidence_class')=='assumed' else 'reported',datum=r.get('datum'),basis=r.get('source') or 'Explicit parameter CSV row'))
+            classification=(r.get('evidence_class') or '').strip().lower() or 'reported'
+            if classification not in ('reported','assumed'):
+                raise ValueError('Use reported or assumed for evidence_class')
+            result.append(dict(field=key,value=value,row=i+2,evidence_class=classification,datum=r.get('datum'),basis=r.get('source') or 'Explicit parameter CSV row'))
         except (ValueError,TypeError) as e:errors.append(dict(row=i+2,field=key,error=str(e)))
     return result,errors
 

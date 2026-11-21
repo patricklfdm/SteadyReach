@@ -29,3 +29,9 @@ The target is a single-reach 1D steady workflow starting with a location, site r
 | 4. Recovery and release | Route preparation, solver and export failures to the appropriate recovery step; replay frozen inputs and bind newly computed outputs to the new packages. | Midway and Siletz. Exercise interruption or missing-file recovery, duplicate submission protection and same-machine native replay. Compare native water levels and flows. |
 
 Each stage uses Midway and a different river drawn at random without replacement from five prior sites. The stage assignments were drawn before implementation. Record real inputs, actions and verifiable outputs for every stage. Report software acceptance separately from hydraulic approval, independent engineer timing and cross-machine release qualification.
+
+### Results on the acceptance workstation
+
+All four stages were exercised in isolated Windows copies. Returned worksheets preserved the source classification and identified remaining inputs. Both Midway and Merced had revisions with fewer warnings and a water-level change exceeding the 0.10 ft screening threshold. The recipient pages opened the matching reports, exhibits and project files. Removing an exhibit produced an error naming its package and relative path. Independent same-input runs reproduced the baseline water level and flow at all seven Midway sections and all 18 Siletz sections, with zero maximum absolute difference at output precision.
+
+This evidence supports an engineer-supervised pilot on the tested workstation. Independent engineering review, a timed project by a new user and cross-machine qualification remain open.

@@ -14,6 +14,30 @@ def contains(outer, inner):
             and outer[1]<=inner[1]<inner[3]<=outer[3])
 
 
+def parent_mosaic(configuration,crs,bounds):
+    """A revision may retain its parent's dated map background over the identical extent."""
+    origin=configuration.get('revision_origin') or {}
+    entry=origin.get('summary')
+    if not entry or not intact([entry]):
+        return None
+    from .site_delivery import latest,cached_imagery
+    try:
+        path=safe_path(ROOT,entry['path'])
+        parent=read(path)['configuration']
+        if parent.get('project_id')!=origin.get('project_id'):
+            return None
+        package=latest(path)
+        if not package or not package.get('mapped') or package.get('summary')!=entry:
+            return None
+        acquired=cached_imagery(package['complete']['path'],crs,bounds,allow_new_extent=True)
+        if acquired and acquired['acquisition'].get('service')==SERVICE:
+            return dict(acquired,parent_summary=entry)
+    except (KeyError,ValueError,OSError,TypeError):
+        # An unusable prior mosaic leaves the normal catalogue search available.
+        return None
+    return None
+
+
 def _live_selection(query, crs, bounds):
     if not (query/'acquisition.json').is_file():
         return None

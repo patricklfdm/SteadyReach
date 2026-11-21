@@ -28,7 +28,10 @@ function preparationActions(model){
  if(!intake.section_count)actions.push({kind:'layout',fields:[]});
  else if(geometry.length)actions.push({kind:'repair',fields:[],geometry});
  if(blocking.length)actions.push({kind:'dependencies',fields:[],issues:blocking});
- group('conflict',fields.filter(f=>f.source_conflict));
+ group('conflict',fields.filter(f=>f.source_conflict&&(f.required||!f.missing)));
+ if(remaining.length&&intake.section_count&&model.route==='coordinates'&&model.automation&&!model.preparation_result){
+  actions.push({kind:'derive',fields:[]});
+ }
  group('source',remaining.filter(f=>physical(f.key)&&!f.parameter_candidates?.length));
  group('banks',remaining.filter(f=>f.key.endsWith('.bank_stations_ft')));
  group('candidates',remaining.filter(f=>!f.key.endsWith('.bank_stations_ft')&&f.parameter_candidates?.length));
@@ -54,6 +57,7 @@ function renderPreparationActions(parent,actions){
   layout:['Lay out the river and cross sections','布置河线和断面'],
   repair:['Resolve section geometry','修正断面几何'],
   dependencies:['Resolve blocking model checks','处理阻塞计算的模型检查'],
+  derive:['Try automatic preparation with the available sources','用已有资料自动补齐草稿'],
   conflict:['Resolve conflicting sources','核对有冲突的来源'],
   source:['Find missing site or design data','补充缺少的现场或设计资料'],
   banks:['Locate missing banks','核对缺少的岸站'],
@@ -79,6 +83,9 @@ function renderPreparationActions(parent,actions){
   }else if(kind==='dependencies'){
    for(const issue of action.issues)host.append(el('p',tr(issue.message,issue.zh)));
    host.append(button('Open model checks','打开模型检查',()=>openModelTool('model-automation')));
+  }else if(kind==='derive'){
+   host.append(el('p',tr('Use the saved materials and terrain to propose inputs first. Review assumptions together before starting HEC-RAS.','先用已保存的资料和地形推导候选参数。开算前再集中核对假设。')),
+    button('Prepare an automatic draft','自动准备草稿（含标注的估计值）',async()=>{await saveAll();await api('automatic-prepare',{id:model.id,revision:current.revision});await open(model.id);},'primary'));
   }else if(kind==='checks'){
    host.append(button('Locate the failed checks','定位检查项',showFinalReview));
   }else{
@@ -242,7 +249,7 @@ function renderSources(parent){
   const docs=details(card,'Original documents and extracted text','原件与提取文本',false);
   for(const doc of a.documents){const f=doc.source,box=details(docs,f.original_name||f.path.split('/').at(-1),f.original_name||f.path.split('/').at(-1));const link=el('a',tr('Open original ↗','查看原件 ↗'));link.href='file/'+f.path;link.target='_blank';box.append(link,el('p',(doc.method||'')+' · '+sourceStatus(doc.status)));if(doc.coverage)box.append(el('p',doc.coverage.inspected_pages+' / '+doc.coverage.total_pages+tr(' pages inspected; OCR attempts ',' 页已尝试解析；OCR 尝试 ')+doc.coverage.ocr_pages));if(doc.error)box.append(el('p',doc.error,'warning'));for(const w of doc.warnings||[])box.append(el('p',typeof w==='string'?w:JSON.stringify(w),'warning'));if(doc.text)box.append(el('pre',doc.text));}
   for(const survey of a.surveys)renderSurvey(card,survey);
- }else if(current.attachments.length){const docs=details(card,'Saved source files','已保存的资料');for(const f of current.attachments){const p=el('p'),link=el('a',f.original_name);link.href='file/'+f.path;link.target='_blank';p.append(link);docs.append(p);}}
+ }else if(current.attachments.length){const docs=details(card,'Saved source files','已保存的资料');for(const f of current.attachments){const p=el('p'),link=el('a',f.original_name||f.path.split('/').at(-1));link.href='file/'+f.path;link.target='_blank';p.append(link);docs.append(p);}}
 }
 function renderSurvey(parent,s){
  const key=s.source.sha256,box=details(parent,'Survey: '+s.source.original_name+' · '+s.points.length+' points','测量：'+s.source.original_name+' · '+s.points.length+' 个点',false),context=s.context||{};

@@ -1,3 +1,13 @@
+function renderRecipientHandoff(parent){
+ const output=el('div');output.setAttribute('aria-live','polite');
+ parent.append(button('Verify packages and create recipient guide','校验双包并生成收件人说明',async()=>{
+  const id=current.id,revision=current.revision;
+  const info=await api('handoff-export',{id,revision,summary_hash:current.summary.sha256});
+  output.replaceChildren(el('p',tr('English and Chinese opening guides saved','已保存中英文打开说明')+' · L'+info.level+' · '+info.run_id,'status'),
+   el('p',tr('Copy this folder alongside Complete and Minimal. Open Start_EN.html or Start_zh-CN.html.','请将本文件夹与 Complete、Minimal 并列转交。双击 Start_zh-CN.html 或 Start_EN.html 即可阅读。')),
+   button('Open recipient guide folder','打开收件人说明文件夹',()=>api('open-folder',{id,path:info.folder})));
+ }),output);
+}
 function renderHandoff(parent) {
  const box=details(parent,'Handoff, local files and optional pilot timing','交付预览、本地文件与可选试点计时');
  const area=el('div');box.append(area);

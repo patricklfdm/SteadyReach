@@ -275,6 +275,8 @@ def generate(summary_path,output,reuse_package=None,refresh_imagery_extent=False
             if image_settings.get('mode')=='usgs_naip':
                 acquired=cached_imagery(reuse_package,crs,bounds,allow_new_extent=refresh_imagery_extent) if reuse_package else None
                 from . import imagery_recovery
+                if not acquired:
+                    acquired=imagery_recovery.parent_mosaic(c,crs,bounds)
                 evidence=full/'Evidence/Imagery'
                 previous_query=run.parent/'delivery/Complete/Evidence/Imagery'
                 query=None

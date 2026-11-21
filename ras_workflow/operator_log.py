@@ -9,7 +9,7 @@ def classify(route, body):
     counts = Counter()
     confirmations = {'revision','start','study-start','checks-start','geometry/auto-apply','geometry/repair-apply',
                      'geometry/bank-proposal-apply','resolve-dependencies','candidate','use-native-values'}
-    requests = {'create','prepare','automatic-prepare','acquire','analyze','attach','catalog-import','native',
+    requests = {'create','prepare','automatic-prepare','acquire','analyze','attach','catalog-import','native','handoff-export','recover-run',
                 'sources/folder','sources/survey','sources/points','river-observations','opening-associations','review','next-review',
                 'study-prepare','checks-prepare','study-suggest','revision','report','delivery','native-export','native-outputs',
                 'geometry/auto-prepare','geometry/repair-preview','geometry/banks','geometry/generate','geometry/picks',
@@ -45,7 +45,7 @@ def classify(route, body):
         counts['section_adjustments_submitted'] = len(body.get('changes',[]))
     if route in confirmations:
         counts['decision_requests'] = 1
-    if route in ('start','study-start','checks-start'):
+    if route in ('start','study-start','checks-start') or (route=='recover-run' and body.get('mode')=='RESUME_COMPUTATION' and body.get('confirmed') is True):
         counts['compute_consents'] = 1
     return dict(counts)
 

@@ -138,6 +138,8 @@ def analyze(key,network=False,reuse_failed=False):
                           auto=len(matches_at_gages)==1 and match['distance_m']<=25,
                           sources=attempt['sources'],requires_applicability_review=len(matches_at_gages)>1)
     for i,entry in enumerate(m['attachments']):
+        if not entry.get('original_name'):
+            entry=dict(entry,original_name=Path(entry['path']).name)
         progress(m,f'Inspecting material {i+1}/{len(m["attachments"])} / 解析资料：'+entry['original_name'])
         if not intact([entry]):
             documents.append(dict(source=entry,status='SOURCE_CHANGED',warnings=['File missing or changed; reimport the current source']));continue

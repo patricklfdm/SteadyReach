@@ -17,3 +17,5 @@ For a site without an existing model, use [consolidated preparation](AUTOMATION_
 Use the [Windows installation guide](WINDOWS_SETUP_EN.md), then the [user manual](USER_GUIDE_EN.md). Daily entry: `start_workflow.cmd`.
 
 After the run, see [Results, revisions and sensitivity](RESULTS_REVIEW_EN.md) for optional native output completion, one-click QGIS preview and safe recalculation.
+
+For an incomplete draft, start with **What should I do next?** Follow the link to section repair, automatic preparation or source review. If site data are needed, choose **Export missing site data (CSV)**. Fill values in the listed units, import the worksheet under site materials and select the candidates. After calculation, choose **Reports and maps → Verify packages and create recipient guide** for bilingual reading instructions tied to this run.

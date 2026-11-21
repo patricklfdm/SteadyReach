@@ -72,6 +72,8 @@ def create_draft(parent,body,preparation_task=None):
     draft.update(consent=False,reviewer=None,basis='Editable revision of an existing conditional calculation; confirm all current parameters before a new solve.')
     save(new_sp.parent/'draft.json',draft)
     m=copy.deepcopy(parent)
+    m.pop('compiled_checkpoint',None)
+    m.pop('recovered_task',None)
     for field in ('summary','engine_state','active_project','latest_reports','latest_delivery','previous_delivery','run_confirmation','pending_review','task','run_scenario','exports_need_refresh','pending_study','active_study','latest_study','latest_spacing','latest_coverage','latest_coverage_exports','automatic_preparation','automatic_options','exit_code','sensitivity_suggestions','latest_reports_binding','pending_check_batch','active_check_batch','latest_check_batch','automatic_next_review',
                   'latest_geometry_comparison','latest_warning_study','river_observations','latest_observed_event','observed_event_history','native_export_attempt','assessment_area','extent_review','extent_decision'):
         m.pop(field,None)
@@ -111,6 +113,11 @@ def compare(m,summary):
     except (ValueError,KeyError,OSError) as error:
         return dict(status='COMPARISON_UNAVAILABLE',rows=[],error=str(error))
     from .revision_inputs import collect, station_key
+    def station_id(value):
+        try:return station_key(value)
+        except (TypeError,ValueError):return str(value).strip()
+    def station_index(values):
+        return {station_id(raw):raw for raw in values}
     input_context=collect(old,summary)
     locations={r['station']:r for r in input_context.get('geometry',{}).get('sections',[])}
     a={p['profile_id']:p for p in previous['profiles']};rows=[];sections=[];profiles=[]
@@ -130,19 +137,23 @@ def compare(m,summary):
             if location_key:
                 location_status='UNVERIFIED'
                 if old_rs is not None and new_rs is not None:
-                    location_status='MOVED' if station_key(old_rs)!=station_key(new_rs) else locations.get(station_key(new_rs),{}).get('location_status','UNVERIFIED')
+                    location_status='MOVED' if station_id(old_rs)!=station_id(new_rs) else locations.get(station_id(new_rs),{}).get('location_status','UNVERIFIED')
             moved=location_status=='MOVED'
             rows.append(dict(profile=p['profile_id'],metric=field,previous=x,current=y,
                 previous_station=old_rs,current_station=new_rs,location_status=location_status,
                 location_changed=moved,change=y-x if finite(x) and finite(y) and location_status in ('SAME_CENTER','NOT_LOCATION_SPECIFIC') else None))
         left,right=old_water[p['profile_id']],new_water[p['profile_id']]
+        old_ids,new_ids=station_index(left),station_index(right)
+        if len(old_ids)!=len(left) or len(new_ids)!=len(right):
+            return dict(status='COMPARISON_INCOMPATIBLE',rows=[],error='Ambiguous native station identifiers after matching numeric precision')
         matched=[]
-        for rs in left:
-            if rs not in right:continue
-            if not finite(left[rs]) or not finite(right[rs]):
+        for key,prior_rs in old_ids.items():
+            if key not in new_ids:continue
+            rs=new_ids[key]
+            if not finite(left[prior_rs]) or not finite(right[rs]):
                 return dict(status='COMPARISON_UNAVAILABLE',rows=[],error='Nonfinite native water-surface value')
-            location=locations.get(station_key(rs),{})
-            matched.append(dict(profile=p['profile_id'],station=rs,previous=left[rs],current=right[rs],change=right[rs]-left[rs],
+            location=locations.get(key,{})
+            matched.append(dict(profile=p['profile_id'],station=rs,previous=left[prior_rs],current=right[rs],change=right[rs]-left[prior_rs],
                 location_status=location.get('location_status','UNVERIFIED'),center_shift_ft=location.get('center_shift_ft'),
                 changed_geometry_fields=location.get('changed_fields',[])))
         sections+=matched
@@ -150,18 +161,23 @@ def compare(m,summary):
         coincident=[r for r in matched if r['location_status']=='SAME_CENTER']
         profiles.append(dict(profile=p['profile_id'],matched_sections=len(matched),maximum=maximum,
             verified_center_count=len(coincident),maximum_at_verified_centers=max(coincident,key=lambda r:abs(r['change'])) if coincident else None,
-            added_stations=sorted(right.keys()-left.keys()),removed_stations=sorted(left.keys()-right.keys()),
+            added_stations=[rs for k,rs in new_ids.items() if k not in old_ids],removed_stations=[rs for k,rs in old_ids.items() if k not in new_ids],
             exceeds_review_threshold=bool(maximum and abs(maximum['change'])>THRESHOLDS['sensitivity_hw_ft'])))
     if not profiles:
         return dict(status='COMPARISON_INCOMPATIBLE',rows=[],error='No matching profiles')
     from .river_review import overbank_changes
     overbanks = overbank_changes(old,summary,locations) if current.get('model_type')=='river' else None
+    diagnostics=dict(previous=_diagnostic_summary(old),current=_diagnostic_summary(summary))
+    from .revision_review import interpret
+    review=interpret(diagnostics,profiles,old_water.keys()==new_water.keys(),THRESHOLDS['sensitivity_hw_ft'])
+    diagnostic_sources=[ref for s,d in ((old,diagnostics['previous']),(summary,diagnostics['current']))
+                        if d['status']=='VERIFIED' for ref in (s['hydraulics'].get('diagnostics'),s.get('native_supplement')) if ref]
     return dict(status='COMPARISON_NOT_ACCEPTANCE',parent=parent,rows=rows,cross_sections=sections,profiles=profiles,input_context=input_context,overbank_changes=overbanks,
         threshold_ft=THRESHOLDS['sensitivity_hw_ft'],
         unmatched_previous_profiles=sorted(a.keys()-new_water.keys()),
         unmatched_current_profiles=sorted(new_water.keys()-a.keys()),
-        diagnostics=dict(previous=_diagnostic_summary(old),current=_diagnostic_summary(summary)),
-        sources=[parent['summary'],previous['raw_hdf'],previous['raw_controller'],current['raw_hdf'],current['raw_controller']]+input_context['sources'])
+        diagnostics=diagnostics,review=review,
+        sources=[parent['summary'],previous['raw_hdf'],previous['raw_controller'],current['raw_hdf'],current['raw_controller']]+input_context['sources']+diagnostic_sources)
 
 
 def _diagnostic_summary(summary):
@@ -172,13 +188,26 @@ def _diagnostic_summary(summary):
         return dict(status='UNAVAILABLE',error='Diagnostic evidence missing or changed')
     try:
         data=read(ROOT/entry['path'])
+        if data.get('run_id')!=hyd.get('run_id') or not data.get('sources') or not intact(data['sources']):
+            raise ValueError('Diagnostic sources differ from this run')
         native_count=None
+        severity=None
         if summary.get('native_supplement'):
-            from .app_outputs import validate,diagnostics
+            from .app_outputs import validate,diagnostics,FULL_SCOPES
             supplement=validate(summary['native_supplement'])
+            bound=read(ROOT/supplement['summary']['path'])['hydraulics']
+            if (bound['run_id'],bound['raw_hdf'])!=(hyd['run_id'],hyd['raw_hdf']):
+                raise ValueError('Native messages belong to a different run')
             data=diagnostics(hyd,supplement)
-            native_count=len((supplement.get('warnings') or {}).get('records',[]))
-        return dict(status='VERIFIED',counts=data['counts'],warning_coverage=data['warning_coverage'],
+            warnings=supplement.get('warnings')
+            if warnings is not None:
+                native_count=len(warnings['records'])
+                if supplement['warning_scope'] in FULL_SCOPES:
+                    severity={s:warnings['counts'].get(s,0) for s in ('WARNING','NOTE','ERROR')}
+        wet_ends=[dict(profile=row['profile'],station=row['station'],side=row['evidence']['side'],
+                       excess_ft=row['evidence']['exceedance_ft'])
+                  for row in data['issues'] if row.get('code')=='WET_SECTION_EDGE']
+        return dict(status='VERIFIED',counts=data['counts'],warning_coverage=data['warning_coverage'],wet_ends=wet_ends,severity=severity,
                     native_messages=native_count,issue_count=len(data['issues']))
-    except (ValueError,KeyError,OSError) as error:
+    except (ValueError,KeyError,TypeError,OSError) as error:
         return dict(status='UNAVAILABLE',error=str(error))

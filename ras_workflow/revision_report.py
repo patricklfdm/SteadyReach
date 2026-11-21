@@ -54,6 +54,12 @@ def compose(doc,data,tr,full):
         else:
             doc.add_paragraph(profile['profile']+tr(' has no verified coincident-center water-level comparison.',' 无可核验同中心位置的水位对比。'))
     old,now=comparison['diagnostics']['previous'],comparison['diagnostics']['current']
+    if comparison.get('review'):
+        for action in comparison['review']['actions']:
+            doc.add_paragraph(tr(action['en'],action['zh']))
+        for key,en,zh in [('WARNING','Native warnings','原生警告'),('ERROR','Native errors','原生错误')]:
+            levels=[value((d.get('severity') or {}).get(key)) for d in (old,now)]
+            doc.add_paragraph(tr(en,zh)+' · '+' → '.join(levels))
     if old['status']==now['status']=='VERIFIED':
         doc.add_paragraph(tr('Native messages, previous/current: ','原生信息条数，上次／本次：')+str(old['native_messages'])+' / '+str(now['native_messages'])+
                           tr('. Fewer messages do not establish hydraulic acceptance.','；信息减少不代表水力验收通过。'))
