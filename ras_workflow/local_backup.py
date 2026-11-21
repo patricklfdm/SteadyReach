@@ -85,6 +85,11 @@ def verify_archive(path,dest=None):
         hashes=record['files']
         if record['schema']!='steadyreach_local_backup_1' or set(hashes)!=set(names)-{'BACKUP.json'}:
             raise ValueError('Archive and manifest disagree')
+        if dest is not None:
+            required=sum(archive.getinfo(k).file_size for k in hashes)
+            free=shutil.disk_usage(dest).free
+            if required>free:
+                raise OSError(f'Restore volume has {free:,} bytes free; the uncompressed files require at least {required:,} bytes. Choose another volume or free space.')
         for k,expected in hashes.items():
             member=member_key(k)
             with archive.open(k) as stream:

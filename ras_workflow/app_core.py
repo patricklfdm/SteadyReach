@@ -483,6 +483,9 @@ def worker(record):
         job['status']='FINISHED'
     except Exception as e:
         traceback.print_exc();job.update(status='FAILED',error=str(e));m=model(key)
+        if job['action']=='delivery':
+            from .site_delivery import failure_kind
+            job['recovery_kind']=failure_kind(e)
         m.update(status='NEEDS_ATTENTION',errors=[str(e)]);persist(m,'TASK_FAILED',dict(error=str(e)))
     job.update(finished_utc=utc(),elapsed_seconds=round(time.monotonic()-started,3));save(path,job)
     return 0 if job['status']=='FINISHED' else 1
@@ -663,7 +666,7 @@ def view(key,detail=True):
             result['delivery']=None
             task=result.get('job',{})
             if task.get('action')=='delivery' and task.get('status')=='FAILED':
-                result['delivery']=dict(status='INCOMPLETE',error=task.get('error','Delivery export failed'))
+                result['delivery']=dict(status='INCOMPLETE',error=task.get('error','Delivery export failed'),recovery_kind=task.get('recovery_kind'))
 
     return result
 

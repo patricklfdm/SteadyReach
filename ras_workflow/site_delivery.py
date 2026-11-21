@@ -5,6 +5,8 @@ No prior Mapper results, screenshots, or computed values are used as new output.
 """
 from pathlib import Path
 import json, math, os, shutil, subprocess
+import errno
+from urllib.error import HTTPError, URLError
 import h5py
 import rasterio
 from pyproj import CRS
@@ -12,6 +14,18 @@ from .common import ROOT, read, save, sha, item, intact, rel, safe_path, utc, di
 from . import delivery_spatial as spatial
 
 SCHEMA='site_delivery_1.0'
+
+
+def failure_kind(error):
+    if getattr(error,'errno',None)==errno.ENOSPC or getattr(error,'winerror',None) in (39,112):
+        return 'DISK_SPACE'
+    if isinstance(error,TimeoutError) or isinstance(getattr(error,'reason',None),TimeoutError):
+        return 'TRANSFER_OR_TOOL_TIMEOUT'
+    if isinstance(error,HTTPError):
+        return 'SERVICE_UNAVAILABLE' if error.code==429 or 500<=error.code<600 else None
+    if isinstance(error,URLError):
+        return 'SERVICE_UNAVAILABLE'
+    return None
 
 
 def horizontal_crs(value):
@@ -197,7 +211,14 @@ def generate(summary_path,output,reuse_package=None,refresh_imagery_extent=False
         projects=list(native.glob('*.prj'))
         if len(projects)!=1:raise ValueError('Ambiguous native project')
         source_project=projects[0];project=full/'HEC_RAS'/source_project.name
-        for ext in ['.prj','.g01','.f01','.p01','.g01.hdf','.p01.hdf','.O01']:
+        extensions=['.prj','.g01','.f01','.p01','.g01.hdf','.p01.hdf','.O01']
+        required=2*sum(source_project.with_suffix(ext).stat().st_size for ext in extensions)
+        required+=sum(entry['size_bytes'] for entry in run_manifest['input_snapshots'])
+        free=shutil.disk_usage(output).free
+        result['disk_preflight']=dict(free_bytes=free,known_copy_bytes=required)
+        if free<required:
+            raise OSError(errno.ENOSPC,f'Delivery volume has {free:,} bytes free; known model and snapshot copies need at least {required:,} bytes before maps and reports.')
+        for ext in extensions:
             copy_file(source_project.with_suffix(ext),project.with_suffix(ext))
         # Verify effective input bytes against the completed run, not just result hashes.
         if not intact(run_manifest['native_after']):raise ValueError('Native inputs changed after computation')
@@ -374,6 +395,7 @@ def generate(summary_path,output,reuse_package=None,refresh_imagery_extent=False
         save(output/'delivery.json',result)
         register(summary_path,output/'delivery.json')
     except Exception as e:
+        result['recovery_kind']=failure_kind(e)
         result.update(status='INCOMPLETE',error=str(e));save(output/'delivery.json',result)
         raise
     return result

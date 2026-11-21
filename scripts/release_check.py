@@ -50,8 +50,14 @@ def run(args):
             pairing=check(packet/'Packages/Complete',packet/'Packages/Minimal')
             matching=[s for s in data['siletz'] if s['run']==pairing['run_id'] and s['native_hash']==pairing['native_hdf_sha256']]
             if len(matching)!=1:raise ValueError('Measured results do not match delivery')
+            from release_benchmark import field_screen,east_fork_screen,write_field_notes
+            east=east_fork_screen(packet)
+            if abs(east['rmse_m']-data['east_fork']['holdout_rmse_m'])>1e-8:
+                raise ValueError('East Fork field result and packet summary disagree')
             result['field_packet']=dict(identity=pairing,records=len(hashes),measured=matching[0]['rows'],
-                   holdout_rmse_m=data['east_fork']['holdout_rmse_m'],native_warnings=matching[0]['warnings'])
+                   holdout_rmse_m=data['east_fork']['holdout_rmse_m'],native_warnings=matching[0]['warnings'],
+                   siletz_field_screen=field_screen(packet,matching[0],hashes),east_fork_field_screen=east)
+            write_field_notes(root,result['field_packet']['siletz_field_screen'],east)
             if args.fresh_benchmark:
                 from release_benchmark import replay
                 result['fresh_benchmark']=replay(packet,matching[0],hashes,root)

@@ -1,5 +1,8 @@
 import json
 import unittest
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 import numpy as np
 from pyproj import Transformer
 
@@ -9,6 +12,28 @@ from ras_workflow.river import check_known_stages
 
 
 class ExtentTests(unittest.TestCase):
+    def test_recorded_preference_is_bound_to_a_common_station_and_appears_in_each_report(self):
+        from docx import Document
+        from ras_workflow import app_core as core,extent_review,report_decision
+        from ras_workflow.common import ROOT
+        m=dict(id='trial',revision=2,summary={'sha256':'current'},status='RESULTS_READY')
+        cases=[dict(crs='EPSG:26910',run_id=name,rows=[{'rs':'100','center_xy':[0,y]}]) for name,y in [('first',0),('second',2)]]
+        packet=dict(cases=cases,classification='NATIVE_GEOMETRY_COMPARISON',max_wse_change={'station':'100'})
+        with tempfile.TemporaryDirectory(dir=ROOT/'status') as temp,patch.object(core,'BASE',Path(temp)), \
+                patch.object(extent_review,'model_for',return_value=m),patch.object(extent_review,'selected_comparison',return_value=({},packet)):
+            body=dict(decision='prefer_second',station='100',reason='Compare the surveyed banks')
+            with self.assertRaisesRegex(ValueError,'common location'):extent_review.disposition('trial',body)
+            cases[1]['rows'][0]['center_xy']=[0,0]
+            decision=extent_review.disposition('trial',body)
+            self.assertEqual(decision['preferred_run'],'second')
+            self.assertEqual(decision['engineering_acceptance'],'NOT_ASSESSED')
+            self.assertTrue(m['exports_need_refresh'])
+            data=dict(summary={'hydraulics':{},'configuration':{}},river_checks={'extent_review':{'decision':decision}})
+            for chinese in (False,True):
+                doc=Document();report_decision.add(doc,data,chinese)
+                output='\n'.join(p.text for p in doc.paragraphs)
+                self.assertIn('RS 100 · second',output);self.assertIn(body['reason'],output)
+
     def setUp(self):
         self.transform=Transformer.from_crs(26910,4326,always_xy=True)
         self.cut=[[500000,5000000],[500100,5000000]]

@@ -43,6 +43,7 @@ def metrics(project,session=None):
     interventions=session.get('developer_interventions')
     if interventions is not None and (not isinstance(interventions,list) or not all(isinstance(x,str) and x.strip() for x in interventions)):
         raise ValueError('Document each developer intervention')
+    marker_only=bool(session.get('checkpoints')) and not (tagged or session.get('open') or interventions)
     solver=[];compute=[]
     for path in sorted((folder/'approved').glob('*/jobs/*/solver__*/execution.json')):
         native=read(path)
@@ -56,8 +57,9 @@ def metrics(project,session=None):
         native_solver_wall_seconds=sum(solver) if solver and None not in solver else None,
         compute_call_wall_seconds=sum(compute) if compute and None not in compute else None,
         unfinished_interval=session.get('open'),
+        pilot_checkpoints=session.get('checkpoints',[]),human_acceptance='NOT_ASSESSED',
         active_engineer_seconds=result.get('engineer'),external_wait_seconds=result.get('external_wait'),
-        developer_interventions=len(interventions) if interventions is not None else None,
+        developer_interventions=len(interventions) if interventions is not None and not marker_only else None,
         first_mapped_delivery=attempts[0]['first_attempt_pair_registered'] if attempts else None,
         attempts=attempts,interaction_receipts=inventory(folder))
 

@@ -65,9 +65,11 @@ def add(document,data,cn):
         document.add_paragraph(tr('Site sensitivity has yet to be quantified in this edition.','本版尚无可量化的场地敏感性结果。'))
     decision=comparison.get('decision')
     if decision:
-        text=(tr('Field survey requested at','已登记补测') if decision['choice']=='request_survey' else
-              tr('First run retained for comparison at','该站对照沿用首个计算'))
-        document.add_paragraph(text+' RS '+decision['station']+' · '+decision['reference_run'])
+        labels={'request_survey':('Field survey requested','已登记补测'),'keep_first':('First run retained','保留首个计算'),
+                'defer':('Decision deferred','暂缓取舍'),'prefer_second':('Second run preferred','倾向第二方案')}
+        document.add_paragraph(tr(*labels[decision['choice']])+' · RS '+decision['station']+' · '+
+                               (decision.get('preferred_run') or decision['reference_run']))
+        if decision.get('reason'):document.add_paragraph(decision['reason'])
     revision=data.get('revision_comparison') or {}
     context=revision.get('input_context') or {}
     if context.get('status')=='VERIFIED':

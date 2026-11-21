@@ -40,3 +40,9 @@ Use this procedure for a Windows workstation with the supported HEC-RAS and QGIS
 ```
 
 Machine elapsed time comes from saved task timestamps. Active engineering time, external waiting and developer interventions are unknown unless measured. To include a timed session, pass `--session <json>` with a selected project. Its fields are `project_id`, `intervals` (ordered `kind` of `engineer` or `external_wait` with timezone-aware `started_utc` and `finished_utc`) and `developer_interventions` (list of recorded interventions). An explicit empty list records zero interventions for that session.
+
+During a pilot, **Record a sticking point** captures the page, project phase, edition and topic. **Record developer assistance** adds an intervention. Opening the clock leaves it paused until explicitly started. Automated checks carry no human timing or independent acceptance claim.
+
+After `release_check.py --packet` with the frozen field packet, open `Field_review.md` beside the new release.json. For Siletz the check reselects the withheld event from archived discharge and sensor series and reads the interior station from the native HDF. Its investigation threshold is 0.15 m. For East Fork the check uses a separate event with the previously selected roughness and scores three nonboundary sections. Both exclude the prescribed outlet from accuracy statistics.
+
+Before copying the two packages, the exporter checks free space against known native copies and input snapshots. GIS, reports and temporary files need additional space. Backup restore checks the uncompressed file sizes before extracting. When space runs low, retain the archive and solver outputs, free space on the destination drive or restore the backup into a new folder on another volume.

@@ -101,7 +101,7 @@ def current(model):
     if ref and intact([ref]):
         data=read(ROOT/ref['path'])
         if data['baseline']==model.get('summary') and intact(data['sources']):
-            return data
+            return dict(data,comparison_token=ref['sha256'])
     return None
 
 
@@ -137,6 +137,8 @@ def compare_case(variant, profile, lines, event, search_m):
         row['wet_ends']=sum(v>0 for v in ends) if all(finite(v) for v in ends) else None
         row['center_xy']=centers.get(row['rs'])
         row['left_right_flow_pct']=section['ob_percent']
+        row['section_profile']={k:section[k] for k in ('station_ft','elevation_ft','banks_ft','wse_ft',
+                              'egl_ft','critical_wse_ft','wet_intervals_ft') if k in section}
     context,extra=station_context(variant,summary,profile,crs)
     refs.extend(extra)
     for row in result['rows']:
@@ -204,10 +206,17 @@ def disposition(key,body):
     m=model_for(key,body);core.require_idle(m)
     ref,packet=selected_comparison(m,body)
     choice=body.get('decision');station=body.get('station')
-    if choice not in ('keep_first','request_survey') or station not in {r['rs'] for c in packet['cases'] for r in c['rows']}:
+    if choice not in ('keep_first','prefer_second','defer','request_survey') or station not in {r['rs'] for c in packet['cases'] for r in c['rows']}:
         raise ValueError('Select an available station and review action')
+    if choice=='prefer_second' and (packet['classification']!='NATIVE_GEOMETRY_COMPARISON' or
+            not packet.get('max_wse_change') or len(packet['cases'])!=2 or station not in aligned_stations(packet['cases'])):
+        raise ValueError('Select a common location in a comparable two-run review')
+    reason=body.get('reason','')
+    if not isinstance(reason,str) or len(reason)>1200:raise ValueError('Review note must be at most 1200 characters')
     decision=dict(comparison=ref,choice=choice,station=station,reference_run=packet['cases'][0]['run_id'],
-                  summary=m['summary'],engineering_acceptance='NOT_ASSESSED')
+                  preferred_run=packet['cases'][1]['run_id'] if choice=='prefer_second' else
+                     packet['cases'][0]['run_id'] if choice=='keep_first' else None,
+                  reason=reason.strip(),summary=m['summary'],engineering_acceptance='NOT_ASSESSED')
     path=core.folder(key)/'extent_decisions'/unique_id()/'decision.json';save(path,decision)
     m.update(extent_decision=item(path),revision=m['revision']+1,exports_need_refresh=True)
     core.persist(m,'EXTENT_REVIEW_DECISION',decision)
@@ -312,4 +321,4 @@ def analyze(key,body):
     m.pop('extent_decision',None)
     m['revision']+=1;m['exports_need_refresh']=True
     core.persist(m,'FLOOD_EXTENT_REVIEW',dict(review=m['extent_review'],classification=classification))
-    return result
+    return dict(result,comparison_token=m['extent_review']['sha256'])

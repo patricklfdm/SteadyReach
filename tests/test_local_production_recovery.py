@@ -16,6 +16,39 @@ from ras_workflow.common import ROOT,read,save
 
 
 class LocalRecovery(unittest.TestCase):
+    def test_pilot_blockers_preserve_legacy_clock_and_count_only_actual_assistance(self):
+        from ras_workflow import pilot_session
+        from ras_workflow.release_metrics import metrics
+        with tempfile.TemporaryDirectory(dir=ROOT/'status') as temp, patch.object(app_core,'BASE',Path(temp)):
+            folder=app_core.folder('old')
+            save(folder/'app.json',dict(id='old',revision=4,phase='RUN',status='NEEDS_ATTENTION'))
+            clock=folder/'pilot_session.json'
+            self.assertFalse(pilot_session.update('old',{})['intervals'])
+            self.assertFalse(clock.exists())
+            save(clock,dict(project_id='old',revision=1,developer_interventions=['2020-01-01'],open=None,intervals=[]))
+            body=dict(action='blocker',page='review',topic='hydraulics',timer_revision=1)
+            checkpoint=pilot_session.update('old',body)['checkpoints'][0]
+            self.assertEqual((checkpoint['phase'],checkpoint['page'],checkpoint['model_revision']),('RUN','review',4))
+            with self.assertRaises(ValueError):pilot_session.update('old',body)
+            result=metrics(folder)
+            self.assertEqual(result['developer_interventions'],1)
+            self.assertEqual(result['human_acceptance'],'NOT_ASSESSED')
+            self.assertIsNone(result['active_engineer_seconds'])
+            marker_only=read(clock)
+            marker_only['developer_interventions']=[]
+            self.assertIsNone(metrics(folder,marker_only)['developer_interventions'])
+
+    def test_restore_rejects_low_space_before_reading_payload(self):
+        with tempfile.TemporaryDirectory(dir=ROOT/'status') as temp:
+            parent=Path(temp);src=parent/'checkout';out=parent/'restored'
+            save(src/'projects/test/app.json',dict(revision=5))
+            archive=parent/'old.zip';local_backup.snapshot(src,archive)
+            with patch('shutil.disk_usage',return_value=SimpleNamespace(free=1)),self.assertRaisesRegex(OSError,'uncompressed'):
+                local_backup.restore(archive,out)
+            self.assertFalse(out.exists())
+            local_backup.restore(archive,out)
+            self.assertEqual(read(out/'projects/test/app.json'),{'revision':5})
+
     def test_restore_only_selected_pdf_and_record_opt_in_time(self):
         from ras_workflow.common import item
         from ras_workflow.site_delivery import seal

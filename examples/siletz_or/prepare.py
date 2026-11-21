@@ -19,7 +19,10 @@ from ras_workflow.public_reach import road_crossings
 from ras_workflow.survey_import import make_manifest
 
 OUTLET, INTERIOR = '986237', '9695486'
-from discharge import URL, V1_NAME, archived_input, obtain, read_discharge
+if __package__:
+    from .discharge import URL, V1_NAME, archived_input, obtain, read_discharge
+else:
+    from discharge import URL, V1_NAME, archived_input, obtain, read_discharge
 MODEL = 'https://doi.org/10.5066/P1489NN8'
 STAGE = 'https://doi.org/10.5066/P1N35MQN'
 CONTEXT_URL = ('https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage'
@@ -53,6 +56,14 @@ def select_events(folder,ratio,flow_file=None):
     return result
 
 
+def published_flows(flow_lines):
+    values={}
+    for line,following in zip(flow_lines,flow_lines[1:]):
+        if line.startswith('River Rch & RM='):
+            values[int(line.rsplit(',',1)[1])]=float(following[16:24])
+    return values
+
+
 def section_inputs(folder):
     def member(archive,ending):
         return archive.read(next(n for n in archive.namelist() if n.endswith(ending)))
@@ -60,10 +71,7 @@ def section_inputs(folder):
         source_crs=CRS.from_wkt(member(archive,'Projection.prj').decode())
         geom_raw=member(archive,'FINAL.g01.hdf')
         flow_lines=member(archive,'FINAL.f01').decode().splitlines()
-    values={}
-    for i,line in enumerate(flow_lines):
-        if line.startswith('River Rch & RM='):
-            values[int(line.rsplit(',',1)[1])]=float(flow_lines[i+1][16:24])
+    values=published_flows(flow_lines)
     ratio=values[44506]/values[19532]
     to_utm=Transformer.from_crs(source_crs,26910,always_xy=True)
     with h5py.File(io.BytesIO(geom_raw)) as h:

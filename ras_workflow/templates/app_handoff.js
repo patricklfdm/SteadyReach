@@ -41,19 +41,40 @@ function renderHandoff(parent) {
   }
  }
  box.append(button('Inspect handoff and storage','查看交付与存储清单',inspect));
- const timer=el('div');box.append(timer);
+ box.append(button('Open optional pilot clock','打开可选试点计时',async()=>{
+  const timer=document.getElementById('project-pilot-clock');
+  if(timer){await timer.showClock();timer.scrollIntoView({block:'center'});}
+ }));
+}
+function renderPilotClock(parent){
+ const timer=el('div');timer.id='project-pilot-clock';timer.hidden=true;
+ parent.append(button('Pilot log','试点记录',async()=>{
+  if(timer.hidden)await timer.showClock();else timer.hidden=true;
+ }),timer);
+ timer.showClock=async()=>{await showClock();timer.hidden=false;};
  async function showClock(action='read',revision=null){
   const info=await api('pilot-clock',{id:current.id,action,timer_revision:revision});
   timer.replaceChildren();
   const labels={engineer:tr('Engineering work','工程师操作'),external_wait:tr('Waiting for data','等外部资料')};
   timer.append(el('p',(info.open?labels[info.open.kind]+' · '+new Date(info.open.started_utc).toLocaleString():tr('Paused','已暂停'))+
-   ' · '+tr('Recorded intervals','已记录时段')+' '+info.intervals.length+' · '+tr('Developer interventions','开发者介入')+' '+info.developer_interventions.length));
+   ' · '+tr('Recorded intervals','已记录时段')+' '+info.intervals.length+' · '+tr('Recorded developer interventions','已记录的开发者介入')+' '+info.developer_interventions.length));
   timer.append(el('p',tr('Pause when leaving. Discard the open interval if it includes unattended time.','离开前请暂停；当前时段若误计了离开时间，可舍弃。')));
-  const actions=[['engineer','Time engineering work','计工程师操作时间'],['external_wait','Time external wait','计等资料时间'],['pause','Pause and save','暂停并保存'],['discard','Discard open interval','舍弃当前时段'],['intervention','Record developer assistance','记录一次开发者介入']];
+  const actions=[['engineer','Time engineering work','计工程师操作时间'],['external_wait','Time external wait','计等资料时间'],['pause','Pause and save','暂停并保存'],['discard','Discard open interval','舍弃当前时段']];
   for(const [mode,en,zh] of actions){
    if((!info.open&&['pause','discard'].includes(mode))||info.open?.kind===mode)continue;
    timer.append(button(en,zh,()=>showClock(mode,info.revision)));
   }
+  const topic=field(timer,'pilot-topic','Where did you get stuck?','遇到困难的环节','unspecified','select',[
+   ['unspecified','Current step','当前步骤'],['data','Site data','现场资料'],['geometry','Geometry','几何'],
+   ['parameters','Inputs','参数'],['hydraulics','Interpreting results','解读结果'],['delivery','Delivery','交付'],['recovery','Recovery','恢复']]);
+  for(const [kind,en,zh] of [['blocker','Record a sticking point','记下卡点'],['intervention','Record developer assistance','记录一次开发者介入']]){
+   timer.append(button(en,zh,async()=>{
+    const page=current.results?(lastResultPage.project===current.id?lastResultPage.key:'overview'):'model';
+    await api('pilot-clock',{id:current.id,action:kind,timer_revision:info.revision,topic:topic.value,page});
+    await showClock();notify(tr('Saved with the current project step.','已连同当前项目步骤保存。'));
+   }));
+  }
+  if(info.checkpoints?.length)table(timer,[tr('Time','时间'),tr('Project step','项目步骤'),tr('Topic','环节'),tr('Developer assisted','开发者介入')],
+   info.checkpoints.slice(-5).map(row=>[new Date(row.at).toLocaleString(),[row.page,row.phase||row.status].filter(Boolean).join(' · '),row.topic,row.kind==='intervention'?'✓':'—']));
  }
- box.append(button('Open optional pilot clock','打开可选试点计时',()=>showClock()));
 }

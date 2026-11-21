@@ -1,3 +1,17 @@
+function renderParentStationReview(parent,comparison,peak){
+ const m=current, output=el('div');output.setAttribute('aria-live','polite');
+ const body={id:m.id,revision:m.revision,summary_hash:m.summary.sha256,mode:'geometry',
+  cases:[{id:comparison.parent.summary.sha256,profile:peak.profile},{id:m.summary.sha256,profile:peak.profile}]};
+ parent.append(button('Inspect both native runs at this station','并排核查该站两次原生结果',async()=>{
+  const data=await api('extent-review',{...body,preview:true});
+  drawExtent(output,data,String(Number(peak.station)));
+  output.append(button('Save this comparison for a decision','保存这次对比并记录取舍',async()=>{
+   const saved=await api('extent-review',body);current=await api('project/'+m.id);
+   drawExtent(output,saved,String(Number(peak.station)));
+   notify(tr('Comparison saved. Record your choice below.','对比已保存，可直接在下方记录取舍。'));
+  }));
+ }),output);
+}
 function renderExtentReview(parent){
  const box=details(parent,'Compare model editions and mapped flood edges','比较模型版本与历史洪水边线');
  const m=current, key={id:m.id,summary_hash:m.summary.sha256};
@@ -30,7 +44,7 @@ function renderExtentReview(parent){
  }));
 }
 
-function drawExtent(parent,data){
+function drawExtent(parent,data,focusStation){
  parent.replaceChildren();
  const classes={NATIVE_GEOMETRY_COMPARISON:tr('Comparison of native model editions','原生模型版本对照'),SPATIAL_CONTEXT:tr('Spatial context only: event identity or prior use limits comparison.','空间参照：事件身份或资料用途限制了对比。'),
   USED_FOR_GEOMETRY_OR_CALIBRATION:tr('These edges informed geometry or calibration.','该边线曾用于确定几何或调参。'),
@@ -42,9 +56,10 @@ function drawExtent(parent,data){
    c.label,c.profile,c.flow_cfs,c.native_warning_count,c.matched+' / '+c.total,c.common_median_abs_m]));
  if(data.max_wse_change){const d=data.max_wse_change;parent.append(el('p',tr('Largest common-section WSE change','共有断面最大水位变化')+' '+d.signed_ft.toFixed(3)+' ft @ RS '+d.station));}
  const stations=[...new Set(data.cases.flatMap(c=>c.rows.map(r=>r.rs)))].sort((a,b)=>Number(b)-Number(a));
- const station=field(parent,'extent-rs','Inspect station','核对断面',data.max_wse_change?.station??stations[0],'select',stations.map(rs=>[rs,'RS '+rs,'RS '+rs]));
- const comparisonToken=current.extent_review?.sha256;
- const key=()=>({id:current.id,revision:current.revision,summary_hash:current.summary.sha256,comparison_token:comparisonToken});
+ const station=field(parent,data.preview?'preview-extent-rs':'extent-rs','Inspect station','核对断面',stations.includes(focusStation)?focusStation:(data.max_wse_change?.station??stations[0]),'select',stations.map(rs=>[rs,'RS '+rs,'RS '+rs]));
+ const comparisonToken=data.comparison_token??current.extent_review?.sha256;
+ const identity={id:current.id,revision:current.revision,summary_hash:current.summary.sha256,comparison_token:comparisonToken};
+ const key=()=>({...identity});
  for(const c of data.cases)for(const issue of c.context_issues||[])parent.append(el('p',c.label+' · '+issue,'warning'));
  const plot=el('div');parent.append(plot);
  function update(){
@@ -52,10 +67,17 @@ function drawExtent(parent,data){
   const rows=data.cases.map(c=>c.rows.find(r=>r.rs===station.value));
   table(plot,[tr('Calculation','计算'),'WSE (ft)',tr('Left / right shortfall (m)','左／右边线欠覆盖（m）'),tr('Wet ends','湿端'),tr('L/R overbank flow (%)','左右滩地分流（%）'),tr('Warnings at RS','该站警告')],
    rows.map((r,i)=>[data.cases[i].label,r?.wse_ft?.toFixed(3),r?.status==='MATCHED'?[r.left_shortfall_m,r.right_shortfall_m].join(' / '):r?.status,r?.wet_ends,
-    r?.left_right_flow_pct?.map(x=>x?.toFixed(1)??'—').join(' / '),r?.native_warnings?.join(', ')]));
+    r?.left_right_flow_pct?.map(x=>x?.toFixed(1)??'—').join(' / '),r?.native_warnings==null?'—':r.native_warnings.join(', ')||'0']));
   const observed=rows.flatMap((r,i)=>(r?.observations||[]).map(o=>[data.cases[i].label,o]));
+  for(const [i,r] of rows.entries()){
+   if(r?.section_profile?.station_ft?.length){
+    const label=data.cases[i].label;
+    atlasSectionPlot(details(plot,label+' · native section (ft)',label+' · 原生断面（ft）'),r.section_profile);
+   }
+  }
   if(observed.length)table(plot,[tr('Run','计算'),tr('Observation','测量'),tr('Role','用途'),tr('Observed (ft)','实测（ft）'),tr('Residual (ft)','偏差（ft）'),tr('Source / restrictions','来源／限制')],
    observed.map(([label,o])=>[label,[o.date,o.event,o.kind].join(' · '),o.role,o.observed_ft?.toFixed(3),o.residual_ft?.toFixed(3),[o.source,...o.issues].join(' · ')]));
+  else plot.append(el('p',tr('No matched field observations are available for this station.','该站暂无匹配的现场观测。')));
   const tests=rows.flatMap((r,i)=>(r?.boundary_tests||[]).map(t=>[data.cases[i].label,t.case,t.parameter,t.delta_ft.toFixed(3)]));
   if(tests.length)table(plot,[tr('Run','计算'),tr('Boundary test','边界工况'),tr('Changed input','变更输入'),'Δ WSE (ft)'],tests);
   else plot.append(el('p',tr('No verified boundary sensitivity is recorded for this station and profile.','该站本工况暂无已核验的边界敏感性结果。')));
@@ -76,12 +98,16 @@ function drawExtent(parent,data){
    '北向上。绿框为历史边线，蓝点为基准计算湿边，橙点为备选。正差表示历史边线在计算湿边以外。')));
  }
  station.onchange=update;update();
- if(!current.extent_review)return;
+ if(data.preview||!comparisonToken||comparisonToken!==current.extent_review?.sha256)return;
  const actions=details(parent,'Review decision','处理决定');
  actions.append(el('p',tr('Purple diamonds locate field observations. A request records the selected station for field follow-up.','紫色菱形表示实测位置。需补测时，会记录当前站号供现场回访。')));
- for(const [choice,en,zh] of [['keep_first','Retain first run as comparison reference','保留首个计算作为对照'],['request_survey','Request field survey at this station','登记该站补测']]){
+ const note=field(actions,'extent-note','Decision or outstanding question (optional)','取舍依据或待查问题（可选）','','textarea');note.maxLength=1200;
+ const choices=[['keep_first','Retain first run as comparison reference','保留首个计算作为对照'],['defer','Defer the choice','暂缓取舍'],['request_survey','Request field survey at this station','登记该站补测']];
+ if(data.classification==='NATIVE_GEOMETRY_COMPARISON'&&data.max_wse_change)choices.push(['prefer_second','Record preference for second run','记录倾向第二方案（保留原模型）']);
+ for(const [choice,en,zh] of choices){
   actions.append(button(en,zh,async()=>{
-   const saved=await api('extent-decision',{...key(),decision:choice,station:station.value});current=await api('project/'+current.id);
+   const saved=await api('extent-decision',{...key(),decision:choice,station:station.value,reason:note.value});current=await api('project/'+identity.id);
+   if(current.extent_review?.sha256===comparisonToken)identity.revision=current.revision;
    notify(tr('Decision saved for RS ','已保存处理决定，RS ')+saved.station);
   }));
  }

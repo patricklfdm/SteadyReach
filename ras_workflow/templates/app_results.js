@@ -33,6 +33,11 @@ function renderTaskRecovery(parent,m){
 }
 function renderDeliveryRecovery(parent,delivery){
  if(!delivery?.error)return;
+ if(delivery.recovery_kind==='DISK_SPACE'||/ENOSPC|WinError (112|39)\b|Errno 28\b/i.test(delivery.error)){
+  parent.append(el('p',tr('Free space on the delivery drive. Keep the project and solver evidence. Retry only the delivery after space is available.','请在交付目标盘释放空间，保留项目原件和求解结果。空间充足后只重试交付。'),'warning'));
+ }
+ if(delivery.recovery_kind==='TRANSFER_OR_TOOL_TIMEOUT')parent.append(el('p',tr('Read the timed-out step below and retry the export from the saved calculation.','请查看下方超时的步骤，然后从已有计算结果重试导出。'),'warning'));
+ if(delivery.recovery_kind==='SERVICE_UNAVAILABLE')parent.append(el('p',tr('The data service could not serve this request. Check connectivity and retry delivery when available.','外部数据服务未能响应此次请求。请检查连接，服务恢复后重试交付。'),'warning'));
  parent.append(el('p',tr('Calculation and reports are saved. Resolve the export error below, then retry delivery without solving. A temporary map-service failure may only need a retry.','计算和报告已保存。请处理下方导出错误，再单独重试交付包，无需重新求解。地图服务临时故障可先重试。'),'warning'),
   el('p',delivery.error,'warning'),button('Retry delivery without solving','重试交付包（不重新求解）',async()=>{await api('delivery',{id:current.id});await open(current.id);}));
 }
@@ -55,6 +60,9 @@ function renderRevisionComparison(parent,comparison){
   for(const item of review.actions)box.append(el('p',tr(item.en,item.zh),'warning'));
   const peak=review.maximum_at_verified_center;
   if(peak)box.append(el('p',peak.profile+' · RS '+peak.station+tr(' · signed WSE change ',' · 水位变化（含方向）')+format(peak.change)+' ft'));
+  if(peak&&current.model_type==='river'&&!current.native_review&&comparison.parent?.summary?.sha256){
+   renderParentStationReview(box,comparison,peak);
+  }
   if(review.increased_control_codes.length)box.append(el('small',review.increased_control_codes.join(', ')));
   if(now?.wet_ends?.length){
    const wet=details(box,'Locate current wet ends','定位本次过水端点');

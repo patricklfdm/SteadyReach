@@ -29,6 +29,117 @@ def hydraulic_matrix(path):
     return profiles,stations,data
 
 
+def field_screen(packet, reference, hashes):
+    """Reselect the frozen Siletz event and check an interior sensor against native WSE."""
+    from examples.siletz_or.prepare import INTERIOR, OUTLET, archived_input, published_flows, select_events
+    edition=reference['id']
+    if Path(edition).name!=edition or edition in ('.','..'):
+        raise ValueError('Invalid field packet edition')
+    source=packet/edition/'Sources'
+    archive=archived_input(source)
+    native=packet/edition/'HEC_RAS/Model.p01.hdf'
+    if not archive:
+        raise ValueError('Frozen discharge series missing')
+    files=[archive,native,*[source/name for name in ('protocol.json','flow_inputs.f01','events.json','Calculated Data.csv','Site Information.csv')]]
+    for path in files:
+        if hashes.get(path.relative_to(packet).as_posix())!=sha(path):
+            raise ValueError('Missing or changed field evidence: '+path.name)
+    if sha(source/'protocol.json')!=sha(ROOT/'examples/siletz_or/protocol.json') or sha(native)!=reference['native_hash']:
+        raise ValueError('The field protocol or native edition differs from the benchmark')
+    changes=published_flows((source/'flow_inputs.f01').read_text().splitlines())
+    events=select_events(source,changes[44506]/changes[19532],archive)
+    if events!=read(source/'events.json')['events']:
+        raise ValueError('Selected event differs from the frozen source series')
+    event=next(e for e in events if e['id']=='Holdout')
+    profiles,stations,values=hydraulic_matrix(native)
+    stations=[float(rs) for rs in stations]
+    if 'Holdout' not in profiles or stations.count(44056)!=1 or stations.count(34913)!=1:
+        raise ValueError('Holdout profile or surveyed station is ambiguous or missing')
+    i=profiles.index('Holdout')
+    if np.max(np.abs(values['Flow'][i]-event['reach_cfs']))>.002:
+        raise ValueError('Native flow differs from the selected observed event')
+    surface=values['Water Surface'][i]
+    boundary_error_ft=float(surface[stations.index(34913)])-event['stage_m'][OUTLET]/.3048
+    observed=event['stage_m'][INTERIOR]
+    computed=float(surface[stations.index(44056)])*.3048
+    residual=computed-observed
+    exported=[r for r in reference['rows'] if r['profile']=='Holdout']
+    if len(exported)!=1 or exported[0]['date']!=event['date'] or not np.isclose(exported[0]['interior_error_m'],residual,atol=1e-8,rtol=0):
+        raise ValueError('Reported holdout differs from native and field records')
+    return dict(status='BOUNDARY_MISMATCH' if abs(boundary_error_ft)>.002 else
+                'INVESTIGATE' if abs(residual)>.15 else 'WITHIN_SCREEN',
+                run=reference['run'],profile='Holdout',date=event['date'],interior_rs=44056,observed_m=observed,
+                computed_m=computed,signed_residual_m=residual,investigation_threshold_m=.15,
+                scored_locations=1,excluded_boundary_rs=34913,boundary_error_ft=boundary_error_ft,
+                protocol_sha256=sha(source/'protocol.json'),native_sha256=reference['native_hash'],engineering_approval='PENDING')
+
+
+def east_fork_screen(packet):
+    """Check a second site's withheld event without fitting another roughness or inventing a tolerance."""
+    base=packet/'East_Fork'
+    spec=read(base/'frozen_training.json')
+    event=read(base/'frozen_holdout.json')
+    published=ROOT/'examples/east_fork_wy'
+    cal=read(base/'frozen_calibration.json')
+    trial=read(base/'holdout_result.json')
+    inputs=read(base/'holdout/inputs.json')
+    chosen=min(cal['trials'],key=lambda t:t['rmse_m'])['n']
+    if (spec!=read(published/'training.json') or event!=read(published/'holdout.json') or
+            event['date']!=spec['holdout_date'] or event['date']==spec['calibration']['date'] or
+            event!=inputs['event'] or trial['observation_source']['sha256']!=sha(base/'frozen_holdout.json') or
+            trial['calibration']['sha256']!=sha(base/'frozen_calibration.json') or
+            any(v!=chosen for v in (inputs['scenario']['channel_n'],inputs['scenario']['overbank_n'],cal['selected_n'],trial['result']['n']))):
+        raise ValueError('East Fork holdout identity or calibrated roughness differs')
+    native=base/'holdout/Model.p01.hdf'
+    execution=read(base/'holdout/execution.json')
+    if not execution['compute_completed'] or sha(native)!=execution['hdf_sha256'] or sha(native)!=trial['result']['native']['sha256']:
+        raise ValueError('East Fork execution and native result differ')
+    profiles,stations,values=hydraulic_matrix(native)
+    stations=[float(s) for s in stations]
+    expected=[s['rs'] for s in spec['sections']]
+    if (profiles!=['HOLDOUT'] or stations!=expected or np.max(np.abs(values['Flow'][0]-round(event['flow_m3s']/.3048**3,3)))>.002):
+        raise ValueError('East Fork section, flow or profile differs')
+    boundary=expected[-1]
+    observations={r['rs']:spec['offset_m']+r['stage_m'] for r in event['observations']}
+    if set(observations)!=set(expected) or len(event['observations'])!=len(expected):
+        raise ValueError('East Fork observation index differs')
+    residuals=[dict(rs=rs,signed_m=float(w)*.3048-observations[rs]) for rs,w in zip(expected,values['Water Surface'][0],strict=True)]
+    boundary_error=residuals.pop()['signed_m']
+    errs=np.array([r['signed_m'] for r in residuals])
+    rmse=float(np.sqrt(np.mean(errs**2)))
+    if abs(boundary_error)>.001 or not np.isclose(rmse,trial['result']['rmse_m'],atol=1e-8,rtol=0):
+        raise ValueError('East Fork boundary readback or reproduced holdout RMSE differs')
+    return dict(status='DESCRIPTIVE_NO_ACCEPTANCE_LIMIT',date=event['date'],selected_n=chosen,scored_locations=len(errs),
+                excluded_boundary_rs=boundary,boundary_error_m=boundary_error,rmse_m=rmse,bias_m=float(np.mean(errs)),
+                worst=max(residuals,key=lambda r:abs(r['signed_m'])),residuals=residuals,native_sha256=sha(native),
+                engineering_approval='PENDING')
+
+
+def write_field_notes(folder, siletz, east):
+    for zh,name in [(False,'Field_review.md'),(True,'Field_review.zh-CN.md')]:
+        def tr(en,cn):
+            return cn if zh else en
+        rows=[
+            '# '+tr('Withheld event review','留出事件复核'),
+            tr('[中文](Field_review.zh-CN.md)','[English](Field_review.md)'),
+            tr('Independent engineering review is pending.','独立工程复核待办。'),
+            '## Siletz',
+            f"{siletz['date']} · RS {siletz['interior_rs']} · {siletz['status']}",
+            tr('Observed / computed elevation','实测／计算高程')+f" · {siletz['observed_m']:.4f} / {siletz['computed_m']:.4f} m",
+            tr('Signed difference / investigation threshold','有符号偏差／调查门槛')+
+                f" · {siletz['signed_residual_m']:+.4f} / {siletz['investigation_threshold_m']:.2f} m",
+            tr('One interior sensor scored. The prescribed downstream station is excluded.','仅内点传感器参与评分，排除用作下游边界的测点。')+
+                f" RS {siletz['excluded_boundary_rs']}",
+            '## East Fork',
+            f"{east['date']} · n = {east['selected_n']:.3f} · {east['scored_locations']} "+tr('scored stations','个评分断面'),
+            f"RMSE {east['rmse_m']:.5f} m · "+tr('largest absolute difference at','最大绝对偏差位于')+
+                f" RS {east['worst']['rs']} ({east['worst']['signed_m']:+.5f} m)",
+            tr('The outlet is excluded. This case has no agreed acceptance tolerance.','出口测点不参与评分。本例尚未约定接受误差。')+
+                f" RS {east['excluded_boundary_rs']}",
+            tr('[Run evidence and fingerprints](release.json)','[运行证据及文件指纹](release.json)')]
+        (folder/name).write_text('\n\n'.join(rows)+'\n',encoding='utf-8')
+
+
 def replay(packet,reference,hashes,destination):
     source=packet/reference['id']/'Sources/survey.json'
     by_hash={v:packet/k for k,v in hashes.items()}

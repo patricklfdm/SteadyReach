@@ -12,16 +12,45 @@ function renderParameterNavigator(parent,fields){
  function draw(){list.replaceChildren();const q=search.value.toLowerCase();const selected=fields.filter(f=>(!q||(f.key+' '+f.label.en+' '+f.label.zh).toLowerCase().includes(q))&&(filter.value==='all'||filter.value==='missing'&&f.missing&&f.required||filter.value==='conflict'&&f.source_conflict||filter.value==='candidate'&&f.parameter_candidates?.length));if(!selected.length)list.append(el('p',tr('No matching items.','没有符合条件的项目。')));for(const f of selected){const row=el('div',undefined,'parameter-link');row.append(button(tr(f.label.en,f.label.zh),tr(f.label.en,f.label.zh),async()=>focusParameter(f.key)),el('small',(f.missing?'—':format(f.value,f.kind).slice(0,100))+' · '+sourceStatus(f.acquisition?.status||'')));list.append(row);}}
  search.oninput=draw;filter.onchange=draw;draw();
 }
+const siteRequests={
+ crossing:['Crossing and road survey','涵洞与道路联合测量','Ask the owner or survey crew for the as-built plan and longitudinal survey. Request both end inverts on the same datum, barrel dimensions, blockage and road crest. These control headwater and overtopping.','向业主或测量队索取竣工图和纵断测量。两端涵底要使用同一高程基准，同时核对孔径、淤堵与路顶。这些资料影响涵前水位和漫顶判断。'],
+ flow:['Event discharge record','事件流量资料','Request the hydrology study or gage record for this event and reach. Check the return period, units and drainage area.','向水文资料提供方索取本事件、本河段的研究或测站记录。核对重现期、单位和汇水面积。'],
+ control:['Boundary or datum control','边界与高程控制资料','Ask for the applicable vertical reference and any event-matched water levels at the model boundary. Record station, event and units.','索取适用的高程基准和模型边界同事件水位，注明位置、事件和单位。']
+};
+function siteRequestKind(key){
+ if(/^g\.structure\.groups\.\d+\.(shape|count|span_ft|rise_ft|length_ft|us_invert_ft|ds_invert_ft|depth_blocked_ft|bottom_type|inlet_description)$/.test(key)
+    ||/^g\.structure\.road\.(width_ft|elevation_ft|station_ft|downstream_station_ft|downstream_elevation_ft)$/.test(key))return 'crossing';
+ if(/^c\.scenarios\.\d+\.profiles\.\d+\.flow_cfs$/.test(key))return 'flow';
+ if(key==='g.vertical_datum'||/^g\.boundaries\.(upstream|downstream)\.stages_ft$/.test(key))return 'control';
+ return null;
+}
+function requestBundles(fields){
+ const crossing=fields.some(f=>siteRequestKind(f.key)==='crossing');
+ return Object.entries(siteRequests).map(([kind,labels])=>({kind,labels,
+  fields:fields.filter(f=>(crossing&&f.key==='g.vertical_datum'?'crossing':siteRequestKind(f.key))===kind)})).filter(group=>group.fields.length);
+}
+function siteEvidenceRequests(fields){
+ const provisional=new Set(['assumed','inferred','terrain_derived','source_input_unverified','user_entered']);
+ return fields.filter(f=>siteRequestKind(f.key)&&(f.required||!f.missing)&&(f.source_conflict||(
+  f.missing?f.required&&!f.parameter_candidates?.some(c=>['reported','measured','surveyed'].includes(c.evidence_class))
+           :provisional.has(f.evidence_class))));
+}
+function renderRequestBundles(host,fields){
+ for(const group of requestBundles(fields)){
+  const [en,zh,whyEn,whyZh]=group.labels;
+  const row=details(host,en+' ('+group.fields.length+')',zh+'（'+group.fields.length+'）');
+  const status=f=>f.source_conflict?tr('Conflicting sources','来源冲突'):f.missing?tr('Missing','待补'):tr('Verify adopted value','核对已采用值');
+  row.append(el('p',tr(whyEn,whyZh)),el('p',group.fields.map(f=>tr(f.label.en,f.label.zh)+' ('+status(f)+')').join(' · ')),
+   button('Export this request','导出这份索取表',()=>downloadParameterTemplate(group.fields,'site_'+group.kind+'.csv',group.labels)));
+ }
+}
 function preparationActions(model){
  const intake=model.intake;
  if(!intake||model.native||model.results||model.feasibility?.state==='outside')return [];
  const fields=intake.fields||[], actions=[];
  function group(kind,rows){if(rows.length)actions.push({kind,fields:rows});}
  const remaining=fields.filter(f=>f.required&&f.missing&&!f.source_conflict);
- const physical=key=>/^c\.scenarios\.\d+\.profiles\.\d+\.flow_cfs$/.test(key)
-  ||/^g\.structure\.groups\.\d+\.(shape|count|span_ft|rise_ft|length_ft|us_invert_ft|ds_invert_ft|depth_blocked_ft|bottom_type|inlet_description)$/.test(key)
-  ||/^g\.structure\.road\.(width_ft|elevation_ft|station_ft|downstream_station_ft|downstream_elevation_ft)$/.test(key)
-  ||key==='g.vertical_datum';
+ const physical=siteRequestKind;
  const geometry=intake.geometry_review?.issues||[];
  const blocking=(model.automation?.checks?.issues||[]).filter(issue=>issue.blocking&&!geometry.some(
   spatial=>spatial.code===issue.code&&JSON.stringify(spatial.sections)===JSON.stringify(issue.sections)));
@@ -40,13 +69,15 @@ function preparationActions(model){
  return actions;
 }
 
-function scopedParameterCsv(fields){
+function scopedParameterCsv(fields,request=null){
  const quote=value=>'"'+String(value??'').replaceAll('"','""')+'"';
- return ['field,value,unit,datum,evidence_class,source,parameter_en,parameter_zh',
-  ...fields.map(f=>[f.key,'',f.unit||'','','reported','',f.label?.en,f.label?.zh].map(quote).join(','))].join('\r\n');
+ const instructions=request?request.slice(2):[];
+ return ['field,value,unit,datum,evidence_class,source,parameter_en,parameter_zh'+(request?',request_en,request_zh,request_status,current_value,current_class':''),
+  ...fields.map(f=>[f.key,'',f.unit||'','','reported','',f.label?.en,f.label?.zh,...instructions,...(request?[
+   f.source_conflict?'conflict':f.missing?'missing':'verify_adopted',f.missing?'':JSON.stringify(f.value),f.evidence_class||'']:[])].map(quote).join(','))].join('\r\n');
 }
-function downloadParameterTemplate(fields=current.intake?.fields||[],name='parameter_import.csv'){
- const url=URL.createObjectURL(new Blob(['\ufeff'+scopedParameterCsv(fields)],{type:'text/csv;charset=utf-8'}));
+function downloadParameterTemplate(fields=current.intake?.fields||[],name='parameter_import.csv',request=null){
+ const url=URL.createObjectURL(new Blob(['\ufeff'+scopedParameterCsv(fields,request)],{type:'text/csv;charset=utf-8'}));
  const link=el('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  notify(fields.length+tr(' rows exported. Enter values, units, elevation datum where applicable, and the source; mark estimates as assumed. Import the CSV in Site materials to review the candidates.',' 行已导出。请填写数值、单位、适用的高程基准和来源，估计值标为 assumed；将 CSV 导回现场资料后核对候选。'));
 }
@@ -85,7 +116,7 @@ function renderPreparationActions(parent,actions){
    host.append(button('Open model checks','打开模型检查',()=>openModelTool('model-automation')));
   }else if(kind==='derive'){
    host.append(el('p',tr('Use the saved materials and terrain to propose inputs first. Review assumptions together before starting HEC-RAS.','先用已保存的资料和地形推导候选参数。开算前再集中核对假设。')),
-    button('Prepare an automatic draft','自动准备草稿（含标注的估计值）',async()=>{await saveAll();await api('automatic-prepare',{id:model.id,revision:current.revision});await open(model.id);},'primary'));
+    button('Prepare an automatic draft','自动准备草稿（含标注的估计值）',async()=>{const id=current.id;await saveAll();await api('automatic-prepare',{id,revision:current.revision});await open(id);},'primary'));
   }else if(kind==='checks'){
    host.append(button('Locate the failed checks','定位检查项',showFinalReview));
   }else{

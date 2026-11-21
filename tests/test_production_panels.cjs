@@ -32,6 +32,39 @@ test('comparison opens on peak, plots field location and routes station-specific
  assert.equal(ui.calls.at(-1).route,'revision');assert.equal(ui.calls.at(-1).body.confirmed,true);
 });
 
+test('read-only station preview cannot replace an earlier disposition and saves only on request',async()=>{
+ const ui=page(),row={rs:'300',wse_ft:100},cases=['old','new'].map(label=>({label,profile:'Q100',rows:[row]}));
+ const payload={cases,classification:'NATIVE_GEOMETRY_COMPARISON',max_wse_change:{station:'300',signed_ft:.14}};
+ ui.context.api=async(route,body)=>{
+  ui.calls.push({route,body});
+  return route==='project/site_test'?ui.current:{...payload,preview:body.preview===true};
+ };
+ ui.context.renderParentStationReview(ui.el('div'),{parent:{summary:{sha256:'prior'}}},{profile:'Q100',station:'300.00'});
+ await ui.buttons.get('Inspect both native runs at this station')();
+ assert.equal(ui.calls[0].body.cases[0].id,'prior');assert.equal(ui.calls[0].body.preview,true);
+ assert.equal(ui.buttons.has('Defer the choice'),false);
+ assert.equal(ui.fields.get('preview-extent-rs').value,'300');
+ await ui.buttons.get('Save this comparison for a decision')();
+ assert.equal(ui.buttons.has('Defer the choice'),true);
+ ui.fields.get('extent-note').value='Survey needed at the left edge';
+ await ui.buttons.get('Defer the choice')();
+ const decision=ui.calls.find(call=>call.route==='extent-decision').body;
+ assert.equal(decision.station,'300');assert.equal(decision.reason,'Survey needed at the left edge');
+});
+
+test('pilot marker records the actual review tab without starting a timer or counting assistance',async()=>{
+ const ui=page();ui.current.results={};ui.context.lastResultPage={project:ui.current.id,key:'review'};
+ ui.context.api=async(route,body)=>{
+  ui.calls.push({route,body});
+  return {revision:3,open:null,intervals:[],developer_interventions:[],checkpoints:[]};
+ };
+ ui.context.renderPilotClock(ui.el('div'));assert.equal(ui.calls.length,0);
+ await ui.buttons.get('Pilot log')();ui.fields.get('pilot-topic').value='hydraulics';
+ await ui.buttons.get('Record a sticking point')();
+ assert.deepEqual(ui.calls.map(c=>c.body.action),['read','blocker','read']);
+ assert.equal(ui.calls[1].body.page,'review');assert.equal(ui.calls[1].body.topic,'hydraulics');
+});
+
 test('handoff stays on demand and only exposes single-file recovery for the current edition',async()=>{
  for(const stale of [true,false]){
   const ui=page(),key='Restore this PDF';

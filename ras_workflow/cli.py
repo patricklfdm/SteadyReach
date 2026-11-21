@@ -161,7 +161,8 @@ def execute(path,scenario_id,fresh=False,timeout=180,receipt_path=None):
             from .site_delivery import generate as generate_delivery
             try:delivery_result=generate_delivery(folder/'summary.json',folder/'delivery')
             except Exception as e:
-                delivery_result=dict(status='INCOMPLETE',error=str(e),output=rel(folder/'delivery'))
+                from .site_delivery import failure_kind
+                delivery_result=dict(status='INCOMPLETE',error=str(e),output=rel(folder/'delivery'),recovery_kind=failure_kind(e))
                 save(folder/'delivery_error.json',dict(**delivery_result,traceback=traceback.format_exc()))
             print('Delivery: '+delivery_result['status'],flush=True)
         # Summary is immutable after report authoring; report failure lives in state.
