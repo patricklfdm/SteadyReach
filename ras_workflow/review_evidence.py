@@ -18,7 +18,7 @@ from .result_guidance import text
 from .revision_inputs import bound_inputs, station_key
 from .source_fetch import Download
 
-WATER = 'https://api.waterdata.usgs.gov'
+from .usgs_water import HOST as WATER, pages, query
 CATALOG = 'https://www.sciencebase.gov/catalog/'
 
 
@@ -203,23 +203,31 @@ def search(key,body):
         field('survey',middle,rows[middle]['center_xy'],text('Seek surveyed bed transects and independent flood marks with measured flow, datum and uncertainty.','查水下河床断面及独立洪痕的同期流量、高程基准与测量误差。'),
               text('Confirm survey coverage and reserve non-boundary marks from a separate flood.','确认测量覆盖范围，保留独立洪水的非边界测点。'))
     searcher=Download(limit=12_000_000,timeout=9)
-    def request(kind,url,parse):
-        attempt=dict(kind=kind,url=url);requests.append(attempt)
-        try:
-            ref,received=archived_queries.get((kind,url),(None,None))
+    def request(kind,url,parse,paginate=False):
+        def fetch(address):
+            attempt=dict(kind=kind,url=address);requests.append(attempt)
+            ref,received=archived_queries.get((kind,address),(None,None))
             if ref and intact([ref]):
                 data=(ROOT/ref['path']).read_bytes()
                 attempt.update(retrieval='ARCHIVED',retrieved_utc=received)
             else:
-                data=searcher.get(url,limit=2_000_000)
+                data=searcher.get(address,limit=2_000_000)
                 raw=out/(str(len(requests))+'_'+kind+'.dat');raw.write_bytes(data)
                 ref=item(raw)
                 attempt.update(retrieval='FETCHED',retrieved_utc=utc())
             sources.append(ref);attempt['source']=ref
-            records=parse(data)
-            attempt.update(status='CANDIDATES' if records else 'NO_RECORDS',count=len(records))
-            for entry in records:evidence.append(dict(**entry,source=ref,url=url))
-        except (OSError,ValueError,KeyError,TypeError) as exc:attempt.update(status='UNAVAILABLE',error=str(exc))
+            return data
+        try:
+            responses=pages(url,fetch) if paginate else [(url,fetch(url),None)]
+            for address,data,_ in responses:
+                attempt=requests[-1]
+                records=parse(data)
+                attempt.update(status='CANDIDATES' if records else 'NO_RECORDS',count=len(records))
+                for entry in records:evidence.append(dict(**entry,source=attempt['source'],url=address))
+        except (OSError,ValueError,KeyError,TypeError) as exc:
+            if requests[-1].get('status'):
+                requests.append(dict(kind=kind,url=url,status='PARTIAL',error=str(exc)))
+            else:requests[-1].update(status='UNAVAILABLE',error=str(exc))
     def bbox(buffer):
         points=np.concatenate(list(sections.values()))
         x0,y0=points.min(axis=0)-buffer/units
@@ -242,7 +250,7 @@ def search(key,body):
                     vertical_datum=p.get('vertical_datum'),datum_matches=bool(p.get('vertical_datum')) and datum(p['vertical_datum'])==datum(geom['vertical_datum']),
                     position_accuracy=p.get('horizontal_positional_accuracy'),longitude=f['geometry']['coordinates'][0],latitude=f['geometry']['coordinates'][1]))
             return sorted(out_rows,key=lambda r:r['distance_to_boundary_m'])
-        request('gages',WATER+'/ogcapi/v0/collections/monitoring-locations/items?'+urlencode(dict(bbox=box,f='json',limit=200)),stations)
+        request('gages',query('monitoring-locations',bbox=box,limit=200),stations,paginate=True)
         discharges={p['profile_id']:p['flow_cfs'] for p in summary['hydraulics']['profiles']}
         def rating_index(data):
             return [dict(kind='rating_index',station=f['properties']['monitoring_location_number'])
@@ -262,7 +270,7 @@ def search(key,body):
                 return [dict(kind='peak',station=station,date=p['time'],parameter=p['parameter_code'],value=p['value'],unit=p['unit_of_measure'],qualifier=p.get('qualifier'))
                         for f in features for p in [f['properties']] if p['monitoring_location_id']=='USGS-'+station
                         and p['parameter_code'] in ('00060','00065')]
-            request('peaks',WATER+'/ogcapi/v0/collections/peaks/items?'+urlencode(dict(monitoring_location_id='USGS-'+station,limit=500,f='json')),peaks)
+            request('peaks',query('peaks',monitoring_location_id='USGS-'+station,limit=500),peaks,paginate=True)
         for topic,term in [('survey','bathymetry'),('opening','crossing survey'),('accuracy','water surface profile')]:
             if not any(j['topic']==topic for j in jobs):continue
             shape=dict(type='Polygon',coordinates=[[[west,south],[east,south],[east,north],[west,north],[west,south]]])

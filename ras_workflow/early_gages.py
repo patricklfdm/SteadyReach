@@ -1,7 +1,6 @@
 """Locate records near a proposed reach without treating a gage as its tailwater."""
-import json
 import re
-from urllib.parse import urlencode
+from .usgs_water import pages, query
 
 from pyproj import Geod, Transformer
 from pyproj.exceptions import ProjError
@@ -14,7 +13,7 @@ from .terrain import bbox_for
 def lookup(location, out, download):
     lat, lon = location['latitude'], location['longitude']
     box = ','.join(str(v) for v in bbox_for(lat,lon,2000))
-    url = WATER+'/ogcapi/v0/collections/monitoring-locations/items?'+urlencode(dict(bbox=box,f='json',limit=200))
+    url = query('monitoring-locations', bbox=box, limit=200)
     result = dict(route='USGS_boundary_records',status='UNAVAILABLE',sources=[],stations=[],failures=[])
 
     def fetch(name, address):
@@ -25,9 +24,14 @@ def lookup(location, out, download):
         return raw
 
     try:
-        data = json.loads(fetch('early_gages.json',url))
+        features = []
+        for index, (address, raw, page) in enumerate(pages(url, download.get)):
+            path = out / ('early_gages.json' if index == 0 else f'early_gages_{index + 1}.json')
+            path.write_bytes(raw)
+            result['sources'].append(dict(**item(path), url=address))
+            features.extend(page['features'])
         geod = Geod(ellps='WGS84')
-        for feature in data['features']:
+        for feature in features:
             props = feature['properties']
             identifier = props.get('id') or feature.get('id') or ''
             if not re.fullmatch(r'USGS-\d+', identifier) or props.get('site_type_code') != 'ST':
@@ -38,8 +42,7 @@ def lookup(location, out, download):
                 result['stations'].append(dict(station=identifier[5:],name=props.get('monitoring_location_name'),
                     lonlat=xy,distance_to_pin_m=round(distance,1),datum=props.get('vertical_datum')))
         result['stations'].sort(key=lambda row:row['distance_to_pin_m'])
-        if any(link.get('rel')=='next' for link in data.get('links',[])):
-            result['failures'].append('USGS station response is paginated; coverage is partial')
+
     except (OSError,KeyError,ValueError,TypeError) as error:
         result['failures'].append(str(error))
         return result

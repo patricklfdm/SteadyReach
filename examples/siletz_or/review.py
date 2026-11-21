@@ -8,7 +8,7 @@ import shutil
 import h5py
 import numpy as np
 
-from prepare import INTERIOR, OUTLET, select_events
+from prepare import INTERIOR, OUTLET, select_events, archived_input
 from ras_workflow.common import ROOT, intact, read, safe_path, sha
 from ras_workflow.site_delivery import verify
 
@@ -75,7 +75,7 @@ def collect(receipt,destination):
         copy_file(project.with_suffix(suffix),target/'HEC_RAS'/('Model'+suffix))
     for src in [summary_path,solver/'request.json',solver/'execution.json',solver/'worker_stderr.log',receipt]:
         copy_file(src,target/'Run'/src.name)
-    for name in ['survey.json','protocol.json','events.json','Calculated Data.csv','Site Information.csv','discharge.rdb',
+    for name in ['survey.json','protocol.json','events.json','Calculated Data.csv','Site Information.csv',archived_input(survey).name,
                  'Siletz River Surface Water Elevation.xml','flow_inputs.f01','geometry_inputs.hdf']:
         copy_file(survey/name,target/'Sources'/name)
     supplement=summary.get('native_supplement')

@@ -2,16 +2,15 @@
 import io
 import re
 import zipfile
-from urllib.parse import urlencode
+from .usgs_water import pages, query
 from xml.etree import ElementTree as ET
 
 from pyproj import Geod
 
-from .common import item, read
+from .common import item
 from .terrain import bbox_for
 
 TABLE='https://pubs.usgs.gov/sir/2012/5113/data/sir20125113_Table4.xlsx'
-STATIONS='https://api.waterdata.usgs.gov/ogcapi/v0/collections/monitoring-locations/items'
 NS={'s':'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
 
 
@@ -66,15 +65,16 @@ def station_on_river(station_name, river_name):
 
 def lookup(location, reach, out, download):
     lat,lon=location['latitude'],location['longitude']
-    url=STATIONS+'?'+urlencode(dict(f='json',limit=100,bbox=','.join(map(str,bbox_for(lat,lon,1500)))))
-    path=out/'streamgages.json'
-    path.write_bytes(download.get(url))
-    catalog=read(path); sources=[dict(**item(path,'USGS_streamgages'),url=url)]
-    if any(link.get('rel')=='next' for link in catalog.get('links',[])):
-        raise ValueError('Streamgage query exceeds the local result limit')
+    url=query('monitoring-locations',limit=100,bbox=','.join(map(str,bbox_for(lat,lon,1500))))
+    sources=[]; features=[]
+    for index,(address,raw,page) in enumerate(pages(url,download.get)):
+        path=out/('streamgages.json' if index==0 else f'streamgages_{index + 1}.json')
+        path.write_bytes(raw)
+        sources.append(dict(**item(path,'USGS_streamgages'),url=address))
+        features.extend(page['features'])
     river=normalized(reach.get('river') or '')
     stations=[]
-    for feature in catalog['features']:
+    for feature in features:
         props=feature['properties']
         if props.get('agency_code')!='USGS' or props.get('state_code')!='06' or props.get('site_type_code')!='ST':
             continue

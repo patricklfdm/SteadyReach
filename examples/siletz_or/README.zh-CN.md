@@ -5,7 +5,7 @@
 本例使用俄勒冈州 RS 44506 至 RS 34913 河段，核对冻结几何在两次实测事件中的水位表现。先读[事先约定的事件与误差规则](protocol.json)。留出事件可生成完整包和最小包，其内部测点偏差仍可能超过调查门槛。
 
 1. 在 Windows 安装 SteadyReach，准备一个空的原始资料目录。从 USGS 目录下载 1D、2D 两份模型压缩包，保留原始 `Siletz_1D_Model.zip`。从 2D 包中提取唯一的 `Terrain/DEM_0104_ft.DEM_0104_ft.tif`，在资料目录存为 `released_terrain_ft.tif`。1D 包提供已定位的测量断面与流量变化记录。[USGS 模型发布页](https://www.sciencebase.gov/catalog/item/66049bced34e64ff15492d45)
-2. 把 `Calculated Data.csv`、`Site Information.csv` 和 `Siletz River Surface Water Elevation.xml` 存入同一目录。USGS 同时提供原始探头记录。将 15 分钟流量响应保存为 `discharge.rdb`。[水位和测站资料](https://www.sciencebase.gov/catalog/item/66f43599d34e791ae5dfc34b) · [流量查询](https://nwis.waterservices.usgs.gov/nwis/iv/?format=rdb&sites=14305500&startDT=2017-09-27&endDT=2018-07-31&parameterCd=00060&siteStatus=all)
+2. 把 `Calculated Data.csv`、`Site Information.csv` 和 `Siletz River Surface Water Elevation.xml` 存入同一目录。USGS 同时提供原始探头记录。准备命令会从 USGS Water Data V1 接口下载核准流量，将原始响应分页及指纹保存在测量包中。已有冻结的 V1 资料包或历史 discharge.rdb 时也可离线使用。[USGS 连续观测](https://api.waterdata.usgs.gov/ogcapi/v1/collections/continuous) · [水位和测站资料](https://www.sciencebase.gov/catalog/item/66f43599d34e791ae5dfc34b)
 3. 制作方形展图时，将[准备脚本](prepare.py)中 `CONTEXT_URL` 返回的 USGS 地形另存为 `context_3dep_m.tif`。它补充展图背景的空值，水力运算仍使用 18 条冻结的调查断面。
 4. 在仓库根目录运行以下命令。按实际位置替换原始资料目录和新的输出目录。
 

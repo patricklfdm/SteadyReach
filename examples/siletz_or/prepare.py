@@ -19,7 +19,7 @@ from ras_workflow.public_reach import road_crossings
 from ras_workflow.survey_import import make_manifest
 
 OUTLET, INTERIOR = '986237', '9695486'
-FLOW_URL = 'https://nwis.waterservices.usgs.gov/nwis/iv/?format=rdb&sites=14305500&startDT=2017-09-27&endDT=2018-07-31&parameterCd=00060&siteStatus=all'
+from discharge import URL, V1_NAME, archived_input, obtain, read_discharge
 MODEL = 'https://doi.org/10.5066/P1489NN8'
 STAGE = 'https://doi.org/10.5066/P1N35MQN'
 CONTEXT_URL = ('https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage'
@@ -27,11 +27,10 @@ CONTEXT_URL = ('https://elevation.nationalmap.gov/arcgis/rest/services/3DEPEleva
                '&pixelType=F32&interpolation=RSP_Bilinear&renderingRule=%7B%22rasterFunction%22%3A%22None%22%7D&f=image')
 
 
-def select_events(folder,ratio):
-    with (folder/'discharge.rdb').open(encoding='utf-8-sig') as handle:
-        reader=csv.DictReader((s for s in handle if not s.startswith('#')),delimiter='\t')
-        entries={datetime.fromisoformat(r['datetime']):float(r['117415_00060']) for r in reader
-                 if r['site_no']=='14305500' and r['tz_cd']=='PST' and r['117415_00060_cd']=='A'}
+def select_events(folder,ratio,flow_file=None):
+    path=flow_file or archived_input(folder)
+    if not path:raise ValueError('Missing frozen USGS discharge source')
+    entries=read_discharge(path)
     with (folder/'Calculated Data.csv').open(encoding='utf-8-sig') as handle:
         stages={datetime.strptime(r['Date Time'],'%m/%d/%Y %H:%M'):r for r in csv.DictReader(handle)}
     sites={r[0]:float(r[6]) for r in list(csv.reader((folder/'Site Information.csv').read_text('cp1252').replace('\xa0','').splitlines()))[1:] if r[0] in (OUTLET,INTERIOR)}
@@ -103,9 +102,10 @@ def prepare(source,terrain,out,profile=None,context=None):
     from rasterio.transform import from_origin
     from rasterio.warp import reproject, Resampling
     sections,xy,ratio=section_inputs(source)
-    all_events=select_events(source,ratio)
-    events=[r for r in all_events if profile is None or r['id']==profile]
     out.mkdir(parents=True,exist_ok=False)
+    flow_file=archived_input(source) or obtain(out)
+    all_events=select_events(source,ratio,flow_file)
+    events=[r for r in all_events if profile is None or r['id']==profile]
     points=np.concatenate([s['cutline_xy'] for s in sections])
     lo=points.min(axis=0)-30;hi=points.max(axis=0)+30
     shape=np.ceil((hi-lo)/3).astype(int)
@@ -147,7 +147,7 @@ def prepare(source,terrain,out,profile=None,context=None):
                      parameter_source='Fixed benchmark assumptions before stage comparison; within USGS SIR 2025-5063 ranges.'))
     definition=out/'definition.json';save(definition,config)
     citations=dict([(raster.name,MODEL+'; crop of USGS published model terrain, elevations in feet NAVD88, resampled to UTM 10N at 3 m.'),
-        ('Calculated Data.csv',STAGE),('Site Information.csv',STAGE),('discharge.rdb',FLOW_URL),
+        ('Calculated Data.csv',STAGE),('Site Information.csv',STAGE),(flow_file.name,URL if flow_file.name==V1_NAME else 'Archived USGS WaterServices RDB, station 14305500, approved discharge in cfs'),
         ('Siletz River Surface Water Elevation.xml',STAGE),('geometry_inputs.hdf',MODEL+'; original g01 geometry only.'),
         ('flow_inputs.f01',MODEL+'; Table 14 flow-change cards for discharge transfer.'),
         ('protocol.json','Frozen evaluation and selection criteria for the two events.'),
@@ -159,7 +159,8 @@ def prepare(source,terrain,out,profile=None,context=None):
         citations['background_m.tif']=CONTEXT_URL+'; current 3DEP topography in metres NAVD88; map gaps only.'
         citations[raster.name]+=' Released terrain takes precedence; only NoData areas filled from 3DEP after metre-to-foot conversion. Survey hydraulic sections are unchanged.'
         shutil.copyfile(context,out/'background_m.tif')
-    for filename in ('Calculated Data.csv','Site Information.csv','discharge.rdb','Siletz River Surface Water Elevation.xml'):
+    if flow_file.parent!=out:shutil.copyfile(flow_file,out/flow_file.name)
+    for filename in ('Calculated Data.csv','Site Information.csv','Siletz River Surface Water Elevation.xml'):
         shutil.copyfile(source/filename,out/filename)
     shutil.copyfile(Path(__file__).with_name('protocol.json'),out/'protocol.json')
     save(out/'events.json',dict(events=all_events,included_profiles=[r['id'] for r in events],terrain_source_sha256=sha(terrain),model_archive_sha256=sha(source/'Siletz_1D_Model.zip'),
