@@ -5,9 +5,27 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const source = fs.readFileSync(path.join(__dirname, '../ras_workflow/templates/app.js'), 'utf8');
+const resume = source.slice(source.indexOf('async function resumePage()'), source.indexOf('async function home()'));
+test('Reload restores the saved screen and never submits a calculation', async () => {
+  for (const [view,status,expected] of [
+    [null,'',['home']],
+    [{project:'x',page:'confirm'},'INPUTS_READY',['open','review']],
+    [{project:'x',page:'confirm'},'PROCESSING',['open']],
+    [{project:'x',page:'results',resultTab:'delivery'},'RESULTS_READY',['open','result-panel-delivery']],
+    [{project:'gone'},'MISSING',['open','home','notice']]
+  ]) {
+    const calls=[];
+    const context={window:{history:{state:{steadyReach:view}}},current:{status,results:status==='RESULTS_READY'},
+      open:async()=>{calls.push('open');if(status==='MISSING')throw Error('missing');},home:async()=>calls.push('home'),
+      showFinalReview:async()=>calls.push('review'),tr:en=>en,notify:()=>calls.push('notice'),
+      document:{getElementById:id=>({dispatchEvent(){calls.push(id);}})},CustomEvent:class {}};
+    await vm.runInNewContext(resume+';resumePage()',context);
+    assert.deepEqual(calls,expected);
+  }
+});
 const home = source.slice(source.indexOf('async function home()'), source.indexOf('function savedProjectGroups'));
 function node() {
-  return {children: [], append(...items) { this.children.push(...items); }};
+  return {children: [], setAttribute(){}, append(...items) { this.children.push(...items); }};
 }
 
 for (const hasProjects of [false,true]) {
@@ -15,7 +33,7 @@ for (const hasProjects of [false,true]) {
     const fields = {'#screen': node()};
     const panels = {};
     const context = {
-      poll: null, clearTimeout() {}, shell() {}, tr: a => a, el: node, button: node, check() {},
+      poll: null, clearTimeout() {}, rememberView() {}, shell() {}, tr: a => a, el: node, button: node, check() {},
       $: id => fields[id], nativeSelector() {}, scopeFields() {}, renderSavedProjects(saved) {
         saved.querySelector = () => hasProjects;
       },

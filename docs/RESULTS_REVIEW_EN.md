@@ -6,6 +6,8 @@
 
 For a reach without structures, choose **River reach (bridges excluded)** and follow the [river guide](RIVER_REACH_EN.md). It removes culvert/road fields and requires channel-bed representation and active boundary conditions. The crossing-specific steps below apply to culvert projects.
 
+Open **Hydraulic review** on the result page to follow the checks below. To read the reports or open a delivery package, switch to **Reports and maps**.
+
 ## Reduce native warnings in a river model
 
 1. Open the saved river result, expand **Reduce native HEC-RAS warnings**, and select **Preview scope and original warnings**. A verified, full native export and matching run inputs are required. If the export is missing, use **Complete native outputs / refresh deliverables** first.

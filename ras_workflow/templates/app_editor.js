@@ -43,7 +43,7 @@ async function showFinalReview(){
  notify(review.ready?tr('Changes saved. Review the complete inputs and highlighted assumptions before running.','更改已保存。请核对完整输入和标出的假设，再确认运行。'):tr('Changes saved. Resolve the listed inputs before running.','更改已保存。请处理列出的输入问题后再运行。'));
 }
 function renderFinalReview(){
- const review=finalReview;shell(1);window.scrollTo(0,0);const screen=$('#screen');screen.append(el('h1',tr('Confirm every input before HEC-RAS runs','HEC-RAS 运算前核对全部输入')),
+ const review=finalReview;rememberView({project:current.id,page:'confirm'});shell(2);window.scrollTo(0,0);const screen=$('#screen');screen.append(el('h1',tr('Confirm calculation inputs','开算前确认')),el('p',current.title,'status'),
  el('p',tr('Nothing has been solved yet. Edit any field; changes cancel this confirmation. No name, reason, or signature is required.','尚未开始求解。可以修改任意字段，修改后本次确认会失效。无需姓名、理由或签名。')),
  button('← Back to preparation','← 返回准备页面',async()=>{await save();finalReview=null;await open(current.id);}));
  const state=el('p',review.ready?tr('Technical input checks passed. Assumptions remain conditional.','必要输入检查通过。假设仍属于条件性输入。'):tr('Fill the items below, then refresh this list. The solver is paused.','请补齐下列项目并刷新清单，求解器处于等待状态。'),review.ready?'status':'warning');state.id='review-state';screen.append(state);
@@ -53,7 +53,7 @@ function renderFinalReview(){
   if(!current.gis)screen.append(button('Include GIS and check again','加入 GIS 并再次预检',async()=>{await saveAll();current.gis=true;mark();await save();await showFinalReview();}));
   if(r.gis.status==='BLOCKED'&&current.gis)screen.append(button('Switch to hydraulic results and reports only','改为仅交付水力结果和报告',async()=>{await saveAll();current.gis=false;mark();await save();await showFinalReview();}));
  }
- renderFeasibility(screen,review.feasibility);
+ renderFeasibility(details(screen,'Model scope and data limitations','模型适用范围与资料限制',review.feasibility?.state==='outside'),review.feasibility);
  if(showAcquisitionGaps(screen,current.acquisition))screen.append(button('Review source coverage and local files','查看来源覆盖和本地文件',async()=>{
   await save();finalReview=null;await open(current.id);
   const hub=document.querySelector('.source-hub');for(let p=hub;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;hub?.scrollIntoView({block:'start'});
@@ -167,7 +167,7 @@ function renderFeasibility(parent,data,editable=false){
  card.append(el('h2',tr('Before building this reach','开工前的项目判断')));
  const state={outside:tr('The requested flow paths exceed the single-reach steady model.','当前过流条件超出单河段恒定流范围。'),
   missing:tr('Inputs or datum checks remain. Use the available sources below.','还有待补输入或基准冲突，可按下表核对资料。'),
-  review:tr('Continue to parameter review. Verify the listed assumptions for this use.','可以继续核对参数，请按项目用途复核下列假设。')};
+  review:tr('Verify the listed assumptions for the intended use.','请按本项目用途核对所列假设。')};
  card.append(el('p',state[data.state],data.state==='outside'?'warning':'status'));
  if(data.use==='conditional_screening')card.append(el('p',tr('Suitable for a conditional screening run. Confirm the assumptions below before calculating.','当前可做条件性初筛。运算前请集中确认下列假设。')));
  const labels={scope:tr('Flow paths','过流路径'),flow:tr('Discharge','流量'),bed:tr('Submerged bed','水下河床'),
@@ -211,20 +211,28 @@ function renderFeasibility(parent,data,editable=false){
  }
 }
 
+function modelPreparationGroups(parent,intake){
+ const hasSections=intake.section_count>0,hasFiles=!!current.attachments?.length;
+ return {
+  sources:details(parent,'Site data and source files','现场资料与来源文件',!hasFiles&&!hasSections),
+  geometry:details(parent,'Map, cross sections and banks','地图、断面与岸站',hasFiles&&!hasSections),
+  inputs:details(parent,'Hydraulic parameters','水力参数',hasSections)
+ };
+}
 function renderManual(screen){
  if(current.model_type==='river'){renderRiverManual(screen);return;}
  const intake=current.intake;if(!intake){screen.append(button('Prepare terrain and inputs','准备地形与输入',async()=>{await api('prepare',{id:current.id});await open(current.id);}));return;}
  screen.append(el('h2',tr('Build from site materials','从现场资料建立模型')),el('p',tr('Import site materials and check the crossing on the DEM, then prepare an automatic draft. Review the highlighted uncertainties and remaining inputs together before confirming the calculation.','导入现场资料并在 DEM 上核对设施位置，然后自动准备草稿。集中核对标出的不确定项与剩余输入，再确认运算。')));
- const sources=intake.section_count?details(screen,'Review or add source material','查看或补充资料'):screen;
- renderSources(sources);renderAutomation(screen);renderAutoGeometry(screen);renderParameterNavigator(screen,intake.fields);
- const guide=details(screen,'What materials are useful?','准备哪些资料？',false);
+ const groups=modelPreparationGroups(screen,intake);
+ renderSources(groups.sources);renderAutoGeometry(groups.geometry);renderAutomation(groups.inputs);renderParameterNavigator(groups.inputs,intake.fields);
+ const guide=details(groups.sources,'What materials are useful?','准备哪些资料？',false);
  table(guide,[tr('Input','输入'),tr('Preferred material / what automation can do','优先资料／可自动处理的部分')],[
  [tr('Flow and roughness','流量与糙率'),tr('Applicable StreamStats / hydrology report; channel/overbank photos. DEM does not determine design flow.','本站 StreamStats／水文报告；河槽与漫滩照片。DEM 不能确定设计流量。')],
  [tr('Culverts','涵洞'),tr('Count, shape, clear dimensions, length, inlet/outlet inverts and datum, floor/inlet construction, blockage. Use drawings or measured photos.','孔数、形状、净尺寸、涵长、进出口涵底及基准、底板和入口构造、淤堵情况。优先竣工图或有尺度照片。')],
  [tr('Terrain and road','地形与道路'),tr('USGS DEM is fetched automatically. Pick flow direction and road crest; inspect sections and banks. Road width still needs an explicit value.','自动获取 USGS DEM。点选流向和路面高点线，查看断面和岸站。路宽仍须明确填写。')],
  [tr('Boundary','边界'),tr('Remote reach slope or applicable boundary data. Positive sampled slopes can be proposed; verify reach extent.','远端代表河段坡降或适用边界资料。可提出正地形坡降候选，需核对范围。')]]);
- if(current.terrain?.raster)screen.append(el('p',tr('DEM downloaded. Coordinates, elevations and source hashes are retained.','DEM 已下载，坐标、高程及来源哈希已保留。'),'status'));
- const categories={flow:details(screen,'A · Flow and roughness','A · 流量与糙率',false),geometry:details(screen,'B · DEM, sections and banks','B · DEM、断面和左右岸',false),structure:details(screen,'C · Culvert and road','C · 涵洞与道路',false),boundary:details(screen,'D · Units and boundaries','D · 单位与边界'),sections:details(screen,'E · All section data (editable)','E · 全部断面数据（可修改）')};
+ if(current.terrain?.raster)groups.geometry.append(el('p',tr('DEM downloaded. Coordinates, elevations and source hashes are retained.','DEM 已下载，坐标、高程及来源哈希已保留。'),'status'));
+ const categories={flow:details(groups.inputs,'Flow and roughness','流量与糙率'),geometry:details(groups.geometry,'Edit map and bank stations','编辑地图与岸站'),structure:details(groups.inputs,'Culvert and road','涵洞与道路'),boundary:details(groups.inputs,'Units and boundaries','单位与边界'),sections:details(groups.inputs,'All section data (editable)','全部断面数据（可修改）')};
  metadata(categories.geometry,false);renderMapEditor(categories.geometry);if(current.intake?.section_count)renderSectionRepair(categories.geometry);if(intake.geometry_review?.sections?.length)renderBanks(categories.geometry,intake.geometry_review);
 
  const losses=intake.fields.filter(f=>f.key.startsWith('g.cross_sections.')&&f.key.endsWith('.expansion_contraction')&&f.missing);
@@ -283,14 +291,14 @@ function renderRiverAutomation(card,data){
 }
 function renderRiverManual(screen){
  const intake=current.intake;if(!intake){screen.append(button('Prepare terrain and inputs','准备地形与输入',async()=>{await api('prepare',{id:current.id});await open(current.id);}));return;}
- screen.append(el('h2',tr('River reach between bridges','桥间纯河道')),
- el('p',tr('Place the upstream end below the upstream bridge and the downstream end above the downstream bridge. Bridge backwater can still affect the boundary. Select a defensible flow and boundary condition before solving.','上端设在上游桥下游侧，下端设在下游桥上游侧。桥梁壅水仍可能影响边界；计算前需选定有依据的流量与边界条件。')));
- const sources=intake.section_count?details(screen,'Review or add source material','查看或补充资料'):screen;
- renderSources(sources);
- const map=details(screen,'Reach extent and DEM','河段范围与 DEM',!intake.section_count);metadata(map,false);renderTerrainExtent(map);renderRiverMap(map);
- renderAutomation(screen);renderAutoGeometry(screen);renderParameterNavigator(screen,intake.fields);
- if(intake.section_count){const sections=details(screen,'Section and bank adjustments','断面和岸站调整');renderSectionRepair(sections);if(intake.geometry_review?.sections?.length)renderBanks(sections,intake.geometry_review);}
- const fullEditor=details(screen,'Edit individual hydraulic inputs','逐项编辑水力参数');
+ screen.append(el('h2',tr('River geometry and inputs','河道几何与输入')),
+ el('p',tr('Check the upstream and downstream limits against the site materials. Where a bridge sets the reach limit, review its influence on the boundary.','请按现场资料核对河段两端。如果以桥位划定范围，请核对桥梁对边界的影响。')));
+ const groups=modelPreparationGroups(screen,intake);
+ renderSources(groups.sources);
+ const map=details(groups.geometry,'Reach extent and DEM','河段范围与 DEM',!intake.section_count);metadata(map,false);renderTerrainExtent(map);renderRiverMap(map);
+ renderAutoGeometry(groups.geometry);renderAutomation(groups.inputs);renderParameterNavigator(groups.inputs,intake.fields);
+ if(intake.section_count){const sections=details(groups.geometry,'Section and bank adjustments','断面和岸站调整');renderSectionRepair(sections);if(intake.geometry_review?.sections?.length)renderBanks(sections,intake.geometry_review);}
+ const fullEditor=details(groups.inputs,'Edit individual hydraulic inputs','逐项编辑水力参数');
  const cats={flow:details(fullEditor,'Flow and roughness','流量与糙率'),boundary:details(fullEditor,'Channel bed and boundaries','河槽与边界'),sections:details(fullEditor,'All section data','全部断面数据')},xs={};
  for(const f of intake.fields){if(f.key.endsWith('.source')||f.key.endsWith('.parameter_source')||f.key==='g.functional_section_basis'||f.key.endsWith('.reach_length_basis'))continue;
   let target=f.key.startsWith('c.scenarios.')?cats.flow:f.key.startsWith('g.cross_sections.')?cats.sections:cats.boundary;
@@ -366,4 +374,4 @@ function renderRiverMap(parent){
  numeric.append(button('Save coordinates and show on map','保存坐标并显示到地图',saveCoordinates));
  state.textContent=points.length+tr(' saved anchors',' 个已保存锚点');
 }
-home().catch(e=>notify(e.message,true));
+resumePage().catch(e=>notify(e.message,true));

@@ -68,15 +68,15 @@ function showFieldSearch(box,a){
  panel.parentElement.addEventListener('toggle',()=>{if(panel.parentElement.open&&!result.hasChildNodes())void load();});
  if(panel.parentElement.open)void load();
 }
-function showResultAssessment(box,a){
+function showResultAssessment(overview,a,box=overview){
  const label=s=>tr(s.en,s.zh),ordered=a.next_actions||a.findings,primary=ordered[0];
- box.append(el('h2',tr('Delivery assessment','结果交付评估')+' · L'+a.level+' · '+label(a.title)));
+ overview.append(el('h2',tr('Delivery assessment','结果交付评估')+' · L'+a.level+' · '+label(a.title)));
  const use=[
   tr('Restore calculation evidence before interpreting water levels.','先恢复本次计算证据，再解读水位。'),
   tr('Use this edition for internal troubleshooting. Resolve the listed evidence or package gaps before handoff.','本版可用于内部排查，交出前先补齐所列证据或交付包。'),
   tr('Share the model and maps with an engineer for conditional review. Include the limitations below.','可以将本版模型和地图连同下列限制交给工程师复核。'),
   tr('The technical package can enter sign-off review. The responsible engineer decides suitability and approval.','技术资料可送签审，由负责工程师判断用途与签发。')];
- box.append(el('p',use[a.level]));
+ overview.append(el('p',use[a.level]));
  function action(parent,row){
   const f=row.facts||{};
   parent.append(el('p',(row.scope==='CANDIDATE'?tr('Unadopted alternative · ','未采用方案 · '):'')+label(row.reason)),el('p',assessmentFact(row),'muted'));
@@ -85,12 +85,13 @@ function showResultAssessment(box,a){
    table(detailsBox,[tr('Event / date','事件／日期'),'RS',tr('Residual (ft)','偏差（ft）'),tr('Survey uncertainty (ft)','实测不确定度（ft）'),tr('Source','来源')],f.observations.map(o=>[o.event+' / '+o.date,o.location?.rs??'—',o.residual_ft.toFixed(3),o.uncertainty_ft>0?o.uncertainty_ft:tr('Request survey record','待补联测或精度记录'),o.source||'—']));
   }
   if(row.code==='FIELD_RESIDUAL'||row.code==='BOUNDARY_INFLUENCE')parent.append(button('Add field feedback or export a request','补录现场反馈或导出索资清单',()=>openGuidanceTool('field-feedback')));
-  parent.append(button('Open related tool','打开对应工具',()=>{
+  const toolLabels={'field-search':['Find field records','查找实测资料'],observations:['Compare observed levels','对比实测水位'],qa:['Inspect warnings','查看警告'],floodplain:['Inspect overbank flow','检查漫滩流量'],delivery:['Check delivery files','检查交付文件']};
+  parent.append(button(...(toolLabels[row.target]||['Open related tool','打开对应工具']),()=>{
    openGuidanceTool(row.target);
    if(row.target==='floodplain'&&f.station)document.getElementById('qa-tool-floodplain')?.dispatchEvent(new CustomEvent('steadyreach-inspect-floodplain',{detail:{rs:f.station,geometry:f.case}}));
   }));
  }
- if(primary){const first=el('div');box.append(first);first.append(el('strong',tr('First action','优先处理')));action(first,primary);}
+ if(primary){const first=el('div');overview.append(first);first.append(el('strong',tr('First action','优先处理')));action(first,primary);}
  if(a.event_tailwaters?.length){
   const panel=details(box,'Measured tailwater by observed event','按实测事件核对尾水');
   table(panel,[tr('Event / date','事件／日期'),'RS','cfs',tr('Datum','基准'),tr('Observed interval (ft)','观测区间（ft）')],a.event_tailwaters.map(r=>[r.event+' / '+r.date,r.rs,r.flow_cfs,r.datum,r.interval_ft?.map(v=>v.toFixed(3)).join('–')??tr('Need verified event record and uncertainty','待补匹配事件资料与测量精度')]));
@@ -98,7 +99,7 @@ function showResultAssessment(box,a){
  }
  if(a.delivery){
   const d=a.diagnostics,counts=a.delivery.files;
-  box.append(el('p',tr('Delivery files','交付文件')+' · '+assessmentState(a.delivery.status)+(counts?' · Minimal '+counts.minimal+' / Complete '+counts.complete:''),
+  overview.append(el('p',tr('Delivery files','交付文件')+' · '+assessmentState(a.delivery.status)+(counts?' · Minimal '+counts.minimal+' / Complete '+counts.complete:''),
    'status'),el('p',tr('Native messages','原生信息')+' '+(d.native_messages??'—')+' · '+tr('Combined diagnostic records','综合诊断记录')+' '+(d.records??'—')+' · QA '+assessmentState(a.qa.status)));
  }
  if(ordered.length>1){const more=details(box,'Next actions in priority order ('+(ordered.length-1)+')','其余事项（按优先顺序，共 '+(ordered.length-1)+' 项）');for(const r of ordered.slice(1))action(more,r);}
@@ -148,14 +149,16 @@ function showResultAssessment(box,a){
 function openGuidanceTool(key){
  const node=document.getElementById(key==='observations'?'field-observations':'qa-tool-'+key)||document.getElementById('qa-tool-qa');
  if(!node)throw Error(tr('Reopen this result to load the review tool.','请重新打开结果以加载复核工具。'));
+ const panel=node.closest('[role="tabpanel"]');if(panel?.hidden)panel.dispatchEvent(new CustomEvent('steadyreach-show-panel'));
  for(let p=node;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;
  node.scrollIntoView({block:'start',behavior:'smooth'});
  node.setAttribute('tabindex','-1');node.focus({preventScroll:true});
  notify(tr('Review tool opened. No input changed and no calculation started.','已展开相应复核工具；未修改输入、未启动计算。'));
 }
-function renderGuidance(parent){
+function renderGuidance(parent,reviewPage=parent){
  const assessment=el('section',undefined,'result-assessment');parent.append(assessment);
- const box=details(parent,'Suggested next steps from this calculation','根据本次计算整理下一步');
+ const box=details(reviewPage,'Diagnostic priorities by location','按位置查看诊断优先项');
+ const secondary=el('section');reviewPage.append(secondary);
  const content=el('div');box.append(content);
  const id=current.id,hash=current.summary.sha256,edition=current.revision;
  async function load(){
@@ -170,7 +173,7 @@ function renderGuidance(parent){
    const data=await request;
    if(!content.isConnected||current?.id!==id||current.summary?.sha256!==hash||current.revision!==edition)return;
    assessment.replaceChildren();
-   if(data.assessment)showResultAssessment(assessment,data.assessment);
+   secondary.replaceChildren();if(data.assessment)showResultAssessment(assessment,data.assessment,secondary);
    content.replaceChildren();
    if(data.assessment?.level===0){content.append(el('p',tr('Reopen this result and restore the displayed evidence.','请重新打开本次结果，按上方提示恢复证据。')));return;}
    content.append(el('p',tr('Suggested work order, not a risk score. Opening a tool does not accept a change or start the solver.','以下为建议处理顺序，不是风险评分。打开工具不代表接受修改，也不会启动求解器。')),

@@ -75,7 +75,34 @@ function renderRevisionComparison(parent,comparison){
   comparison.threshold_ft+tr(' ft for review. This threshold supports screening. Hydraulic convergence, source adequacy and engineering acceptance require separate assessment.',' ft 的变化标为待复核，此阈值用于筛查。水力收敛、资料充分性与工程验收仍需分别判断。')));
 }
 
-function renderResultTools(parent){
+let lastResultPage={project:null,key:'overview'};
+function resultPages(parent){
+ const navigation=el('div',undefined,'result-pages');
+ navigation.setAttribute('role','tablist');navigation.setAttribute('aria-label',tr('Result views','结果视图'));parent.append(navigation);
+ const pages={},tabs={};
+ const names={overview:['Summary','结果总览'],review:['Hydraulic review','水力复核'],delivery:['Reports and maps','报告与地图']};
+ function select(key){
+  for(const [name,panel] of Object.entries(pages)){
+   panel.hidden=name!==key;tabs[name].setAttribute('aria-selected',String(name===key));tabs[name].tabIndex=name===key?0:-1;
+  }
+  lastResultPage={project:current.id,key};rememberView({project:current.id,page:'results',resultTab:key});
+ }
+ for(const [key,labels] of Object.entries(names)){
+  const control=el('button',tr(...labels));control.type='button';control.id='result-tab-'+key;control.setAttribute('role','tab');
+  const panel=el('section');panel.id='result-panel-'+key;panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby',control.id);panel.tabIndex=0;
+  control.setAttribute('aria-controls',panel.id);control.onclick=()=>select(key);
+  panel.addEventListener('steadyreach-show-panel',()=>select(key));
+  control.onkeydown=event=>{
+   const keys=Object.keys(names),i=keys.indexOf(key);
+   const next={Home:0,End:keys.length-1,ArrowLeft:(i+keys.length-1)%keys.length,ArrowRight:(i+1)%keys.length}[event.key];
+   if(next===undefined)return;event.preventDefault();select(keys[next]);tabs[keys[next]].focus();
+  };
+  tabs[key]=control;pages[key]=panel;navigation.append(control);parent.append(panel);
+ }
+ select(lastResultPage.project===current.id?lastResultPage.key:'overview');
+ return pages;
+}
+function renderResultTools(parent,delivery){
  renderNextReview(parent);
  const advanced=details(parent,'Investigate the results and compare scenarios','深入核查结果与比较工况');
  if(current.model_type==='river'&&!current.native_review){renderWarningStudy(advanced);renderFloodplain(advanced);renderRiverComparison(advanced);renderRiverObservations(advanced);renderFieldFeedback(advanced);}
@@ -84,8 +111,8 @@ function renderResultTools(parent){
  renderStudy(advanced);
  renderSpacing(advanced);
  renderCoverage(advanced);
- if(current.delivery?.mapped&&!current.exports_need_refresh)parent.append(button('Open QGIS review copy','打开 QGIS 复核副本',async()=>{const r=await api('qgis-preview',{id:current.id});notify(tr('Opened a separate preview copy: ','已打开独立复核副本：')+r.path);}));
- const box=details(parent,'Complete native outputs / refresh deliverables','补齐原生输出／更新交付包',!!current.exports_need_refresh||['UNAVAILABLE','COMPLETE_WITH_DIFFERENCES'].includes(current.automatic_native_outputs?.status));box.id='qa-tool-native';
+ if(current.delivery?.mapped&&!current.exports_need_refresh)delivery.append(button('Open QGIS review copy','打开 QGIS 复核副本',async()=>{const r=await api('qgis-preview',{id:current.id});notify(tr('Opened a separate preview copy: ','已打开独立复核副本：')+r.path);}));
+ const box=details(delivery,'Complete native outputs / refresh deliverables','补齐原生输出／更新交付包',!!current.exports_need_refresh||['UNAVAILABLE','COMPLETE_WITH_DIFFERENCES'].includes(current.automatic_native_outputs?.status));box.id='qa-tool-native';
  const deliveryAnchor=el('div');guidanceTarget(deliveryAnchor,'delivery');box.append(deliveryAnchor);
  if(current.model_type==='river')box.append(el('p',tr('The workflow exports the full native warning table for the river reach. There are no culvert group tables.','工作流导出整个河段的原生警告表，纯河道没有涵孔组表。')));
  else box.append(el('p',tr('After a new calculation, SteadyReach automatically exports every computed culvert group/profile and the full native warning table, then cross-checks them before reporting. Hydraulic interpretation still needs review.','新计算结束后，SteadyReach 自动导出各工况、各孔组明细及完整原生警告表，交叉核验后纳入报告。水力含义仍需工程判断。')));
@@ -321,7 +348,7 @@ function renderStudy(parent){
 function renderNextReview(parent){
  if(current.native_review)return;
  const record=current.next_review;
- const box=details(parent,'Suggested next review','下一项复核建议',true);box.id='qa-tool-next-review';
+ const box=details(parent,'Prepare a follow-up check','准备后续复核',!!record?.preview);box.id='qa-tool-next-review';
  const reasons={
   WET_SECTION_ENDS:tr('Actual water levels exceed section ends. A bounded DEM extension preview is ready below.','实际水位超出断面端点，下方已准备限定范围的 DEM 延伸预览。'),
   NO_WET_SECTION_ENDS:tr('No positive wet-end exceedance was found in the verified outputs. Applicable sensitivity and spacing previews are ready below; other hydraulic warnings remain for review.','已核验输出未检出端点被水位超出的情况。下方已准备适用的敏感性和加密预览，其他水力警告仍需复核。'),
@@ -350,7 +377,7 @@ function renderNextReview(parent){
     if(joint.project_id&&!['UNAVAILABLE','SOURCE_CHANGED'].includes(joint.status))box.append(button('Open the prepared geometry revision','打开已准备的几何修订',async()=>{await open(joint.project_id);},'primary'));
    }
    box.append(el('p',tr('Preparation starts no additional solver run. Inspect the preview and its assumptions, then use its confirmation control. Existing results and packages remain available.','准备过程不启动追加求解。请查看预览及假设，再使用对应的确认按钮。已有结果与交付包仍可使用。'),'muted'));
-   if(record.preview)box.append(button('Inspect the prepared review','查看已准备的复核',()=>{const target=document.getElementById(record.action==='coverage'?'qa-tool-coverage':'qa-tool-check-batch');if(target){const panel=target.closest('details');if(panel)panel.open=true;target.scrollIntoView({block:'start'});}}));
+   if(record.preview)box.append(button('Inspect the prepared review','查看已准备的复核',()=>openGuidanceTool(record.action==='coverage'?'coverage':'check-batch')));
   }
  }else box.append(el('p',tr('Prepare the applicable next review from this saved calculation. No additional solver run starts.','根据已保存计算准备适用的下一项复核，不启动追加求解。')));
  if(!record||['PREPARATION_FAILED','UNAVAILABLE'].includes(record.status))box.append(button('Prepare next review automatically','自动准备下一项复核',async()=>{await api('next-review',{id:current.id,revision:current.revision});await open(current.id);}));
