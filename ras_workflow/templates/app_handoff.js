@@ -48,10 +48,11 @@ function renderHandoff(parent) {
 }
 function renderPilotClock(parent){
  const timer=el('div');timer.id='project-pilot-clock';timer.hidden=true;
- parent.append(button('Pilot log','试点记录',async()=>{
+ const toggle=button('Pilot log','试点记录',async()=>{
   if(timer.hidden)await timer.showClock();else timer.hidden=true;
- }),timer);
- timer.showClock=async()=>{await showClock();timer.hidden=false;};
+  toggle.setAttribute('aria-expanded',String(!timer.hidden));notify();
+ });toggle.setAttribute('aria-controls',timer.id);toggle.setAttribute('aria-expanded','false');parent.append(toggle,timer);
+ timer.showClock=async()=>{await showClock();timer.hidden=false;toggle.setAttribute('aria-expanded','true');};
  async function showClock(action='read',revision=null){
   const info=await api('pilot-clock',{id:current.id,action,timer_revision:revision});
   timer.replaceChildren();

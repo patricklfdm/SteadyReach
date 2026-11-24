@@ -45,7 +45,7 @@ function renderResultAtlas(parent){
   output.replaceChildren();output.append(el('p',data.sections.length+tr(' section/profile records · ',' 条断面／工况记录 · ')+data.attention_section_profiles+tr(' with warnings or geometric observations · ',' 条带警告或几何观察 · ')+data.located_diagnostic_count+'/'+data.diagnostic_count+tr(' diagnostic records located.',' 条诊断已定位。'),'status'));
   output.append(el('p',tr('These are sealed calculation inputs and outputs. No geometry is changed and no warning is closed. Separate wet areas do not prove effective conveyance or connection along the reach.','此处读取封存的计算输入与输出，不修改几何或关闭警告。分隔湿区不能证明有效过流或沿河段连通。'),'warning'));
   for(const error of data.source_errors)output.append(el('p',error,'warning'));
-  output.append(el('p',tr('Native warning coverage: ','原生警告覆盖：')+data.warning_coverage));
+  output.append(el('p',tr('Native warning coverage: ','原生警告覆盖：')+warningCoverageLabel(data.warning_coverage)));
   if(data.unlocated_issues.length){const other=details(output,'Messages without a unique section ('+data.unlocated_issues.length+')','无法唯一定位到断面的信息（'+data.unlocated_issues.length+'）');table(other,['Profile','RS','Code','Message'],data.unlocated_issues.map(i=>[i.profile??'—',i.station??'—',i.code,i.evidence?.native_message||i.recommended_action]));}
   const controls=el('div');output.append(controls);
   const profile=field(controls,'atlas-profile','Profile','工况','','select',[['','All profiles','全部工况'],...[...new Set(data.sections.map(r=>r.profile))].map(v=>[v,v,v])]);

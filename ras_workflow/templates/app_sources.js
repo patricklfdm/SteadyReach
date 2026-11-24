@@ -116,7 +116,7 @@ function renderPreparationActions(parent,actions){
    host.append(button('Open model checks','打开模型检查',()=>openModelTool('model-automation')));
   }else if(kind==='derive'){
    host.append(el('p',tr('Use the saved materials and terrain to propose inputs first. Review assumptions together before starting HEC-RAS.','先用已保存的资料和地形推导候选参数。开算前再集中核对假设。')),
-    button('Prepare an automatic draft','自动准备草稿（含标注的估计值）',async()=>{const id=current.id;await saveAll();await api('automatic-prepare',{id,revision:current.revision});await open(id);},'primary'));
+    button('Prepare an automatic draft','自动准备草稿（含标注的估计值）',async()=>{const id=current.id;await save();await api('automatic-prepare',{id,revision:current.revision});await open(id);},'primary'));
   }else if(kind==='checks'){
    host.append(button('Locate the failed checks','定位检查项',showFinalReview));
   }else{
@@ -167,7 +167,7 @@ function renderFisSelection(parent) {
  const apply = button('Apply this flow and checked roughness', '采用此流量与勾选的糙率', async () => {
   if (!selected) throw Error(tr('Choose a hydrologic location first.', '请先选择适用水文位置。'));
   const chosen = [selected, ...roughnessSelections.filter(row => row.input.checked).map(row => row.candidate)];
-  await saveAll();
+  await save();
   const selections = chosen.map(candidate => {
    const fresh = current.intake.fields.find(field => field.key === candidate.field)
     ?.parameter_candidates.find(value => value.candidate === candidate.candidate);
@@ -258,7 +258,7 @@ function renderSources(parent){
  const fi=field(imports,'attachments','Choose source files (multiple allowed)','选择资料（可多选）','','file');fi.multiple=true;fi.accept='.pdf,.jpg,.jpeg,.png,.tif,.tiff,.csv,.txt,.xml,.docx,.kml,.kmz';
  imports.append(button('Save and extract selected files','保存并解析所选资料',async()=>{await save();if(!fi.files.length)throw Error(tr('Select files first.','请先选择文件。'));const chosen=[...fi.files];let batch=[],bytes=0;for(const f of chosen){if(f.size>15000000)throw Error(tr('Each file must be at most 15 MB. Use the single-site folder import for many files.','单文件不能超过 15 MB，多份资料可使用本站文件夹导入。'));batch.push(f);bytes+=f.size;}if(bytes>48000000)throw Error(tr('Selection exceeds 48 MB; use the local site folder below.','所选资料超过 48 MB，请使用下方本机资料文件夹导入。'));await api('attach',{id:current.id,files:await encodeFiles(batch)});await open(current.id);}));
  if(!current.native){const path=field(imports,'material-folder','Or paste the existing single-site folder path','或粘贴已下载的本站资料文件夹路径');imports.append(button('Import this folder and analyze','导入此文件夹并解析',async()=>{await save();await api('sources/folder',{id:current.id,revision:current.revision,path:path.value});await open(current.id);}));imports.append(el('small',tr('Supported source files only, up to 100 files / 100 MB. Original files are unchanged; native HEC-RAS models are not imported here.','只导入支持的资料格式，最多 100 份／100 MB。原件不变，此处不会导入 HEC-RAS 模型。')),button('Download optional parameter CSV template','下载可选参数 CSV 模板',downloadParameterTemplate));}
- if(!current.native){const record=details(card,'Import another public USGS catalog record','导入其他公开 USGS 资料记录');const url=field(record,'catalog-url','ScienceBase catalog item URL','ScienceBase 公开目录页面网址');record.append(el('p',tr('Use an item page from the search results or a known source. Downloads are bounded to supported document files; check site/event/group applicability. Archives or browser verification remain explicit handoffs.','可使用查询结果或已知资料的目录页面。下载受大小和格式限制，仍须核对地点、工况及涵孔组；压缩包及浏览器验证会明确提示手动接续。')),button('Download available documents and analyze','下载可用文档并解析',async()=>{await saveAll();await api('catalog-import',{id:current.id,revision:current.revision,url:url.value});await open(current.id);}));if(current.catalog_result)table(record,[tr('File','文件'),tr('Status','状态'),tr('Detail','详情')],current.catalog_result.files.map(r=>[r.name,sourceStatus(r.status),r.error||r.reason||'']));}
+ if(!current.native){const record=details(card,'Import another public USGS catalog record','导入其他公开 USGS 资料记录');const url=field(record,'catalog-url','ScienceBase catalog item URL','ScienceBase 公开目录页面网址');record.append(el('p',tr('Use an item page from the search results or a known source. Downloads are bounded to supported document files; check site/event/group applicability. Archives or browser verification remain explicit handoffs.','可使用查询结果或已知资料的目录页面。下载受大小和格式限制，仍须核对地点、工况及涵孔组；压缩包及浏览器验证会明确提示手动接续。')),button('Download available documents and analyze','下载可用文档并解析',async()=>{await save();await api('catalog-import',{id:current.id,revision:current.revision,url:url.value});await open(current.id);}));if(current.catalog_result)table(record,[tr('File','文件'),tr('Status','状态'),tr('Detail','详情')],current.catalog_result.files.map(r=>[r.name,sourceStatus(r.status),r.error||r.reason||'']));}
  if(a){
   card.append(el('p',`${a.documents.length} `+tr('documents attempted','份资料已尝试解析')+` · ${a.documents.filter(d=>d.status==='EXTRACTION_FAILED').length} `+tr('failed (originals retained)','份提取失败（原件保留）')+` · ${a.candidates.length} `+tr('source candidates','项来源候选')+` · ${a.surveys.reduce((n,s)=>n+s.points.length,0)} `+tr('survey points','个测点'),'status'));
   const visual=a.documents.filter(d=>d.visual_only);

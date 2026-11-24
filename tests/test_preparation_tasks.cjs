@@ -56,7 +56,7 @@ test('clicking automatic preparation acts on the current saved project',async()=
  let click;const calls=[];
  const ctx=vm.createContext({current:{id:'site_test',revision:3},tr:en=>en,
   el:()=>({append(){}}),button:(en,zh,fn)=>{click=fn;return {};},
-  saveAll:async()=>{ctx.current.revision=4;},api:async(route,body)=>calls.push([route,body.id,body.revision]),open:async id=>calls.push([id])});
+  save:async()=>{ctx.current.revision=4;},api:async(route,body)=>calls.push([route,body.id,body.revision]),open:async id=>calls.push([id])});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../ras_workflow/templates/app_sources.js'),'utf8'),ctx);
  ctx.renderPreparationActions({append(){}},[{kind:'derive',fields:[]}]);
  await click();assert.deepEqual(calls,[['automatic-prepare','site_test',4],['site_test']]);

@@ -54,7 +54,9 @@ function renderFieldFeedback(parent){
    feedbackLink(panel,data.template,tr('Download the prefilled point table (CSV)','下载已预填的测点表（CSV）'));
    const events=[...new Set(data.rows.map(r=>JSON.stringify([r.event,r.date])))];
    const savedEvent=saved.event?.review;
-   const selected=field(panel,'field-event','Observed event','观测事件',savedEvent?JSON.stringify([savedEvent.event,savedEvent.date]):events[0],'select',events.map(v=>[v,JSON.parse(v).join(' / '),JSON.parse(v).join(' / ')]));
+   const eventKey=draftKey('feedback-event/'+request.summary_hash,request.id);
+   const preferred=readDraft(eventKey),lastEvent=savedEvent?JSON.stringify([savedEvent.event,savedEvent.date]):null;
+   const selected=field(panel,'field-event','Observed event','观测事件',events.includes(preferred)?preferred:events.includes(lastEvent)?lastEvent:events[0],'select',events.map(v=>[v,JSON.parse(v).join(' / '),JSON.parse(v).join(' / ')]));
    const wrap=el('div');panel.append(wrap);
    function edit(){
     wrap.replaceChildren();
@@ -69,30 +71,44 @@ function renderFieldFeedback(parent){
     const ref=field(wrap,'feedback-reference','Field record or assumption','现场记录出处或假设说明');
     const file=field(wrap,'field-source','Supporting record for documented feedback','实测反馈的证明文件','','file');file.accept='.txt,.pdf,.csv,.png,.jpg,.jpeg';
     const csv=field(wrap,'field-return','Or import the edited point table','或导入逐点编辑的反馈表','','file');csv.accept='.csv';
+    const key=draftKey('field-feedback/'+request.summary_hash+'/'+selected.value,request.id);
+    const inputs=[group,point,scope,u,ref,file,csv];
     const preview=el('div');
+    const missingFiles=restoreForm(key,inputs);
+    if(missingFiles.length){
+     const reminder=el('div');wrap.append(reminder);
+     reminder.append(el('p',tr('Reselect draft attachments: ','请重新选择草稿附件：')+missingFiles.join(', '),'warning'),
+      button('Continue without the missing attachments','清除待重选的附件',async()=>{
+       for(const input of [file,csv])delete input.dataset.reselect;
+       rememberForm(key,inputs);reminder.hidden=true;
+      }));
+    }
     wrap.append(button('Save and preview field feedback','保存并预览现场反馈',async()=>{
+     for(const input of [file,csv])if(input.dataset.reselect&&!input.files.length)throw Error(tr('Reselect your attachment or clear the file selection: ','请重新选择附件或清除所选文件：')+JSON.parse(input.dataset.reselect).join(', '));
      const updates=values.map(r=>group.value==='unknown'||(scope.value==='boundary'&&r.role!=='boundary')||(scope.value==='other'&&r.role==='boundary')?r:{...r,basis:group.value,point_type:point.value,uncertainty_ft:u.value,reference:ref.value});
      const payload={...request,mode:'event',event,date,csv:csv.files[0]?await csv.files[0].text():feedbackCsv(updates)};
      if(saved.event?.review?.event===event&&saved.event.review.date===date&&saved.event.review.supporting_record)payload.reuse_document=saved.event.token;
      if(file.files[0]){const f=file.files[0];if(f.size>12000000)throw Error(tr('Maximum 12 MB','最大 12 MB'));
       payload.attachment={name:f.name,data:await new Promise((ok,fail)=>{const reader=new FileReader();reader.onerror=()=>fail(Error('File read failed'));reader.onload=()=>ok(reader.result.split(',')[1]);reader.readAsDataURL(f);})};}
-     const p=await api('field/preview',payload);saved.event=p;
+     const p=await api('field/preview',payload);saved.event=p;forgetForm(key,inputs);
      for(const entry of p.review.rows)Object.assign(values.find(v=>v.point_id===entry.point_id),entry);
      feedbackPreview(preview,p,request);notify(tr('Feedback saved. Review the values below.','已保存反馈，请核对下方数值。'));
     }),preview);
     if(snapshot)feedbackPreview(preview,saved.event,request);
     const dirty=()=>preview.replaceChildren(el('p',tr('Save edits to review the updated scenario before computing.','请保存修改并核对新预览后再计算。'),'status'));
-    for(const input of [group,point,scope,u,ref,file,csv])input.addEventListener('input',dirty);
+    if(readDraft(key))dirty();
+    observeForm(key,inputs,dirty);
    }
    async function switchEvent(){
-    const selection=selected.value,[event,date]=JSON.parse(selection);
+    const selection=selected.value,[event,date]=JSON.parse(selection);writeDraft(eventKey,selection);
     wrap.replaceChildren(el('p',tr('Reading saved feedback…','正在读取已存反馈…')));
     try{
      const state=await api('field/latest',{...request,event,date});
      if(selected.value===selection){saved.event=state.event;edit();}
     }catch(e){if(selected.value===selection)wrap.replaceChildren(el('p',e.message,'warning'),button('Retry','重试',switchEvent));}
    }
-   selected.onchange=switchEvent;edit();
+   selected.onchange=switchEvent;
+   if(events.includes(preferred)&&lastEvent!==preferred)await switchEvent();else edit();
   }catch(e){panel.replaceChildren(el('p',e.message,'warning'),button('Retry field records','重试读取现场资料',load));}
  }
  box.parentElement.addEventListener('toggle',()=>{if(box.parentElement.open&&!started){started=true;void load();}});

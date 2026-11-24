@@ -9,7 +9,7 @@ function revealParameter(key){
  requestAnimationFrame(()=>{if(input.isConnected&&!input.disabled)input.focus({preventScroll:true});});
 }
 async function openModelTool(id){
- if(finalReview||document.getElementById('confirm-run')){await saveAll();finalReview=null;await open(current.id);}
+ if(finalReview||document.getElementById('confirm-run')){await save();finalReview=null;await open(current.id);}
  const node=document.getElementById(id);
  if(!node)throw Error(tr('Reopen model preparation to load this tool.','请重新打开模型准备页以载入此工具。'));
  for(let p=node;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;
@@ -24,7 +24,7 @@ function renderAutomation(parent){
  const status=el('p',tr('Early checks: ','提前检查：')+checks.blocking_count+tr(' blocking · ',' 项待解决 · ')+(issues.length-checks.blocking_count)+tr(' notices',' 项提醒'),issues.length?'warning':'status');card.append(status);
  if(issues.length){const d=details(card,'Geometry / dependency checks ('+issues.length+')','几何／关联参数检查（'+issues.length+'）',true);for(const q of issues){const p=el('p',tr(q.message,q.zh));p.append(el('small',q.code+(q.tentative?tr(' · tentative point pairing',' · 测点配对尚未确认'):'')));if(q.field)p.append(button('Edit input','修改参数',async()=>revealParameter(q.field)));else if(q.sections?.length)p.append(button('Inspect section','查看断面',async()=>sectionRepairController?.select(q.sections[0])));d.append(p);}}
  const automatic=el('div',undefined,'actions');card.append(automatic);
- automatic.append(button('Prepare an automatic draft','自动准备草稿（含标注的估计值）',async()=>{await saveAll();await api('automatic-prepare',{id:current.id,revision:current.revision});await open(current.id);},'primary'));
+ automatic.append(button('Prepare an automatic draft','自动准备草稿（含标注的估计值）',async()=>{await save();await api('automatic-prepare',{id:current.id,revision:current.revision});await open(current.id);},'primary'));
  card.append(el('p',tr('Extract materials, repair DEM geometry and fill dependent values together. All estimates stay editable in the final confirmation. Check crossing direction, construction assumptions and conflicting sources.','集中提取资料、修正 DEM 几何并填入关联参数；估计值可在最终确认前修改。重点核对流向、结构假设及资料冲突。'),'muted'));
  const prepared=current.preparation_result;if(prepared){const last=prepared.stages.at(-1);card.append(el('p',tr('Automatic draft saved · ','自动草稿已保存 · ')+prepared.stages.reduce((n,s)=>n+s.changed_fields.length,0)+tr(' field updates · ',' 次参数更新 · ')+(current.intake?.fields?.filter(f=>f.required&&f.missing).length??last.missing_required.length)+tr(' required items remaining · ',' 个必填项待补 · ')+(current.intake?.fields?.filter(f=>f.source_conflict).length??last.conflicts.length)+tr(' current source items to review',' 项来源当前待核对'),'status'));renderPreparedBanks(card,prepared);renderPreparationAttention(card,current.intake?.current_attention??prepared.attention);}
  if(current.model_type!=='river')renderOpeningAssociations(card,data);
@@ -71,10 +71,14 @@ function renderOpeningAssociations(parent,data){
  const box=details(parent,'Opening groups and survey-point associations','多组涵孔与测点关联',!data.mapping.length&&!!data.suggested.length);
  box.append(el('p',tr('Pairing is suggested from point codes and the selected flow direction. Confirm each inlet/outlet pair against the map or sketch. “Location only” supplies no invert. Crown minus height requires an explicit interior-crown interpretation.','按测点代码和已选流向提出配对。请对照地图或草图核对进出口。“仅位置”不推导涵底；采用“内顶减净高”需明确确认测点为内顶。')));
  if(!data.surveys.length){box.append(el('p',tr('Import a survey and resolve its CRS/units to enable point pairing. You can still edit group parameters and use the DEM/map tools below.','导入测量资料并确定坐标／单位后，可启用测点配对；仍可在下方编辑涵孔参数及使用地图。'),'muted'));return;}
- const draftKey='opening-association-'+current.id;let rows=structuredClone(data.mapping.length?data.mapping:[]);
- let restored=false;try{const cached=JSON.parse(sessionStorage.getItem(draftKey)||'null');if(cached?.revision===current.revision){rows=cached.rows;restored=true;}}catch{}
+ const key='opening-association-'+current.id;
+ const context=JSON.stringify([data.mapping,data.groups,data.surveys.map(s=>[s.source.sha256,s.context_hash])]);
+ let rows=structuredClone(data.mapping.length?data.mapping:[]);
+ let restored=false,cached=null;cached=readDraft(key);
+ if(cached&&(cached.context===context||(!cached.context&&cached.revision===current.revision))){rows=cached.rows;restored=true;}
+ else if(cached)box.append(el('p',tr('Opening groups or survey sources changed. Recheck the saved pairing draft below.','涵孔组或测量来源已改变，请重新核对此前的配对草稿。'),'warning'),el('pre',JSON.stringify(cached.rows,null,2)));
  const content=el('div'),feedback=el('p','', 'status');box.append(feedback);
- const remember=()=>{stageChange('associations',tr('Opening associations','洞口关联'),1,commitAssociations);sessionStorage.setItem(draftKey,JSON.stringify({revision:current.revision,rows}));feedback.textContent=tr('Association edits retained in this browser; click Save associations to prepare candidates.','关联编辑已暂存；点击“保存关联”后生成候选。');};
+ const remember=()=>{stageChange('associations',tr('Opening associations','洞口关联'),1,commitAssociations);writeDraft(key,{revision:current.revision,context,rows,createGroups:create.checked});feedback.textContent=tr('Association edits retained in this browser; click Save associations to prepare candidates.','关联编辑已暂存；点击“保存关联”后生成候选。');};
  box.append(button('Suggest all opening pairs','自动建议全部洞口配对',async()=>{rows=structuredClone(data.suggested);remember();draw();notify(rows.length?tr('Pairing proposal ready. Check group order and point meaning before saving.','配对提案已就绪，请核对组顺序及测点含义后保存。'):tr('No unambiguous pairing found. Add a row and identify points from the map or source.','未找到明确配对；可增加一行并从地图或资料指认测点。'));}));
  box.append(content);
  function draw(){content.replaceChildren();for(const [i,r] of rows.entries()){
@@ -90,8 +94,8 @@ function renderOpeningAssociations(parent,data){
   row.append(el('small',tr('Several IDs at one mouth use their mean XY/elevation. Do not combine different barrels or unrelated surfaces. Same-group members must share hydraulic parameters; split them otherwise.','同一洞口多个点使用 XY／高程均值。不可混合不同涵孔或不同表面；同组孔的水力参数必须一致，否则分组。')),button('Remove association','移除关联',async()=>{rows.splice(i,1);remember();draw();}));
  }}
  box.append(button('Add opening association','增加洞口关联',async()=>{const s=data.surveys[0];rows.push({group:Math.min(rows.length,9),barrel:0,shape:'circular',source:s.source.sha256,context_hash:s.context_hash,us:[],ds:[],interpretation:'location'});remember();draw();}));
- const create=check(box,'Allow creating the displayed new groups (dimensions remain unknown)','允许创建显示的新组（未知尺寸仍留空）',false,()=>{});
- async function commitAssociations(){await save();current=await api('opening-associations',{id:current.id,revision:current.revision,mapping:rows,create_groups:create.checked});sessionStorage.removeItem(draftKey);pendingChanges.delete('associations');}
+ const create=check(box,'Allow creating the displayed new groups (dimensions remain unknown)','允许创建显示的新组（未知尺寸仍留空）',restored&&cached.createGroups===true,remember);
+ async function commitAssociations(){await save();current=await api('opening-associations',{id:current.id,revision:current.revision,mapping:rows,create_groups:create.checked});writeDraft(key,null);pendingChanges.delete('associations');}
  box.append(button('Save associations / prepare candidates','保存关联／生成候选',async()=>{await commitAssociations();await open(current.id);notify(tr('Associations saved; dependent candidates refreshed.','关联已保存，关联候选已刷新。'));},'primary'));
  draw();if(restored)remember();
 }
@@ -99,14 +103,14 @@ function renderOpeningAssociations(parent,data){
 function sameCandidate(a,b){
  return ['value','evidence_class','basis','automation_context','source','sources'].every(k=>JSON.stringify(a?.[k])===JSON.stringify(b?.[k]));
 }
-function renderCandidateBatch(parent,retained=new Map()){
+function renderCandidateBatch(parent,retained=new Map(readDraft(draftKey('candidates'))||[])){
  const all=current.intake.fields.filter(f=>(f.parameter_candidates?.length||retained.has(f.key))&&!f.key.endsWith('.bank_stations_ft'));
  const pending=all.filter(f=>f.missing),box=details(parent,'Review parameter candidates together ('+pending.length+' missing fields)','集中核对参数候选（'+pending.length+' 个缺项）');
  box.closest('details').dataset.candidateBatch='true';
  box.append(el('p',tr('Existing values are kept unless you explicitly select a replacement. A selected assumption is still conditional. You can edit any parameter in the full form below.','已有值默认保留，仅在明确选择替代值后修改。选中的假设仍是条件性输入，全部参数可在下方完整表单中修改。')));
  const selections=new Map(retained),selects=new Map(),feedback=el('p',tr('No candidates selected.','尚未选择候选。'),'status');box.append(feedback);
  box.closest('details').candidateSelections=selections;
- function count(){feedback.textContent=selections.size+tr(' candidates selected; not saved yet.',' 项候选已选，尚未保存。');stageChange('candidates',tr('Parameter candidates','参数候选'),selections.size,commitCandidates);}
+ function count(){writeDraft(draftKey('candidates'),selections.size?[...selections]:null);feedback.textContent=selections.size+tr(' candidates selected; not saved yet.',' 项候选已选，尚未保存。');stageChange('candidates',tr('Parameter candidates','参数候选'),selections.size,commitCandidates);}
  const controls=el('div',undefined,'actions');box.append(controls);
  controls.append(button('Select changed derived values','选中已变化的推导值',async()=>{for(const f of all.filter(v=>v.derived_update_available)){const choices=f.parameter_candidates.filter(c=>c.automation_context);if(choices.length===1){const n=f.parameter_candidates.indexOf(choices[0]);selects.get(f.key).value=String(n);selects.get(f.key).dispatchEvent(new Event('change'));}}count();notify(tr('Changed derived values selected for review; manual overrides are retained.','已选择有变化的推导值供核对，手动输入保持不变。'));}));
  controls.append(button('Select unique missing candidates','选中缺项的唯一候选',async()=>{for(const f of pending){const choices=f.parameter_candidates;const unique=choices.length&&choices.every(c=>JSON.stringify(c.value)===JSON.stringify(choices[0].value)&&c.evidence_class===choices[0].evidence_class);if(unique){selections.set(f.key,choices[0]);selects.get(f.key).value='0';selects.get(f.key).dispatchEvent(new Event('change'));}}count();notify(tr('Selections prepared. Inspect their conditions before applying.','选择已准备，请检查适用条件后集中采用。'));}),button('Clear selections','清空选择',async()=>{selections.clear();selects.forEach(s=>{s.value='';s.dispatchEvent(new Event('change'));});count();}));
@@ -132,6 +136,19 @@ function renderCandidateBatch(parent,retained=new Map()){
  count();
 }
 
+function readBankChoices(key,review,parent){
+ const entries=readDraft(draftKey(key))||[],choices=new Map(),changed=[];
+ for(const entry of entries){
+  if(review.fingerprints?.[entry.index]&&entry.fingerprint===review.fingerprints[entry.index])choices.set(entry.index,entry.indices);
+  else changed.push('RS '+entry.rs);
+ }
+ if(changed.length)parent.append(el('p',tr('Geometry changed. Select banks again at ','断面几何已变化，请重新选择岸站：')+changed.join(', '),'warning'));
+ return choices;
+}
+function storeBankChoices(key,review,choices){
+ const entries=Array.from(choices,([index,indices])=>({index,rs:review.sections[index].rs,fingerprint:review.fingerprints[index],indices}));
+ writeDraft(draftKey(key),entries.length?entries:null);
+}
 function bankReviewReason(code){
  const names={MISSING_OR_INVALID_BANKS:['Missing or invalid banks','岸站缺失或无效'],INFERRED_SPACING_BANKS_REQUIRE_REVIEW:['Banks inherited from adjacent sections','岸站由相邻断面推定'],STALE_BANK_PROFILE_CONTEXT:['Bank derivation belongs to an earlier profile','岸站依据属于旧剖面'],BANK_METHOD_NOT_RECORDED:['Bank interpretation method is not recorded','未记录岸站判读方法'],SCALE_SENSITIVE_BANKS:['Banks vary with smoothing scale','岸站随平滑尺度变化'],COMPETING_LEFT_BANKS:['Multiple plausible left banks','左岸有多个候选'],COMPETING_RIGHT_BANKS:['Multiple plausible right banks','右岸有多个候选'],ASYMMETRIC_BANK_RELIEF:['Asymmetric bank relief','两岸高差不对称'],CONTINUITY_WEIGHT_SENSITIVE:['Reach continuity weights change the choice','沿程连续性权重影响选择'],REACH_CONTINUITY_CHANGED_LOCAL_CHOICE:['Reach-wide selection changed the local choice','沿程选择改变了局部候选'],NO_SCALE_STABLE_BANK_PAIR:['No stable pair across scales','不同尺度下无稳定岸站对'],WEAK_LOCAL_BANK_EVIDENCE:['Weak local bank evidence','局部岸站依据较弱'],BANK_WIDTH_DISCONTINUITY:['Abrupt bank-width change','岸宽沿程突变'],INTERPOLATED_BANKS_REQUIRE_LOCAL_REVIEW:['Banks interpolated from neighboring sections','岸站从相邻断面插值'],LOW_OUTER_TERRAIN_OR_MULTIPLE_CHANNELS:['Low outer terrain or multiple channels','外侧低地或多河槽'],DISTINCT_SLOPE_BREAKS_REVIEW_REQUIRED:['Distinct terrain slope breaks; review applicability','坡折较明确，仍需判断适用性']};
  return names[code]?tr(...names[code]):code;
@@ -152,18 +169,19 @@ function renderBankBatch(parent,review){
  const filter=field(box,'bank-review-filter','Show sections','显示断面',inventory?.attention_count?'attention':'all','select',[
  ['attention','Needs interpretation','有判读提示'],...focusFilters,['inferred','Inferred from neighbors','相邻断面推定'],['ambiguous','Ambiguous terrain','地形判读歧义'],['missing','Missing / invalid banks','岸站缺失／无效'],['all','All sections','全部断面']]);
  const visible=el('p','', 'status');box.append(visible);
- const cards=new Map(),picks=new Map(),selected=new Set(),feedback=el('p','', 'status');box.append(feedback);
+ const drafts=readBankChoices('banks',review,box);
+ const cards=new Map(),picks=new Map(),selected=new Set(drafts.keys()),feedback=el('p','', 'status');box.append(feedback);
  function showFilter(){let count=0;for(const [i,card] of cards){card.hidden=!bankVisible(filter.value,assessments.get(i),selected.has(i));if(!card.hidden)count++;}visible.textContent=count+tr(' of ',' / ')+review.sections.length+tr(' sections shown. Pending changes stay visible.',' 条断面可见；待保存更改始终保留显示。');}
  filter.onchange=()=>{showFilter();notify(visible.textContent);};
- const count=()=>{const incomplete=[...selected].filter(i=>!bankPairReady(review.sections[i],picks.get(i))).map(i=>'RS '+review.sections[i].rs);feedback.textContent=selected.size+tr(' sections selected; existing banks on other sections will be retained.',' 条断面待保存，其余断面的已存岸站会保留。')+(incomplete.length?tr(' Check both bank positions before saving: ',' 保存前请补齐或修正左右岸：')+incomplete.join(', '):'');feedback.className=incomplete.length?'warning':'status';stageChange('banks',tr('Bank positions','岸站'),selected.size,commitBanks);showFilter();};
+ const count=()=>{storeBankChoices('banks',review,[...selected].map(i=>[i,picks.get(i)]));const incomplete=[...selected].filter(i=>!bankPairReady(review.sections[i],picks.get(i))).map(i=>'RS '+review.sections[i].rs);feedback.textContent=selected.size+tr(' sections selected; existing banks on other sections will be retained.',' 条断面待保存，其余断面的已存岸站会保留。')+(incomplete.length?tr(' Check both bank positions before saving: ',' 保存前请补齐或修正左右岸：')+incomplete.join(', '):'');feedback.className=incomplete.length?'warning':'status';stageChange('banks',tr('Bank positions','岸站'),selected.size,commitBanks);showFilter();};
  for(const [i,row] of review.sections.entries()){
-  const saved=row.bank_stations_ft?.length===2,x=row.station_ft,z=row.elevation_ft,bank=saved?row.bank_stations_ft.map(v=>x.indexOf(v)):(row.bank_candidates?.selected_indices?.slice()||[null,null]);
+  const saved=row.bank_stations_ft?.length===2,x=row.station_ft,z=row.elevation_ft,bank=drafts.get(i)||(saved?row.bank_stations_ft.map(v=>x.indexOf(v)):(row.bank_candidates?.selected_indices?.slice()||[null,null]));
   picks.set(i,bank);
   const assessment=assessments.get(i);const confidence=assessment?.confidence||row.bank_candidates?.confidence||'UNRECORDED';
   const d=details(box,'RS '+row.rs+' · '+(saved?'saved':'missing')+' · '+confidence,'RS '+row.rs+' · '+(saved?'已保存':'缺失')+' · '+confidence,false);
   cards.set(i,d.parentElement);
   if(!saved&&!bankPairReady(row,bank))d.append(el('p',tr('No reliable automatic bank pair is available. Both stations remain blank. Inspect the profile and select both banks using the dots or numeric inputs before saving.','未找到可靠的自动岸站组合，左右岸保持空白。请查看剖面，通过点选或数字输入补齐两岸后保存。'),'warning'));
-  const use=check(d,'Save this section in the batch','集中保存此断面',false,v=>{if(v)selected.add(i);else selected.delete(i);count();});
+  const use=check(d,'Save this section in the batch','集中保存此断面',selected.has(i),v=>{if(v)selected.add(i);else selected.delete(i);count();});
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 700 220');svg.classList.add('repair-profile');d.append(svg);let side=null;
   const actions=el('div',undefined,'actions');d.append(actions);const left=button('Pick left bank','选择左岸',async()=>{side=side===0?null:0;draw();}),right=button('Pick right bank','选择右岸',async()=>{side=side===1?null:1;draw();});actions.append(left,right);
   const numbers=bankNumberInputs(d,'batch-bank-'+i,row,()=>bank,pair=>{bank.splice(0,2,...pair);selected.add(i);use.checked=true;count();draw();});
@@ -216,10 +234,12 @@ function renderBankReassessment(parent,review){
   ['inferred','Inherited / missing banks','推定／缺失岸站'],['attention','All banks with interpretation flags','所有带判读提示的岸站']]);
  panel.append(el('small',tr('The broader scope can propose changes to saved conditional choices. Structure approach controls, explicit roughness subdivisions and spatial conflicts are excluded.','扩大范围可对已存条件性选择提出修订。设施邻近控制断面、显式糙率分区及空间冲突会被排除。')));
  const output=el('div');let proposal=review.bank_reassessment,selected=new Set(),checks=new Map();
- function clear(){selected.clear();stageChange('bank-reassessment',tr('Bank replacements','岸站修订'),0,null);}
+ const key=draftKey('bank-reassessment'),draft=readDraft(key);
+ if(proposal?.id&&proposal.id===draft?.proposal&&proposal.status!=='APPLIED'&&proposal.status!=='STALE')selected=new Set(draft.indices);
+ function clear(){writeDraft(key,null);selected.clear();stageChange('bank-reassessment',tr('Bank replacements','岸站修订'),0,null);}
  scope.onchange=()=>{clear();proposal=null;output.replaceChildren(el('p',tr('Scope changed; prepare a new preview.','范围已改变，请重新生成预览。'),'status'));notify(tr('No bank values changed.','岸站数值未改变。'));};
  panel.append(button('Prepare bank replacement preview','生成岸站修订预览',async()=>{
-  clear();await saveAll();const project=current.id;proposal=await api('geometry/bank-proposal-prepare',{id:project,revision:current.revision,scope:scope.value});retainBankProposal(project,proposal);
+  clear();await save();const project=current.id;proposal=await api('geometry/bank-proposal-prepare',{id:project,revision:current.revision,scope:scope.value});retainBankProposal(project,proposal);
   clear();draw();notify(tr('Bank candidates ready; compare saved and proposed positions before selecting changes.','岸站候选已生成；请对照旧值和候选后集中选择。'));output.scrollIntoView({block:'nearest'});
  }));panel.append(output);
  function draw(){
@@ -228,7 +248,7 @@ function renderBankReassessment(parent,review){
   if(proposal.status==='STALE'){output.append(el('p',tr('Saved proposal belongs to earlier inputs. Prepare it again.','已存候选属于旧输入，请重新生成。'),'warning'));return;}
   output.append(el('p',proposal.changed_count+tr(' changed candidates · ',' 项变化候选 · ')+proposal.recommended_count+tr(' stable under the tested scales/continuity weights. Stability is not site verification.',' 项通过已测试尺度／连续性权重的稳定性检查；稳定不等于现场验证。'),'status'));
   const feedback=el('p','', 'status'),controls=el('div',undefined,'actions');output.append(controls,feedback);
-  const count=()=>{feedback.textContent=selected.size+tr(' bank replacements selected, pending adoption. Final calculation confirmation is still required.',' 项岸站修订已选，待采用；计算仍需最终参数确认。');stageChange('bank-reassessment',tr('Bank replacements','岸站修订'),selected.size,commit);};
+  const count=()=>{writeDraft(key,selected.size?{proposal:proposal.id,indices:[...selected]}:null);feedback.textContent=selected.size+tr(' bank replacements selected, pending adoption. Final calculation confirmation is still required.',' 项岸站修订已选，待采用；计算仍需最终参数确认。');stageChange('bank-reassessment',tr('Bank replacements','岸站修订'),selected.size,commit);};
   controls.append(button('Select stable candidates','集中选中稳定候选',async()=>{selected=new Set(stableBankChoices(proposal));checks.forEach((c,i)=>c.checked=selected.has(i));count();notify(feedback.textContent);}),button('Clear bank replacements','清空岸站修订选择',async()=>{clear();checks.forEach(c=>c.checked=false);count();notify(feedback.textContent);}));
   for(const entry of proposal.rows){
    const old=bankValuesText(entry.before_ft),next=bankValuesText(entry.proposed_ft);
@@ -244,7 +264,7 @@ function renderBankReassessment(parent,review){
    box.parentElement.addEventListener('toggle',drawProfile);drawProfile();box.append(el('p',tr('Blue dashed: saved banks · Orange: proposed banks','蓝色虚线：旧岸站 · 橙色：候选岸站'),'muted'));
   }
   for(const row of proposal.excluded||[])output.append(el('p','RS '+row.rs+' · '+tr('Excluded: ','未参与：')+row.reason,'warning'));
-  output.append(button('Adopt selected bank candidates','采用所选岸站候选',async()=>{if(!selected.size)throw Error(tr('Select candidate changes first.','请先选择需要采用的候选。'));await saveAll();await open(current.id);notify(tr('Selected bank positions saved. Review all parameters before computing.','所选岸站已保存，请核对全部参数后再计算。'));},'primary'));count();
+  output.append(button('Adopt selected bank candidates','采用所选岸站候选',async()=>{if(!selected.size)throw Error(tr('Select candidate changes first.','请先选择需要采用的候选。'));await saveAll(['bank-reassessment']);await open(current.id);notify(tr('Selected bank positions saved. Review all parameters before computing.','所选岸站已保存，请核对全部参数后再计算。'));},'primary'));count();
  }
  async function commit(){
   if(!selected.size)return;

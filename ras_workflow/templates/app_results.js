@@ -1,9 +1,41 @@
 'use strict';
 function guidanceTarget(node,key){node.id='qa-tool-'+key;return node;}
+function warningCoverageLabel(value){
+ const labels={
+  ALL_COMPUTED_PROFILES_VERIFIED_SINGLE_REACH:tr('Verified for all computed profiles in this reach','已核对本河段所有已计算工况的原生表'),
+  ALL_REQUESTED_PROFILES_USER_CONFIRMED:tr('Operator confirmed all requested profiles','操作员已核对全部所选工况'),
+  EXPORTED_SCOPE_OPERATOR_ATTESTED:tr('Operator confirmed the exported scope','操作员已核对导出范围'),
+  NOT_A_COMPLETE_WARNING_TABLE:tr('Partial records only','仅有部分记录'),
+  NOT_EXPORTED:tr('Native warning table is pending','原生警告表待导出')};
+ return labels[value||'NOT_EXPORTED']||String(value);
+}
+function batchHeadline(m){
+ if(!['check-batch','study'].includes(m.job?.action)||!(['FAILED','INTERRUPTED'].includes(m.job.status)||m.status==='INTERRUPTED'||m.check_batch_progress?.status==='INCOMPLETE'))return '';
+ const available=m.results?.run_id;
+ return (available?(m.scenario||'').toUpperCase()+tr(' results available. ',' 结果可查看。'):'')+tr('Follow-up checks are incomplete.','后续复核批次未完成。');
+}
+function renderBatchStatus(parent,m){
+ const pack=m.delivery;
+ const packages=m.exports_need_refresh?tr('Refresh needed','需更新'):pack?.complete&&pack?.minimal&&pack.status==='READY_FOR_REVIEW'?tr('Complete and Minimal available','完整包与最小包可查看'):tr('Check the package status in Reports and maps','请在“报告与地图”查看各包状态');
+ parent.append(el('p',tr('Delivery: ','交付：')+packages));
+ const progress=m.check_batch_progress;
+ if(progress?.steps)renderCheckBatchProgress(parent,progress);
+ const cases=m.study_progress||[];
+ if(cases.length){
+  const kept=cases.filter(c=>c.status==='COMPUTED'),pending=cases.filter(c=>!['COMPUTED','SKIPPED'].includes(c.status));
+  parent.append(el('p',tr('Saved calculations: ','已有计算：')+(kept.map(c=>c.id).join(', ')||'—')),
+   el('p',tr('Cases to check on retry: ','重试时需检查的工况：')+(pending.map(c=>c.id).join(', ')||'—')));
+ }
+ parent.append(el('p',tr('Resume verifies saved cases and may run HEC-RAS for missing or invalid results.','继续批次会核验已保存工况，并可能为缺失或未通过核验的结果调用 HEC-RAS。')));
+}
 function renderTaskRecovery(parent,m){
  const plan=m.calculation_recovery,job=m.job||{};
- if(!m.errors?.length&&!plan)return;
- if(m.errors?.length)parent.append(el('p',m.errors.join('\n'),'warning'));
+ const incomplete=batchHeadline(m);
+ if(!m.errors?.length&&!plan&&!incomplete)return;
+ if(incomplete){
+  renderBatchStatus(parent,m);
+  if(m.errors?.length)details(parent,'Original task messages','任务原始信息').append(el('pre',m.errors.join('\n')));
+ }else if(m.errors?.length)parent.append(el('p',m.errors.join('\n'),'warning'));
  const retry=async(route,body={})=>{await api(route,{id:m.id,revision:m.revision,...body});await open(m.id);};
  if(plan){
   if(plan.mode==='RESTORE_EVIDENCE'){
@@ -117,7 +149,7 @@ function renderRevisionComparison(parent,comparison){
  }
  if(old?.status==='VERIFIED'&&now?.status==='VERIFIED'){
   table(box,[tr('Diagnostic coverage','诊断覆盖'),tr('Previous','上次'),tr('Current','本次')],[
-   [tr('Native warning coverage','原生警告覆盖'),old.warning_coverage,now.warning_coverage],
+   [tr('Native warning coverage','原生警告覆盖'),warningCoverageLabel(old.warning_coverage),warningCoverageLabel(now.warning_coverage)],
    [tr('Native messages','原生信息条数'),old.native_messages??'—',now.native_messages??'—'],
    [tr('Combined diagnostic records','合并诊断记录'),old.issue_count,now.issue_count]]);
   const codes=[...new Set([...Object.keys(old.counts),...Object.keys(now.counts)])].sort();

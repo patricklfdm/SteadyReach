@@ -25,7 +25,7 @@ test('Reload restores the saved screen and never submits a calculation', async (
 });
 const home = source.slice(source.indexOf('async function home()'), source.indexOf('function savedProjectGroups'));
 function node() {
-  return {children: [], setAttribute(){}, append(...items) { this.children.push(...items); }};
+  return {children: [],files:[],dataset:{},querySelectorAll(){return [];},setAttribute(){}, append(...items) { this.children.push(...items); }};
 }
 
 for (const hasProjects of [false,true]) {
@@ -33,12 +33,13 @@ for (const hasProjects of [false,true]) {
     const fields = {'#screen': node()};
     const panels = {};
     const context = {
-      poll: null, clearTimeout() {}, rememberView() {}, shell() {}, tr: a => a, el: node, button: node, check() {},
-      $: id => fields[id], nativeSelector() {}, scopeFields() {}, renderSavedProjects(saved) {
+      poll: null, clearTimeout() {}, rememberView() {}, shell() {}, tr: a => a, el: node, button: node, check:node,
+      viewRequest:0,pendingChanges:new Map(),draftKey:()=>'',restoreForm(){},observeForm(){},Event:class{},surveyLimit:()=>'',
+      $: id => fields[id], nativeSelector(){fields['#native-files']=node();}, scopeFields(){fields['#project-flow-paths']={dispatchEvent(){}};}, renderSavedProjects(saved) {
         saved.querySelector = () => hasProjects;
       },
       field(parent,id,en,zh,value) {
-        return fields['#'+id] = {parentElement:node(),value,disabled:false};
+        return fields['#'+id] = {...node(),parentElement:node(),value,disabled:false};
       },
       details(parent,en,zh,open) {
         const panel=node();

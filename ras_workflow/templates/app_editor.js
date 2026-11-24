@@ -34,8 +34,8 @@ function parameterTable(parent,fields){
   if(text.length>200){const d=details(value,Array.isArray(f.value)?f.value.length+' values — expand':'Show complete value',Array.isArray(f.value)?f.value.length+' 个数值 — 展开':'展开完整内容');d.append(el('pre',text));}else value.textContent=text||'—';t.append(row);
  }wrap.append(t);parent.append(wrap);
 }
-async function showFinalReview(){
- await saveAll();
+async function showFinalReview(adoptSelected=true){
+ if(adoptSelected)await saveAll();else await save();
  const review=await api('review',{id:current.id});
  current=await api('project/'+current.id);
  if(current.revision!==review.revision)throw Error(tr('Inputs changed during review. Refresh the parameter list.','核对过程中输入发生变化，请刷新参数清单。'));
@@ -87,8 +87,8 @@ function renderFinalReview(){
  if(review.run_readiness){
   const r=review.run_readiness,labels={CHECKED:tr('Checks passed','检查通过'),BLOCKED:tr('Action needed','需处理'),EXTENT_PENDING:tr('Confirm extent after compilation','原生几何编译后核对范围'),NOT_REQUESTED:tr('Not requested','未选择')};
   table(screen,[tr('Before calculating','开算前预检'),tr('Status','状态')],[[tr('HEC-RAS installation and session','HEC-RAS 安装与会话'),labels[r.solver.status]],[tr('Report tools','报告工具'),labels[r.reports.status]],['GIS / Mapper',labels[r.gis.status]]]);
-  if(!current.gis)screen.append(button('Include GIS and check again','加入 GIS 并再次预检',async()=>{await saveAll();current.gis=true;mark();await save();await showFinalReview();}));
-  if(r.gis.status==='BLOCKED'&&current.gis)screen.append(button('Switch to hydraulic results and reports only','改为仅交付水力结果和报告',async()=>{await saveAll();current.gis=false;mark();await save();await showFinalReview();}));
+  if(!current.gis)screen.append(button('Include GIS and check again','加入 GIS 并再次预检',async()=>{await save();current.gis=true;mark();await save();await showFinalReview();}));
+  if(r.gis.status==='BLOCKED'&&current.gis)screen.append(button('Switch to hydraulic results and reports only','改为仅交付水力结果和报告',async()=>{await save();current.gis=false;mark();await save();await showFinalReview();}));
  }
  renderFeasibility(details(screen,'Model scope and data limitations','模型适用范围与资料限制',review.feasibility?.state==='outside'),review.feasibility);
  if(showAcquisitionGaps(screen,current.acquisition))screen.append(button('Review source coverage and local files','查看来源覆盖和本地文件',async()=>{
@@ -167,7 +167,7 @@ function renderDependencyReview(parent,review){
  box.append(button('Save these decisions and refresh review','保存本组决定并刷新核对',async()=>{
   if(!choices.size)throw Error(tr('Choose at least one decision first.','请先选择至少一项处理方式。'));
   if(finalReview!==review||dirty)throw Error(tr('Parameters were edited. Save and refresh the parameter list first.','参数已编辑，请先保存并刷新参数清单。'));
-  await saveAll();
+  await save();
   const result=await api('resolve-dependencies',{id:current.id,revision:review.revision,review_token:review.review_token,selections:[...choices.values()]});
   current=await api('project/'+current.id);finalReview=null;
   await showFinalReview();
@@ -192,7 +192,7 @@ function scopeFields(parent,scope,atHome=false){
  paths.addEventListener('change',update);update();
  const value=()=>({purpose:purpose.value,flow_paths:paths.value});
  if(!atHome)box.append(button('Save intended use and flow paths','保存用途与过流条件',async()=>{
-  await saveAll();await api('save',{id:current.id,revision:current.revision,production_scope:value()});
+  await save();await api('save',{id:current.id,revision:current.revision,production_scope:value()});
   await open(current.id);notify(tr('Project scope saved. Feasibility updated.','范围已保存，开工核查已更新。'));
  }));
  return value;
@@ -349,7 +349,7 @@ function renderRiverAutomation(card,data){
  el('p',tr('Save the reach anchors, prepare the draft, then review boundaries, channel bed and uncertain banks. Estimates remain editable.','保存河段锚点并自动准备草稿，然后集中核对边界、水下河槽和不确定岸站；估计值均可修改。')));
  const checks=data.checks;card.append(el('p',checks.blocking_count+tr(' geometry / dependency checks remain',' 项几何／关联检查待处理'),checks.blocking_count?'warning':'status'));
  for(const q of checks.issues||[])card.append(el('p',tr(q.message,q.zh),'warning'));
- card.append(button('Prepare an automatic draft','自动准备草稿（含标注的估计值）',async()=>{await saveAll();await api('automatic-prepare',{id:current.id,revision:current.revision});await open(current.id);},'primary'));
+ card.append(button('Prepare an automatic draft','自动准备草稿（含标注的估计值）',async()=>{await save();await api('automatic-prepare',{id:current.id,revision:current.revision});await open(current.id);},'primary'));
  if(current.preparation_result){const p=current.preparation_result;card.append(el('p',tr('Draft saved. Required values remaining: ','草稿已保存，剩余必填项：')+(current.intake?.fields?.filter(f=>f.required&&f.missing).length??p.stages.at(-1).missing_required.length),'status'));if(!current.intake?.section_count)showEndpointSearch(card,p.geometry_proposal?.layouts?.[0]?.endpoint_search);if(p.geometry_proposal?.error)card.append(el('p',p.geometry_proposal.error,'warning'));if(!p.geometry_proposal?.layouts?.[0]?.endpoint_search||p.geometry_applied)renderPreparedBanks(card,p);renderPreparationAttention(card,current.intake?.current_attention??p.attention);}
  renderCandidateBatch(card);
  if(current.intake?.geometry_review?.sections?.length)renderBankBatch(card,current.intake.geometry_review);
@@ -379,7 +379,7 @@ function renderTerrainExtent(parent){
  box.append(button('Expand from downloaded DEM','从已下载地形扩展',async()=>{
   const buffer=Number(radius.value);
   if(!Number.isFinite(buffer)||buffer<50||buffer>5000)throw new Error(tr('Use a radius of 50–5000 m.','半径须为 50–5000 米。'));
-  await saveAll();
+  await save();
   notify(tr('Expanding DEM and checking coverage…','正在扩展 DEM 并检查覆盖范围…'));
   await api('geometry/expand-terrain',{id:current.id,revision:current.revision,buffer_m:buffer});
   await open(current.id);
@@ -409,16 +409,16 @@ function renderRiverMap(parent){
  const actions=el('div',undefined,'actions'),state=el('p','', 'status'),canvas=el('div');parent.append(el('p',tr('Start with two points, just below the upstream bridge and just above the downstream bridge. The DEM search follows bends between them. Add ordered bend points if the path is uncertain or follows the wrong channel.','先点上游桥下游侧，再点下游桥上游侧。程序会在两点间搜索弯曲河道。若提示不确定或走错支汊，请按流向补充弯道点。')),actions,state,canvas);
  async function commit(){clearTimeout(timer);if(promise)await promise;await save();promise=api('geometry/picks',{id:current.id,revision:current.revision,picks:{river:points},parameters:{}});try{current=await promise;pendingMapSave=null;mapDirty=false;if(coordinateText&&!pendingChanges.has('river-coordinates'))coordinateText.value=points.map(p=>p.join(', ')).join('\n');state.textContent=points.length+tr(' reach anchors saved',' 个河段锚点已保存');}finally{promise=null;}}
  function queued(){pendingMapSave=commit;mapDirty=true;state.textContent=tr('Saving reach anchors…','正在保存河段锚点…');clearTimeout(timer);timer=setTimeout(()=>{if(!busy)task(commit,tr('Save river anchors','保存河段锚点'));else queued();},700);}
- const pick=button('Pick river upstream → downstream','沿流向点选河段',async()=>{await saveAll();insertBend=false;bend.setAttribute('aria-pressed','false');selecting=!selecting;pick.setAttribute('aria-pressed',String(selecting));notify(selecting?tr('Click the DEM to add reach anchors. Dragging only pans.','点击 DEM 添加河段锚点，拖动只平移地图。'):tr('Point selection ended.','已退出点选。'));});actions.append(pick);
+ const pick=button('Pick river upstream → downstream','沿流向点选河段',async()=>{await save();insertBend=false;bend.setAttribute('aria-pressed','false');selecting=!selecting;pick.setAttribute('aria-pressed',String(selecting));notify(selecting?tr('Click the DEM to add reach anchors. Dragging only pans.','点击 DEM 添加河段锚点，拖动只平移地图。'):tr('Point selection ended.','已退出点选。'));});actions.append(pick);
  const addedIndices=[];
  const bend=button('Insert a bend between saved anchors','在已存锚点间插入弯道点',async()=>{
-  await saveAll();
+  await save();
   if(points.length<2)throw Error(tr('Save both endpoints first.','请先保存两端点。'));
   selecting=false;insertBend=!insertBend;pick.setAttribute('aria-pressed','false');bend.setAttribute('aria-pressed',String(insertBend));
   notify(insertBend?tr('Click a bend near the intended segment. Check the updated order on the map.','请点目标河段的弯道，再核对地图上的点位顺序。'):tr('Bend selection ended.','已退出弯道点选。'));
  });actions.append(bend);
  const map=terrainMap(canvas,{getAnchors:()=>({river:points}),getMode:()=>selecting||insertBend?'river':null,onPoint:p=>{if(pendingChanges.has('river-coordinates')){notify(tr('Save the coordinate edits first.','请先保存坐标输入。'),true);return;}const index=insertBend?riverBendIndex(points,p):points.length;points.splice(index,0,p);addedIndices.push(index);map.draw();queued();}});
- actions.append(button('Undo last anchor','撤销最后一个点',async()=>{await saveAll();if(points.length)points.splice(addedIndices.pop()??points.length-1,1);await commit();map.draw();}),button('Zoom in','放大',()=>map.zoom(1/1.2)),button('Zoom out','缩小',()=>map.zoom(1.2)),button('Fit DEM','显示全部 DEM',()=>map.fit('terrain')),button('Fit sections','显示全部断面',()=>map.fit('sections')));
+ actions.append(button('Undo last anchor','撤销最后一个点',async()=>{await save();if(pendingChanges.has('river-coordinates'))throw Error(tr('Save your coordinate edits first.','请先保存坐标草稿。'));if(points.length)points.splice(addedIndices.pop()??points.length-1,1);await commit();map.draw();}),button('Zoom in','放大',()=>map.zoom(1/1.2)),button('Zoom out','缩小',()=>map.zoom(1.2)),button('Fit DEM','显示全部 DEM',()=>map.fit('terrain')),button('Fit sections','显示全部断面',()=>map.fit('sections')));
  const numeric=details(parent,'Enter or paste reach coordinates','输入或粘贴河段坐标');
  numeric.append(el('p',tr('One easting, northing pair per line, ordered upstream to downstream. Use the DEM coordinate system and horizontal units shown on the map. Review the saved line on the map.','每行填写东坐标、北坐标，按上游到下游排列。采用地图显示的 DEM 坐标系及平面单位，保存后核对地图上的连线。')));
  async function saveCoordinates(){
@@ -432,10 +432,15 @@ function renderRiverMap(parent){
   clearTimeout(timer);if(promise)await promise;
   const previous=points;points=parsed;
   try{await commit();}catch(error){points=previous;throw error;}
-  addedIndices.length=0;coordinateText.value=points.map(p=>p.join(', ')).join('\n');stageChange('river-coordinates','',0,null);map.draw();
+  writeDraft(draftKey('river-coordinates'),null);addedIndices.length=0;coordinateText.value=points.map(p=>p.join(', ')).join('\n');stageChange('river-coordinates','',0,null);map.draw();
   notify(points.length+tr(' reach anchors saved. Review their direction and position on the map.',' 个河段锚点已保存，请核对地图上的流向与位置。'));
  }
- coordinateText=field(numeric,'river-coordinate-pairs','Easting, northing','东坐标, 北坐标',points.map(p=>p.join(', ')).join('\n'),'textarea',null,()=>stageChange('river-coordinates',tr('Reach coordinates','河段坐标'),1,saveCoordinates));
+ const coordinateKey=draftKey('river-coordinates'),stored=readDraft(coordinateKey);
+ const base=JSON.stringify(points),compatible=stored?.base===base;
+ if(stored&&!compatible)numeric.append(el('p',tr('Saved anchors changed. Compare your earlier coordinate draft before replacing them.','已保存的锚点有变化，请对照先前的坐标草稿后再替换。'),'warning'),el('pre',stored.text));
+ function stageCoordinates(){writeDraft(coordinateKey,{base:JSON.stringify(points),text:coordinateText.value});stageChange('river-coordinates',tr('Reach coordinates','河段坐标'),1,saveCoordinates);}
+ coordinateText=field(numeric,'river-coordinate-pairs','Easting, northing','东坐标, 北坐标',compatible?stored.text:points.map(p=>p.join(', ')).join('\n'),'textarea',null,stageCoordinates);
+ if(compatible)stageCoordinates();
  coordinateText.rows=8;
  numeric.append(button('Save coordinates and show on map','保存坐标并显示到地图',saveCoordinates));
  state.textContent=points.length+tr(' saved anchors',' 个已保存锚点');

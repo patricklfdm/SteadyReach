@@ -12,7 +12,7 @@ const review={revision:3,review_token:'sealed',errors:[{code:'DERIVED_INPUT_CHAN
  evidence_class:'assumed',basis:'Original proxy',answer:{candidate_record:{range:[.001,.02]}},
  parameter_candidates:[{candidate:'current',value:.006,evidence_class:'assumed',basis:'New proxy',range:[.004,.008]}]}]};
 const context=vm.createContext({current:{id:'isolated',revision:3},finalReview:review,dependencyReviewState:null,dirty:false,
- tr:en=>en,el,details:el,format:String,originName:v=>v,saveAll:async()=>{},
+ tr:en=>en,el,details:el,format:String,originName:v=>v,save:async()=>{},
  field(parent,id,en,zh,value,type,options,change){const input={value,change,options};inputs.set(id,input);return input;},
  button(en,zh,action){buttons.set(en,action);return el();},
  notify:message=>messages.push(message),showFinalReview:async()=>calls.push('review'),

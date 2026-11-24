@@ -6,6 +6,10 @@ Open **Start a new project** or expand an entry under **Saved projects** to cont
 
 After the run, **Summary** shows flow, water levels and the first issue requiring judgment. **Hydraulic review** contains the warnings and scenario studies. **Reports and maps** opens the PDFs, QGIS and both delivery packages. On the home page, expand a site's entry to find the original and its revisions. Version management is inside each entry.
 
+**Drafts and adoption.** The current browser tab retains the project form and pending selections across language changes, navigation and refresh. **Save all selected changes** or **Review calculation inputs** applies the selected parameters and banks to the model. Direct parameter edits still autosave. After refreshing, reselect any attachments listed by name. Field feedback is drafted per flood event and written to the project with **Save and preview field feedback**.
+
+**Revisions and batch recovery.** Use the revision number, purpose, local time and latest task to identify an edition. When a follow-up batch stops, check the delivery status, saved cases and retry scope alongside the existing hydraulic result. Resuming the batch may invoke HEC-RAS for cases that still require calculation.
+
 **Starting with one coordinate.** Choose **River reach (bridges excluded)** and supply the project title and location. Leave unknown numbers empty. The app searches for a directed USGS river, nearby mapped road crossings and a DEM covering the candidate bends and cross sections. Open **Automatic DEM layout / QA repair**. At a crossing, choose the intended reach by its two road names. Generate the preview, check the river and banks against the imagery, then adopt it. The parameter page shows populated values, sources, estimates and any missing inputs together. One final confirmation starts HEC-RAS. [River instructions](RIVER_REACH_EN.md)
 
 For a reach without structures, choose **River reach (bridges excluded)** and follow the [river guide](RIVER_REACH_EN.md). It removes culvert/road fields and requires channel-bed representation and active boundary conditions. The crossing-specific steps below apply to culvert projects.

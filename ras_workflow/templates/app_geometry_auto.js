@@ -48,7 +48,7 @@ function renderAutoGeometry(parent){
  const width=field(settings,'auto-width-limit','Maximum section search width (ft)','断面搜索宽度上限（ft）',isInitial?800:1200,'number');
  settings.append(el('small',tr('Search limits are algorithm controls, not accepted model limits or flood extents. Initial widths use terrain relief, not a calculated water level.','搜索上限是算法控制值，不是已确认的模型边界或洪水范围。初始宽度采用地形起伏筛查，不是计算水位。')));
  const note=el('p','', 'status'),out=el('div');box.append(note,out);let proposal=null,layout=null;
- async function request(action,body={}){if(current.id!==project)throw Error('Project changed');if(action!=='status')await saveAll();return api('geometry/auto-'+action,{id:project,revision:current.revision,...body});}
+ async function request(action,body={}){if(current.id!==project)throw Error('Project changed');if(action!=='status')await save();return api('geometry/auto-'+action,{id:project,revision:current.revision,...body});}
  const clear=()=>{proposal=null;out.replaceChildren();note.textContent=tr('Search bounds changed; generate a fresh proposal.','搜索范围已修改，请重新生成提案。');};length.oninput=clear;width.oninput=clear;if(reachChoice)reachChoice.onchange=clear;
  let referenceEnabled=null,referencePairs=null,referenceSource=null,referenceDatum=null;
  if(!isInitial&&current.model_type==='river'){
