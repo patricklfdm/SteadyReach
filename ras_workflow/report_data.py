@@ -139,7 +139,9 @@ def collect(summary_path, comparisons=()):
         from .app_revision import compare as compare_revision
         revision=compare_revision(dict(parent_revision=s['configuration']['revision_origin']),s)
         sources+=revision.get('sources',[])
-    return dict(studies=studies, field_feedback=feedback, river_checks=river_checks, revision_comparison=revision,schema_version='readable_report_data_1.0',created_utc=utc(),summary=s,sections=rows,
+    from .purpose_acceptance import evaluate
+    purpose_decision=evaluate(s,river_checks.get('events',[]),revision)
+    return dict(purpose_decision=purpose_decision, studies=studies, field_feedback=feedback, river_checks=river_checks, revision_comparison=revision,schema_version='readable_report_data_1.0',created_utc=utc(),summary=s,sections=rows,
         geometry=geometry,map_geometry=map_geometry,geometry_source=geometry_source,raster_source=raster_source,diagnostics=diagnostics,
         language_review=language_review,native_supplement=supplement,comparisons=compared,reference_comparisons=references,native_inputs=native_inputs,native_input_error=native_input_error,
         sources=sources,report_generation_is_solver_run=False)

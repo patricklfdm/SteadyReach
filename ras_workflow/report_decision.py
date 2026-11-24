@@ -13,6 +13,15 @@ def add(document,data,cn):
     s=data['summary'];h=s['hydraulics']
     tr=lambda en,zh:zh if cn else en
     document.add_heading(tr('Scope and decision','用途与复核决定'),2)
+    decision=data.get('purpose_decision')
+    if decision:
+        lang='zh' if cn else 'en'
+        document.add_paragraph(decision[lang])
+        for row in decision['rows']:
+            document.add_paragraph(row[lang])
+        if (decision['criteria'] or {}).get('basis'):
+            document.add_paragraph(tr('Project basis','项目依据')+' · '+decision['criteria']['basis'])
+        document.add_paragraph(decision['note_'+lang])
     run=h.get('run_id')
     qa=h.get('hydraulic_qa_status') or tr('Pending review','待复核')
     document.add_paragraph((tr('Run ','运行 ')+run+'  ·  ' if run else '')+tr('Hydraulic QA ','水力 QA ')+str(qa))

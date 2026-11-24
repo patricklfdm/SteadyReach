@@ -348,6 +348,7 @@ def compile_native(m):
     # Every run request gets its own normalized working copy and receipt.
     fresh=folder(m['id'])/'compiled'/unique_id()
     copied=native_review.prepare(ROOT/packet['files']['project']['path'],fresh,selected_plan=packet['selected_plan'])
+    review['production_scope'] = m.get('production_scope', {})
     cp=native_review.approve(copied,review,context,direct_start=True)
     if not context:
         # Default native scenario is baseline, preserving every original profile.
@@ -369,7 +370,8 @@ def run(key):
         if m.get('road_sample'):d['uploads'].append(m['road_sample'])
         if m.get('source_analysis'):d['uploads'].append(m['source_analysis'])
         save(sp.parent/'draft.json',d)
-        result=intake.apply(ROOT/m['session'],read((ROOT/m['session']).parent/'draft.json')['revision'],direct_start=True,mapping_enabled=m['gis'])
+        result=intake.apply(ROOT/m['session'],d['revision'],direct_start=True,mapping_enabled=m['gis'],
+                            production_scope=m.get('production_scope'))
         if result['status']!='APPLIED':raise ValueError(str(result['errors']))
         cp=ROOT/result['project'];m['run_scenario']=m['scenario']
     from .calculation_recovery import seal

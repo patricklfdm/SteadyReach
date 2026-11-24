@@ -25,6 +25,11 @@ def page(language, model, assessment, folders, receipt, pair):
             '<p>L'+str(assessment['level'])+' · '+escape(assessment['title'][language])+'</p>',
             '<p>'+escape(assessment['use_guide']['allowed'][language])+'</p>',
             '<p>'+escape(assessment['use_guide']['deferred'][language])+'</p>']
+    decision=assessment.get('purpose_decision')
+    if decision:
+        result.append('<h2>'+escape(decision[language])+'</h2>')
+        result.extend('<p>'+escape(row[language])+'</p>' for row in decision['rows'])
+        result.append('<p>'+escape(decision['note_'+language])+'</p>')
     scope=assessment.get('area',{}).get('selected') or []
     if scope:
         result.append('<p>'+t('Area reviewed','复核范围')+' · RS '+escape(str(scope[0]))+' – '+escape(str(scope[-1]))+'</p>')

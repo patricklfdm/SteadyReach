@@ -33,11 +33,13 @@ Use this procedure for a Windows workstation with the supported HEC-RAS and QGIS
 .\.venv\Scripts\python.exe -m ras_workflow.local_backup restore D:\Backups\SteadyReach.zip D:\RestoredData
 ```
 
-**Run the local software checks.** With Node.js available for the page tests, run the command below. A new status/release_checks folder contains Python and page logs and a machine-readable receipt. Add `--packet <review folder>` to verify the frozen [Siletz field benchmark](../examples/siletz_or/README.md) and East Fork holdout. Add `--project <id>` per site for timings and first mapped delivery. Archived evidence checks do not invoke a new solver. To conduct a fresh native test follow the benchmark guide and archive its new run ID.
+**Same-machine release gate.** Use a dedicated checkout with working HEC-RAS, QGIS, PDF conversion, Node.js and Edge or Chrome. The command runs Python and browser regressions, builds a new coordinate-based Midway project, solves once, imports the supplemental road memo, reviews all six affected roadway inputs, solves the independent revision and chooses it for handoff. It verifies the mapped Complete and Minimal packages, both PDF verdicts and the browser recipient action. A missing private fixture leaves the release check open. For development-only unit checks run `python -m unittest discover -s tests`. Add `--packet <review folder>` for the optional Siletz and East Fork field benchmarks or `--project <id>` for pilot metrics.
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\release_check.py
+.\.venv\Scripts\python.exe scripts\release_check.py --midway-fixture D:\ReleaseInputs\Midway\fixture.json
 ```
+
+**Private fixture.** Keep the manifest and licensed sources together outside Git. Each file entry has a plain `file` name and its SHA-256. `originals` contains four JPGs, the site KMZ and StreamStats PDF. `supplement` is the original roadway DOCX and `brief` is the accompanying site text. `terrain`, `terrain_source` and `aerial` identify the cached USGS DEM, its original receipt with `raster.sha256`, and the corresponding NAIP raster. `picks` holds upstream/downstream anchors and structure inlet/outlet coordinates in that DEM projection, `sampling` holds `section_width_ft` and `section_spacing_ft`, and `spacing` is clear wall spacing in feet. Use the maintained private fixture from the release custodian. An independent survey is still needed for site inverts. The technical replay tests a 25 ft screening assumption followed by a reported nominal 26 ft road width. Inspect `midway.json` and `release.json` together under `status/release_checks`.
 
 Machine elapsed time comes from saved task timestamps. Active engineering time, external waiting and developer interventions are unknown unless measured. To include a timed session, pass `--session <json>` with a selected project. Its fields are `project_id`, `intervals` (ordered `kind` of `engineer` or `external_wait` with timezone-aware `started_utc` and `finished_utc`) and `developer_interventions` (list of recorded interventions). An explicit empty list records zero interventions for that session.
 

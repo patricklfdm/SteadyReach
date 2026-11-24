@@ -144,7 +144,7 @@ async function home(){
  if(useSurvey)modelType.value='river';else if(route.value==='native')modelType.value='culvert';else modelType.value=locationScope;};
  const gis=check(card,'Also prepare GIS / Mapper / exhibits','同时准备 GIS、Mapper 和展示图',true,()=>{});gis.id='new-gis';
  const inputs=Array.from(card.querySelectorAll('input,select,textarea'));
- restoreForm(key,inputs);if(route.value==='coordinates')locationScope=modelType.value;route.onchange();$('#project-flow-paths').dispatchEvent(new Event('change'));selectionInfo();
+ restoreForm(key,inputs);if(route.value==='coordinates')locationScope=modelType.value;route.onchange();$('#project-purpose').dispatchEvent(new Event('change'));$('#project-flow-paths').dispatchEvent(new Event('change'));selectionInfo();
  const fileHint=el('p','', 'warning');card.append(fileHint);
  function updateForm(){
   title.required=true;modelType.required=route.value==='coordinates';lat.required=lon.required=route.value==='coordinates';

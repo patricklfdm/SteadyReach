@@ -10,7 +10,7 @@ import zipfile
 from importlib.metadata import PackageNotFoundError, version
 import xml.etree.ElementTree as ET
 
-EXTRACTOR_VERSION = 5
+EXTRACTOR_VERSION = 6
 PDF_PAGE_LIMIT = 200
 PDF_OCR_PAGE_LIMIT = 40
 PDF_TEXT_LIMIT = 600_000
@@ -290,6 +290,12 @@ def text_parameters(text,allowed):
             if value is None or value<=0 or not length and value>=1:continue
             if length and match[2].lower() in ('m','meters'):value/=.3048
             out.append(dict(field=key,value=round(value,6),excerpt=match[0]))
+    if 'g.structure.road.width_ft' in allowed:
+        # A labeled table cell followed by a dimension explicitly described as width.
+        for match in re.finditer(r'(?im)^[ \t]*(?:roadway|road)[ \t]*(?:\r?\n|[|:])[ \t]*(\d+(?:\.\d+)?)[ \t]*(ft|feet|m|meters)[ \t]+wide\b',text):
+            width=float(match[1])*(1/.3048 if match[2].lower() in ('m','meters') else 1)
+            if width>0:
+                out.append(dict(field='g.structure.road.width_ft',value=round(width,6),excerpt=match[0],evidence_class='assumed'))
     # Explicit group labels only; dimensions without a group must not populate
     # the first opening of a multiple-group crossing.
     aliases={'length_ft':r'(?:barrel\s+)?length','span_ft':r'(?:clear\s+)?(?:width|diameter|span)',

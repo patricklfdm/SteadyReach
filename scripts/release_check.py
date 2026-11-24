@@ -1,5 +1,6 @@
-"""Run local software regressions and optionally audit a measured benchmark packet."""
+"""Run same-machine release regressions, including the mandatory fresh Midway lifecycle."""
 import argparse
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -63,6 +64,20 @@ def run(args):
                 result['fresh_benchmark']=replay(packet,matching[0],hashes,root)
         elif args.fresh_benchmark:raise ValueError('--fresh-benchmark requires --packet with the frozen source inventory')
     except (OSError,ValueError,KeyError) as exc:result['error']=str(exc);passed=False
+    fixture = args.midway_fixture or os.environ.get('STEADYREACH_MIDWAY_FIXTURE')
+    if not fixture:
+        result['midway'] = dict(status='REQUIRED',reason='Set --midway-fixture to the private source manifest for the two fresh native runs.')
+        passed=False
+    elif passed:
+        try:
+            from midway_release import replay
+            replay(Path(fixture),root/'midway.json')
+            result['midway'] = dict(status='PASSED',receipt='midway.json',sha256=sha(root/'midway.json'))
+        except (OSError,ValueError,KeyError,RuntimeError,TypeError,subprocess.SubprocessError) as exc:
+            result['midway'] = dict(status='FAILED',error=str(exc))
+            passed=False
+    else:
+        result['midway'] = dict(status='NOT_RUN',reason='Fix preceding release checks first.')
     result['status']='SOFTWARE_CHECKS_PASSED' if passed else 'NEEDS_ATTENTION'
     save(root/'release.json',result);print(root/'release.json');return 0 if passed else 1
 
@@ -72,4 +87,5 @@ if __name__=='__main__':
     p.add_argument('--project',action='append',default=[]);p.add_argument('--session',type=Path)
     p.add_argument('--cohort',type=Path,help='JSON object mapping pilot site names to their project IDs')
     p.add_argument('--fresh-benchmark',action='store_true',help='Create an isolated project and repeat the native solve and mapped exports from the verified packet')
+    p.add_argument('--midway-fixture',type=Path,help='Private Midway originals, terrain and operator choices for the mandatory fresh lifecycle replay')
     raise SystemExit(run(p.parse_args()))

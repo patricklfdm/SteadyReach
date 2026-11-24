@@ -504,7 +504,7 @@ def upload(session_path,revision,name,content,kind,basis,evidence_class):
     return view(sp)
 
 
-def apply(session_path,revision,*,direct_start=False,mapping_enabled=None):
+def apply(session_path,revision,*,direct_start=False,mapping_enabled=None,production_scope=None):
     sp=safe_path(ROOT,session_path);original=read(sp)['project']
     with lock((ROOT/original).parent/'project.lock'),lock(sp.parent/'session.lock'):
         sp,s,p,d=_load(sp)
@@ -513,6 +513,12 @@ def apply(session_path,revision,*,direct_start=False,mapping_enabled=None):
         check=validate(sp,d,direct_start=direct_start)
         if not check['ready']:return dict(status=WAITING,**check)
         c,g=_objects(p,d);sources=s['sources']+[s['packet'],p['original_project'],p['original_geometry']]+d['uploads']
+        if production_scope is not None:
+            from .feasibility import scope
+            c['production_scope'] = scope(production_scope)
+            if c['production_scope'].get('criteria',{}).get('site_geometry'):
+                from .purpose_acceptance import geometry_record
+                c['acceptance_geometry'] = geometry_record(g,d['answers'],sources)
         if direct_start and mapping_enabled is not None:
             if type(mapping_enabled)!=bool:raise ValueError('Explicit GIS boolean required')
             c.setdefault('delivery',{})['mapping_enabled']=mapping_enabled
@@ -523,6 +529,11 @@ def apply(session_path,revision,*,direct_start=False,mapping_enabled=None):
         selected={f['key']:[v for v in f['suggestions'] if digest(v)==d['answers'].get(f['key'],{}).get('suggestion')] for f in rows}
         # Keep native solver/report paths shallow. Sessions retain the approval pointer.
         folder=(ROOT/s['project']).parent/'approved'/unique_id();folder.mkdir(parents=True)
+        imagery=c.get('delivery',{}).get('imagery') or {}
+        if imagery.get('raster'):
+            source_image=safe_path((ROOT/p['project']).parent,imagery['raster'])
+            imagery['raster']=os.path.relpath(source_image,folder)
+            sources.append(item(source_image))
         if direct_start:
             # Keep final confirmation, assumptions and supplied material in Complete,
             # rather than leaving only historical workspace references in a receipt.

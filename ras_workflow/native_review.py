@@ -196,6 +196,9 @@ def approve(review_path, review, context=None, *, direct_start=False):
         expected_native=expected,native_import_review='import_receipt.json',geometry=None,authorization=None,
         scenarios=[dict(id='baseline',profiles=[dict(**p,source=review['source']) for p in packet['profiles']])],engineering_acceptance='NOT_ASSESSED')
     config.update(additions)
+    if review.get('production_scope'):
+        from .feasibility import scope
+        config['production_scope'] = scope(review['production_scope'])
     cp=folder/'project.json';save(cp,config)
     save(folder/'import_receipt.json',dict(schema_version='native_import_1.0',status='CONDITIONAL_RUN_REQUESTED' if direct_start else 'CONDITIONALLY_AUTHORIZED_NOT_ENGINEERING_ACCEPTED',
         policy='local_computation_v1' if direct_start else 'named_review',review=review,

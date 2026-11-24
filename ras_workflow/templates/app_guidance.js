@@ -71,6 +71,11 @@ function showFieldSearch(box,a){
 function showResultAssessment(overview,a,box=overview){
  const label=s=>tr(s.en,s.zh),ordered=a.next_actions||a.findings,primary=ordered[0];
  overview.append(el('h2',tr('Delivery assessment','结果交付评估')+' · L'+a.level+' · '+label(a.title)));
+ if(a.purpose_decision){
+  const d=a.purpose_decision, panel=el('section',undefined,'card');overview.append(panel);
+  panel.append(el('h3',label(d)),el('p',tr(d.note_en,d.note_zh)));
+  for(const row of d.rows)panel.append(el('p',label(row),row.state==='met'?'muted':'warning'));
+ }
  if(a.use_guide){
   const panel=el('section',undefined,'card');overview.append(panel);
   panel.append(el('h3',tr('What can I use this run for?','这次计算可以用到什么程度？')),

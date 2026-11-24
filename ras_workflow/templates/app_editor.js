@@ -83,6 +83,15 @@ function renderFinalReview(){
  el('p',tr('Nothing has been solved yet. Edit any field; changes cancel this confirmation. No name, reason, or signature is required.','尚未开始求解。可以修改任意字段，修改后本次确认会失效。无需姓名、理由或签名。')),
  button('← Back to preparation','← 返回准备页面',async()=>{await save();finalReview=null;await open(current.id);}));
  const state=el('p',review.ready?tr('Technical input checks passed. Assumptions remain conditional.','必要输入检查通过。假设仍属于条件性输入。'):tr('Fill the items below, then refresh this list. The solver is paused.','请补齐下列项目并刷新清单，求解器处于等待状态。'),review.ready?'status':'warning');state.id='review-state';screen.append(state);
+ const scope=review.inputs?.production_scope||{}, c=scope.criteria;
+ const conditions=details(screen,'Delivery conditions for this run','本次运算的交付条件',false);
+ conditions.append(el('p',c?tr('These conditions are tied to this edition.','以下条件随本版输入冻结。'):tr('Conditions have not been agreed. Set them in project preparation to assess delivery.','尚未约定条件，可返回项目准备页面设置。')));
+ if(c)table(conditions,[tr('Condition','条件'),tr('Requirement','要求')],[
+  [tr('Intended use','用途'),{screening:tr('Screening','初筛'),comparison:tr('Comparison','比较'),review:tr('Engineering review','工程复核')}[scope.purpose]],
+  [tr('Profile','工况'),c.profile||tr('All','全部')],...(c.dry_ends?[[tr('Section ends','断面端点'),tr('Dry','端点不过水')]]:[]),
+  ...(c.site_geometry?[[tr('Field geometry','场地几何'),tr('Source required','须有来源')]]:[]),
+  ...(c.min_freeboard_ft!=null?[[tr('Road margin','道路余高'),'≥ '+c.min_freeboard_ft+' ft']]:[]),
+  ...(c.event?[[c.event+(c.rs?' · RS '+c.rs:''),'≤ '+c.max_residual_ft+' ft']]:[]),...(c.basis?[[tr('Basis','依据'),c.basis]]:[])]);
  if(!review.native)renderSurveyPriorities(screen,review);
  if(review.run_readiness){
   const r=review.run_readiness,labels={CHECKED:tr('Checks passed','检查通过'),BLOCKED:tr('Action needed','需处理'),EXTENT_PENDING:tr('Confirm extent after compilation','原生几何编译后核对范围'),NOT_REQUESTED:tr('Not requested','未选择')};
@@ -190,11 +199,49 @@ function scopeFields(parent,scope,atHome=false){
    :tr('Public data and the imported inputs will populate the feasibility review.','开工核查会沿用公开资料和已导入的输入。');
  }
  paths.addEventListener('change',update);update();
- const value=()=>({purpose:purpose.value,flow_paths:paths.value});
- if(!atHome)box.append(button('Save intended use and flow paths','保存用途与过流条件',async()=>{
-  await save();await api('save',{id:current.id,revision:current.revision,production_scope:value()});
-  await open(current.id);notify(tr('Project scope saved. Feasibility updated.','范围已保存，开工核查已更新。'));
- }));
+ const c=scope.criteria||{},rules=details(box,'Delivery conditions for this purpose','本用途的交付条件',!!scope.criteria);
+ const agreement=field(rules,'accept-agreement','Apply these conditions for this run','本次运算采用以下条件',scope.criteria?'yes':'no','select',
+  [['no','Set conditions later','稍后约定'],['yes','Use the listed conditions','采用所列条件']]);
+ const summary=el('p');rules.append(summary);
+ function explain(){
+  summary.textContent={screening:tr('Share for conditional screening once the selected checks pass.','所选检查通过后，可结合 QA 限制交付用于条件性初筛。'),
+   comparison:tr('A comparable baseline and revised run are required.','方案比较需要已计算的基准版和可比修订版。'),
+   review:tr('Require documented field geometry or an independent event with an agreed stage tolerance for engineering review.','工程复核请指定场地几何资料，或指定独立实测事件及约定的水位误差限值。')}[purpose.value];
+ }
+ purpose.addEventListener('change',explain);explain();
+ const profile=field(rules,'accept-profile','Modeled profile (blank for all)','计算工况（留空表示全部）',c.profile);
+ const ends=field(rules,'accept-ends','Require dry cross-section ends','要求断面端点均高于水位',c.dry_ends?'yes':'no','select',[['no','Optional','不作要求'],['yes','Required','必须满足']]);
+ const margin=field(rules,'accept-margin','Minimum road margin, ft (culverts only, optional)','最小道路余高，ft（限涵洞，可选）',c.min_freeboard_ft,'number');
+ const site=field(rules,'accept-site','Require source-backed site geometry','要求有原件支持的场地几何',c.site_geometry?'yes':'no','select',[['no','Optional','不作要求'],['yes','Required','必须满足']]);
+ const event=field(rules,'accept-event','Independent observed event ID','独立实测事件名称',c.event);
+ const rs=field(rules,'accept-rs','Observation river station (blank for all matched stations)','观测断面 RS（留空覆盖所有匹配断面）',c.rs);
+ const error=field(rules,'accept-error','Maximum absolute stage error, ft','最大绝对水位误差，ft',c.max_residual_ft,'number');
+ const basis=field(rules,'accept-basis','Source of numerical limits','数值限值依据',c.basis);
+ for(const control of [profile,ends,margin,site,event,rs,error,basis])control.addEventListener('input',()=>{agreement.value='yes';});
+ function value(){
+  if(agreement.value!=='yes')return {purpose:purpose.value,flow_paths:paths.value};
+  const criteria={dry_ends:ends.value==='yes',site_geometry:site.value==='yes'};
+  for(const [key,input] of Object.entries({profile,event,rs,basis}))if(input.value.trim())criteria[key]=input.value.trim();
+  for(const [key,input] of Object.entries({min_freeboard_ft:margin,max_residual_ft:error})){
+   if(input.validity?.badInput)throw Error(tr('Check the numerical limit.','请核对数值限值。'));
+   if(input.value!=='')criteria[key]=Number(input.value);
+  }
+  return {purpose:purpose.value,flow_paths:paths.value,criteria};
+ }
+ if(!atHome){
+  const inputs=Array.from(box.querySelectorAll('input,select,textarea'));
+  const key=draftKey('purpose/'+JSON.stringify(scope));
+  const commit=async()=>{
+   const updated=await api('save',{id:current.id,revision:current.revision,production_scope:value()});
+   current=updated;forgetForm(key,inputs);
+  };
+  const pending=()=>stageChange('purpose',tr('Delivery conditions','交付条件'),readDraft(key)?1:0,commit);
+  restoreForm(key,inputs);update();explain();observeForm(key,inputs,pending);pending();
+  box.append(button('Save intended use and delivery conditions','保存用途与交付条件',async()=>{
+   await save();await commit();pending();await open(current.id);
+   notify(tr('Project use and conditions saved.','项目用途和交付条件已保存。'));
+  }));
+ }
  return value;
 }
 

@@ -33,11 +33,13 @@
 .\.venv\Scripts\python.exe -m ras_workflow.local_backup restore D:\Backups\SteadyReach.zip D:\RestoredData
 ```
 
-**同机软件检查。** 网页回归需安装 Node.js。运行以下命令后，status/release_checks 的新目录会保存 Python、网页测试日志和检查记录。加 `--packet <复核目录>` 核对冻结的 [Siletz 实测基准](../examples/siletz_or/README.zh-CN.md)和 East Fork 留出结果。每个待统计项目加一项 `--project <项目ID>`。归档核对使用已有原生证据，需新求解时按示例指南运行并记录新 ID。
+**同机发版必测。** 在独立检出目录准备 HEC-RAS、QGIS、PDF 转换器、Node.js 与 Edge 或 Chrome。下方命令先执行 Python 和页面回归，再从 Midway 坐标及原件新建项目，首次实算后导入补充备忘录，核对路宽变更影响的六项参数，在修订版再次实算、选版并交接。检查包括带地图的 Complete 和 Minimal、两版 PDF 结论和浏览器交接按钮。缺私有资料时发版检查保持待办。开发期间可单独使用 `python -m unittest discover -s tests`。可加 `--packet <复核目录>` 检查 Siletz、East Fork 实测基准，或加 `--project <项目ID>` 记录试点指标。
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\release_check.py
+.\.venv\Scripts\python.exe scripts\release_check.py --midway-fixture D:\ReleaseInputs\Midway\fixture.json
 ```
+
+**私有基准资料。** 清单和有使用权的原件放在 Git 之外的同一目录，每个文件条目含文件名 `file` 和 `sha256`。`originals` 为四张 JPG、地点 KMZ、StreamStats PDF。`supplement` 为原始道路备忘录 DOCX，`brief` 为随附场地说明 TXT。`terrain`、`terrain_source`、`aerial` 分别为缓存的 USGS DEM、含 `raster.sha256` 的原地形记录和 NAIP 航片。`picks` 保存 DEM 投影下上下游锚点及两端洞口位置，`sampling` 保存 `section_width_ft`、`section_spacing_ft`，`spacing` 为孔间壁宽（ft）。从维护者领取固定清单。试算先假设路宽 25 ft，再核对备忘录的名义宽度 26 ft；场地两端涵底仍需测量。在 `status/release_checks` 下同时查看 `midway.json` 与 `release.json`。
 
 机器耗时取自任务记录。工程师操作、外部等待及开发者介入只有经过记录才能统计。可用 `--session <json>` 为所选项目附加计时。字段为 `project_id`、`intervals`（按时序记录 `kind` 为 `engineer` 或 `external_wait`，`started_utc` 和 `finished_utc` 带时区）和 `developer_interventions`（介入事项清单）。显式空清单表示该次观测确认零介入。
 

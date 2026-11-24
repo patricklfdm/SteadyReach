@@ -35,7 +35,7 @@ for (const hasProjects of [false,true]) {
     const context = {
       poll: null, clearTimeout() {}, rememberView() {}, shell() {}, tr: a => a, el: node, button: node, check:node,
       renderPractice(){},viewRequest:0,pendingChanges:new Map(),draftKey:()=>'',restoreForm(){},observeForm(){},Event:class{},surveyLimit:()=>'',
-      $: id => fields[id], nativeSelector(){fields['#native-files']=node();}, scopeFields(){fields['#project-flow-paths']={dispatchEvent(){}};}, renderSavedProjects(saved) {
+      $: id => fields[id], nativeSelector(){fields['#native-files']=node();}, scopeFields(){for(const id of ['#project-flow-paths','#project-purpose'])fields[id]={dispatchEvent(){}};}, renderSavedProjects(saved) {
         saved.querySelector = () => hasProjects;
       },
       field(parent,id,en,zh,value) {

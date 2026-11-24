@@ -384,6 +384,16 @@ def assess(model, path, summary, diagnostics, studies, guidance):
         warning_coverage=(diagnostics or {}).get('warning_coverage'),by_severity=dict(Counter(r['severity'] for r in issues))),
         qa=review,delivery=delivery,boundary_cases=cases,event_tailwaters=event_tailwaters(reviewed_events),changed_ends=changed,holdout_observations=len(measured),
         sources=list({e['path']:e for e in sources}.values()))
+    from .purpose_acceptance import evaluate
+    origin=summary.get('configuration',{}).get('revision_origin')
+    comparison=None
+    if origin and summary['configuration'].get('production_scope',{}).get('purpose')=='comparison':
+        from .app_revision import compare
+        try:
+            comparison=compare(dict(parent_revision=origin),summary)
+        except EVIDENCE_ERRORS:
+            comparison=None
+    result['purpose_decision']=evaluate(summary,river.get('events',[]),comparison)
     result['evidence_hash'] = digest({k:v for k,v in result.items() if k!='assessed_utc'})
     return result
 
@@ -412,6 +422,11 @@ def save_summary(key, body):
              label('Engineering sign-off remains with the responsible engineer.','工程签发由负责工程师决定。'),'']
     lines.extend([label('Current use', '当前可用范围')+' · '+a['use_guide']['allowed'][language],
                   label('Hold for review', '暂缓用途')+' · '+a['use_guide']['deferred'][language], ''])
+    decision=a.get('purpose_decision')
+    if decision:
+        lines.append(decision[language])
+        lines.extend(r[language] for r in decision['rows'])
+        lines.append(decision['note_'+language])
     if a.get('next_actions'):
         lines.append(label('Recommended action order','建议处理顺序'))
         for i,row in enumerate(a['next_actions'],1):

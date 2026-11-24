@@ -15,7 +15,11 @@ def scope(data):
     paths = data.get('flow_paths', 'unknown')
     if purpose not in PURPOSES or paths not in PATHS:
         raise ValueError('Choose a listed project purpose and flow path / 请选择列表中的用途和过流条件')
-    return {'purpose': purpose, 'flow_paths': paths}
+    from .purpose_acceptance import criteria
+    result = {'purpose': purpose, 'flow_paths': paths}
+    if data.get('criteria') is not None:
+        result['criteria'] = criteria(data['criteria'])
+    return result
 
 
 def assess(model, config, geometry, answers, acquisition=None, native=None, reach=None):
