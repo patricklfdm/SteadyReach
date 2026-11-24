@@ -8,6 +8,8 @@ For a reach without structures, choose **River reach (bridges excluded)** and fo
 
 Open **Hydraulic review** on the result page to follow the checks below. To read the reports or open a delivery package, switch to **Reports and maps**.
 
+**When can I finish this review?** In **Summary**, read the current use level, limitations and first action. If a follow-up batch stops, the existing result and report tab remain accessible. **Review unfinished checks** lists the remaining cases and what a retry will run. Open **Choose an edition or pause this review**. Comparable revisions show the changes in warnings, wet ends and peak water level at a verified common location. After interpreting the evidence, select the previous calculation or this revision as the working edition. Choose **Wait for field records** when the next decision needs independent field evidence. Reopening this result restores the choice. **Resume review of this edition** lets you continue. If you kept the baseline, **Open selected baseline** takes you to its own files. At L2 or L3, **Hand off this edition with its limitations** takes you to package verification and the recipient guide. The hydraulic checks and assessment still govern how the result can be used.
+
 ## Reduce native warnings in a river model
 
 1. Open the saved river result, expand **Reduce native HEC-RAS warnings**, and select **Preview scope and original warnings**. A verified, full native export and matching run inputs are required. If the export is missing, use **Complete native outputs / refresh deliverables** first.

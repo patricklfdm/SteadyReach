@@ -61,11 +61,11 @@ async function saveAll(keys=null){
  if(pendingMapSave)await pendingMapSave();
 }
 
-function notify(text='',error=false){$('#notice').setAttribute('role',error?'alert':'status');$('#notice').hidden=!text;$('#notice').textContent=text;$('#notice').className=error?'error':'';}
+function notify(text='',error=false,tone='info'){$('#notice').setAttribute('role',error?'alert':'status');$('#notice').hidden=!text;$('#notice').textContent=text;$('#notice').className=error?'error':tone;}
 async function api(route,body){const r=await fetch(route,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Workflow-Token':token,'X-SteadyReach-Client':'page'},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw Error(data.error||r.status);return data;}
 async function task(fn,label=tr('Working','正在处理'),source=null){
  if(busy)return;busy=true;const prior=new Map([...document.querySelectorAll('button,input,select,textarea')].map(b=>[b,b.disabled]));
- const working=label+'…',old=source?.textContent;notify(working);document.body.setAttribute('aria-busy','true');prior.forEach((v,b)=>b.disabled=true);if(source){source.textContent=working;source.classList.add('working');}
+ const working=label+'…',old=source?.textContent;notify(working,false,'working');document.body.setAttribute('aria-busy','true');prior.forEach((v,b)=>b.disabled=true);if(source){source.textContent=working;source.classList.add('working');}
  try{if(savePromise)await savePromise;if(pendingMapSave&&pendingMapSave!==fn)await pendingMapSave();await fn();if($('#notice').textContent===working)notify(label+(current?.status==='PROCESSING'?tr(' — started; follow progress below',' — 已启动，请查看下方进度'):''));}
  catch(e){notify(e.message,true);if(e.input)requestAnimationFrame(()=>{e.input.focus();e.input.scrollIntoView({block:'nearest'});});}
  finally{busy=false;document.body.removeAttribute('aria-busy');prior.forEach((v,b)=>{if(b.isConnected)b.disabled=v;});if(source?.isConnected){source.textContent=old;source.classList.remove('working');}}
@@ -103,34 +103,63 @@ function surveyLimit(files){
  if(Array.from(files).reduce((sum,f)=>sum+f.size,0)>50000000)return tr('Selection exceeds 50 MB. Crop the terrain or reduce the package.','所选资料超过 50 MB。请裁剪地形或缩小资料包。');
  return '';
 }
-async function home(){const request=++viewRequest;pendingChanges.clear();clearTimeout(poll);current=null;finalReview=null;rememberView(null);dirty=false;mapData=null;shell(0);const screen=$('#screen');screen.append(el('h1',tr('Projects','项目')),el('p',tr('Start with a location, a surveyed river package, or a HEC-RAS model. Review inputs together before computing.','从坐标、实测河道资料包或已有 HEC-RAS 工程开始，集中核对参数后再计算。')));const saved=el('section');await renderSavedProjects(saved);if(viewRequest!==request)return;const card=details(screen,'Start a new project','新建项目',!saved.querySelector('[data-project-id]'),'new-project');screen.append(saved);const form=el('div',undefined,'grid');card.append(form);const route=field(form,'route','Starting information','起始资料','coordinates','select',[['coordinates','Coordinates / partial information','坐标／部分资料'],['native','Existing HEC-RAS model','已有 HEC-RAS 工程'],['survey','Georeferenced river survey package','已整理的实测河道资料包']]);const modelType=field(form,'model-type','Analysis scope','分析范围','culvert','select',[['culvert','Culvert crossing','涵洞设施'],['river','River reach (bridges excluded)','纯河道（不建桥梁）']]);const title=field(form,'title','Project name','项目名称');const lat=field(form,'latitude','Latitude (WGS84)','纬度（WGS84）','','number'),lon=field(form,'longitude','Longitude (WGS84)','经度（WGS84）','','number');const q=field(form,'flow','Discharge (cfs), if known','流量（cfs，已知时填写）','','number');const more=details(card,'Optional roughness','可选：已知糙率');field(more,'channel_n','Channel Manning n','主槽糙率','','number');field(more,'overbank_n','Overbank Manning n','两侧漫滩糙率','','number');const native=el('div');card.append(native);nativeSelector(native,false);native.hidden=true;
+async function home(){
+ const request=++viewRequest;
+ pendingChanges.clear();clearTimeout(poll);current=null;finalReview=null;rememberView(null);
+ dirty=false;mapData=null;shell(0);
+ const screen=$('#screen');
+ screen.append(el('h1',tr('Projects','项目')),el('p',tr('Start with a location, a surveyed river package, or a HEC-RAS model. Review inputs together before computing.','从坐标、实测河道资料包或已有 HEC-RAS 工程开始，集中核对参数后再计算。')));
+ const saved=el('section');
+ await renderSavedProjects(saved);
+ if(viewRequest!==request)return;
+ const hasProjects=!!saved.querySelector('[data-project-id]');
+ if(!hasProjects)renderPractice(screen);
+ const card=details(screen,'Start a new project','新建项目',!hasProjects,'new-project');
+ screen.append(saved);
+ if(hasProjects)renderPractice(screen);
+ const form=el('div',undefined,'grid project-intake');card.append(form);
+ const route=field(form,'route','Starting information','起始资料','coordinates','select',[
+  ['coordinates','Coordinates / partial information','坐标／部分资料'],['native','Existing HEC-RAS model','已有 HEC-RAS 工程'],['survey','Georeferenced river survey package','已整理的实测河道资料包']]);
+ const modelType=field(form,'model-type','What are you modeling?','你要模拟什么？','','select',[
+  ['','Choose the site type','请选择地点类型'],['river','River reach (bridges excluded), e.g. between two bridges','纯河道（不建桥梁），例如两桥之间的河段'],['culvert','Flow through one or more culvert barrels','水流通过一孔或多孔涵洞']]);
+ const title=field(form,'title','Project name','项目名称');
+ const coords=el('div',undefined,'coordinate-pair');form.append(coords);
+ const lat=field(coords,'latitude','Latitude (WGS84)','纬度（WGS84）','','number');
+ const lon=field(coords,'longitude','Longitude (WGS84)','经度（WGS84）','','number');
+ const q=field(form,'flow','Discharge (cfs), if known','流量（cfs，已知时填写）','','number');
+ const more=details(card,'Optional roughness','可选：已知糙率');
+ field(more,'channel_n','Channel Manning n','主槽糙率','','number');
+ field(more,'overbank_n','Overbank Manning n','两侧漫滩糙率','','number');
+ const native=el('div');card.append(native);nativeSelector(native,false);native.hidden=true;
  const intent=scopeFields(card,{},true);
  const key=draftKey('new-project','home');
  const surveyed=el('label',undefined,'field');surveyed.hidden=true;
  surveyed.append(el('span',tr('Select survey.json, the GeoTIFF and all sources listed in the manifest. Location, flow and roughness are read from the package.','选择 survey.json、GeoTIFF 和清单所列全部来源文件。坐标、流量及糙率取自资料包。')));
  const measured=el('input');measured.type='file';measured.multiple=true;measured.id='survey-files';const selection=el('small');selection.setAttribute('aria-live','polite');const selectionInfo=()=>{const files=Array.from(measured.files);const size=(files.reduce((sum,f)=>sum+f.size,0)/1e6).toFixed(1);selection.textContent=[files.length+tr(' files',' 个文件')+' · '+size+' MB',tr('15 MB per file / 50 MB total','单文件 15 MB／总计 50 MB'),surveyLimit(files)].filter(Boolean).join(' · ');};measured.onchange=selectionInfo;surveyed.append(measured,selection);card.append(surveyed);
+ let locationScope='';modelType.onchange=()=>{if(route.value==='coordinates')locationScope=modelType.value;};
  route.onchange=()=>{const useSurvey=route.value==='survey';native.hidden=route.value!=='native';surveyed.hidden=!useSurvey;
  for(const input of [lat,lon,q,$('#channel_n'),$('#overbank_n'),modelType])input.disabled=useSurvey;
  for(const input of [lat,lon,q,modelType])input.parentElement.hidden=useSurvey;
- more.parentElement.hidden=useSurvey;modelType.disabled=useSurvey||route.value==='native';
- if(useSurvey)modelType.value='river';else if(route.value==='native')modelType.value='culvert';};
+ coords.hidden=useSurvey;more.parentElement.hidden=useSurvey;modelType.disabled=useSurvey||route.value==='native';
+ if(useSurvey)modelType.value='river';else if(route.value==='native')modelType.value='culvert';else modelType.value=locationScope;};
  const gis=check(card,'Also prepare GIS / Mapper / exhibits','同时准备 GIS、Mapper 和展示图',true,()=>{});gis.id='new-gis';
  const inputs=Array.from(card.querySelectorAll('input,select,textarea'));
- restoreForm(key,inputs);route.onchange();$('#project-flow-paths').dispatchEvent(new Event('change'));selectionInfo();
+ restoreForm(key,inputs);if(route.value==='coordinates')locationScope=modelType.value;route.onchange();$('#project-flow-paths').dispatchEvent(new Event('change'));selectionInfo();
  const fileHint=el('p','', 'warning');card.append(fileHint);
  function updateForm(){
-  title.required=true;lat.required=lon.required=route.value==='coordinates';
+  title.required=true;modelType.required=route.value==='coordinates';lat.required=lon.required=route.value==='coordinates';
   measured.required=route.value==='survey';
-  for(const input of [title,lat,lon,measured])input.setAttribute('aria-required',String(input.required));
+  for(const input of [title,modelType,lat,lon,measured])input.setAttribute('aria-required',String(input.required));
   const file=route.value==='survey'?measured:route.value==='native'?$('#native-files'):null;
   fileHint.hidden=!file?.dataset.reselect;
   if(!fileHint.hidden)fileHint.textContent=tr('Reselect these files after reload: ','刷新后请重新选择这些文件：')+JSON.parse(file.dataset.reselect).join(', ');
  }
  updateForm();observeForm(key,inputs,updateForm);
- card.append(el('small',tr('Required: project name; coordinates for a location start.','必填：项目名称；按坐标建项还须填写经纬度。')));
+ card.append(el('small',tr('Enter a project name. For a location start, also choose the site type and enter both coordinates.','请填写项目名称。按坐标建项时，还需选择地点类型、填写经纬度。')));
  card.append(button('Prepare project','准备项目',async()=>{
  if(!title.value.trim())inputError(title,tr('Enter a project name.','请填写项目名称。'));
  if(route.value!=='survey'){
+   if(route.value==='coordinates'&&!modelType.value)inputError(modelType,tr('Choose a river reach or a culvert crossing.','请选择纯河道或涵洞设施。'));
   if(route.value==='coordinates'||lat.value||lon.value)for(const [input,minimum,maximum] of [[lat,-90,90],[lon,-180,180]]){
    if(!input.value||!Number.isFinite(input.valueAsNumber)||input.valueAsNumber<minimum||input.valueAsNumber>maximum)inputError(input,(input===lat?tr('Latitude','纬度'):tr('Longitude','经度'))+' · '+minimum+' … '+maximum);
   }
@@ -185,16 +214,20 @@ function versionCaption(project,originalTitle,sequence){
  const time=Number.isFinite(date.getTime())?' · '+date.toLocaleString(lang==='zh'?'zh-CN':'en-US'):'';
  return (sequence?tr('Revision ','修订 ')+sequence:tr('Revision','修订'))+' · '+purpose+time;
 }
+function indexEditions(projects,deleted){
+ const numbers=new Map();
+ for(const family of savedProjectGroups([...projects,...deleted],[])){
+  const editions=family.versions.filter(p=>p.id!==family.id).sort((a,b)=>(a.created_utc||'').localeCompare(b.created_utc||'')||a.id.localeCompare(b.id));
+  editions.forEach((p,i)=>{numbers.set(p.id,i+1);writeDraft(draftKey('edition',p.id),{rootTitle:family.original?.title||family.id,sequence:i+1});});
+ }
+ return numbers;
+}
 async function renderSavedProjects(parent){
  const data=await api('state');parent.replaceChildren();
  parent.append(el('h2',tr('Saved projects','已保存的项目')));
  if(!data.projects.length)parent.append(el('p',tr('No saved projects yet.','暂无已保存项目。'),'muted'));
  const deleted=data.deleted_projects||[];
- const sequenceById=new Map();
- for(const family of savedProjectGroups([...data.projects,...deleted],[])){
-  const editions=family.versions.filter(p=>p.id!==family.id).sort((a,b)=>(a.created_utc||'').localeCompare(b.created_utc||'')||a.id.localeCompare(b.id));
-  editions.forEach((p,i)=>sequenceById.set(p.id,i+1));
- }
+ const sequenceById=indexEditions(data.projects,deleted);
  for(const group of savedProjectGroups(data.projects,deleted)){
   const title=group.original?.title??group.id;
   const count=group.versions.length;
@@ -203,7 +236,6 @@ async function renderSavedProjects(parent){
   else if(group.versions[0].id!==group.id)entry.append(el('p',tr('The original project is in Deleted projects.','原项目已移至回收站。'),'muted'));
   for(const project of group.versions){
    const sequence=sequenceById.get(project.id);
-   if(sequence)writeDraft(draftKey('edition',project.id),{rootTitle:title,sequence});
    renderProjectCard(entry,project,false,parent,project.id===group.id,versionCaption(project,title,sequence));
   }
  }
@@ -260,7 +292,11 @@ async function pollProject(id){
 async function open(id){const request=++viewRequest,changed=current?.id!==id,wasProcessing=!changed&&current?.status==='PROCESSING';clearTimeout(poll);const next=await api('project/'+id);if(viewRequest!==request)return;if(wasProcessing&&next.status==='PROCESSING'&&document.getElementById('task-progress')){
  const changed=[ 'phase','job','check_batch_progress','study_progress' ].some(key=>JSON.stringify(current[key])!==JSON.stringify(next[key]));
  current=next;if(changed)updateProcessing(next);poll=setTimeout(()=>pollProject(id),2500);return;
- }current=next;pendingChanges.clear();edited={};metaEdits={};classEdits={};dirty=false;render();if(changed)window.scrollTo(0,0);if(current.status==='PROCESSING')poll=setTimeout(()=>pollProject(id),2500);else if(wasProcessing)notify(current.job?.status==='FAILED'?(current.errors||[]).join('\n'):current.job?.action==='automatic-prepare'?tr('Automatic draft saved. Review the highlighted interpretations, then confirm all calculation inputs.','自动草稿已保存。请核对集中列出的判断项，然后确认全部运算参数。'):current.results?tr('Calculation and export task finished. Review the results and delivery status.','任务已完成，请查看计算结果和交付状态。'):tr('Preparation finished. Review the model inputs.','资料准备完成，请核对模型输入。'),current.job?.status==='FAILED');}
+ }
+ if(next.parent_revision&&!readDraft(draftKey('edition',id))){
+  const list=await api('state');if(viewRequest!==request)return;indexEditions(list.projects,list.deleted_projects||[]);
+ }
+ current=next;pendingChanges.clear();edited={};metaEdits={};classEdits={};dirty=false;render();if(changed)window.scrollTo(0,0);if(current.status==='PROCESSING')poll=setTimeout(()=>pollProject(id),2500);else if(wasProcessing)notify(current.job?.status==='FAILED'?(current.errors||[]).join('\n'):current.job?.action==='automatic-prepare'?tr('Automatic draft saved. Review the highlighted interpretations, then confirm all calculation inputs.','自动草稿已保存。请核对集中列出的判断项，然后确认全部运算参数。'):current.results?tr('Calculation and export task finished. Review the results and delivery status.','任务已完成，请查看计算结果和交付状态。'):tr('Preparation finished. Review the model inputs.','资料准备完成，请核对模型输入。'),current.job?.status==='FAILED');}
 function projectHeading(m){
  if(!m.parent_revision)return m.title;
  const info=readDraft(draftKey('edition',m.id))||{},root=info.rootTitle||m.title.replace(/(?:\s*·\s*(?:revision|QA draft))+$/gi,'').trim();
@@ -271,11 +307,13 @@ function updateProcessing(m){
  region.replaceChildren();region.append(el('p',m.phase?.startsWith('CHECK_BATCH_')?checkStepName(m.phase.slice(12).toLowerCase()):({RUN:tr('Starting HEC-RAS','正在启动 HEC-RAS'),HEC_RAS_REPORTS_DELIVERY:tr('Calculating and preparing reports and maps','正在计算并制作报告与地图'),PREPARE:tr('Preparing model inputs','正在准备模型输入')})[m.phase]||m.phase));if(m.check_batch_progress)renderCheckBatchProgress(region,m.check_batch_progress);if(m.study_progress)renderStudyProgress(region,m.study_progress);
  document.getElementById('task-record').textContent=JSON.stringify(m.job,null,2);
 }
-function render(){const m=current;rememberView({project:m.id,page:'model'});shell(m.results?3:m.status==='PROCESSING'&&m.job?.action==='run'?2:1);const screen=$('#screen');screen.append(button('← Projects','← 项目列表',async()=>{await save();await home();notify();}),el('h1',projectHeading(m)),el('p',batchHeadline(m)||stateLabel(m.status),batchHeadline(m)?'warning':'status'));renderPilotClock(screen);if(m.status==='ABANDONED'){screen.append(el('p',tr('Inputs and results are retained. Create a new project to restart.','输入和结果已保留，需要重新开始时请建立新项目。')));return;}if(m.status==='PROCESSING'){
+function render(){const m=current;rememberView({project:m.id,page:'model'});shell(m.results?3:m.status==='PROCESSING'&&m.job?.action==='run'?2:1);const screen=$('#screen');screen.append(button('← Projects','← 项目列表',async()=>{await save();await home();notify();}),el('h1',projectHeading(m)),el('p',batchHeadline(m)||stateLabel(m.status),batchHeadline(m)?'warning':'status'));if(!m.results||m.status==='PROCESSING')renderPilotClock(screen);if(m.status==='ABANDONED'){screen.append(el('p',tr('Inputs and results are retained. Create a new project to restart.','输入和结果已保留，需要重新开始时请建立新项目。')));return;}if(m.status==='PROCESSING'){
  const region=el('section');region.id='task-progress';region.setAttribute('aria-label',tr('Task progress','任务进度'));
  screen.append(el('div',undefined,'progress'),el('p',tr('Working locally. You may close this browser tab; keep the launcher running.','正在本机处理。可关闭浏览器标签页，请保留启动程序。')),region);
  const record=el('pre');record.id='task-record';details(screen,'Technical details','技术详情').append(record);updateProcessing(m);return;
- }renderTaskRecovery(screen,m);if(m.calculation_recovery&&m.calculation_recovery.mode!=='REVIEW_INPUTS'&&!m.results?.run_id)return;if(m.feedback_spec&&(m.job?.status==='FAILED'||!m.results)){screen.append(button('Resume confirmed field check','继续已确认的现场情景',async()=>{await api('field/resume',{id:m.id,confirmed:true});await open(m.id);}));if(!m.results)return;}if(m.results){renderResults(screen);return;}if(m.summary){screen.append(el('p',tr('L0 · The saved calculation evidence is unavailable. Restore the matching summary before reviewing results.','L0 · 保存的计算证据不可用。请恢复对应的汇总文件后再复核结果。'),'warning'));}if(m.feasibility?.state==='outside'){renderFeasibility(screen,m.feasibility,true);return;}
+ }
+ if(m.results&&m.status!=='ABANDONED'){renderResults(screen);return;}
+ renderTaskRecovery(screen,m);if(m.calculation_recovery&&m.calculation_recovery.mode!=='REVIEW_INPUTS'&&!m.results?.run_id)return;if(m.feedback_spec&&(m.job?.status==='FAILED'||!m.results)){screen.append(button('Resume confirmed field check','继续已确认的现场情景',async()=>{await api('field/resume',{id:m.id,confirmed:true});await open(m.id);}));if(!m.results)return;}if(m.summary){screen.append(el('p',tr('L0 · The saved calculation evidence is unavailable. Restore the matching summary before reviewing results.','L0 · 保存的计算证据不可用。请恢复对应的汇总文件后再复核结果。'),'warning'));}if(m.feasibility?.state==='outside'){renderFeasibility(screen,m.feasibility,true);return;}
  const preparation=preparationActions(m);
  const ready=m.missing.length===0&&(m.native||m.intake?.section_count)&&!preparation.length;
  const reviewInputs=()=>button('Review calculation inputs →','核对运算输入 →',()=>showFinalReview(), 'primary');
@@ -296,7 +334,7 @@ function render(){const m=current;rememberView({project:m.id,page:'model'});shel
  if(m.native){renderNative(editor);renderSources(editor);}else renderManual(editor);
  const pending=details(screen,'Missing values / checks','缺失项／检查结果',false);if(m.missing.length){pending.append(el('p',tr('Supply the listed model inputs or read a complete native model. ','补齐列出的模型输入，或读取完整原生模型。')+m.missing.length+tr(' checks remain.',' 项待处理。')));const list=el('ul');for(const text of m.missing.slice(0,8))list.append(el('li',text));pending.append(list);if(m.missing.length>8){const rest=details(pending,'Show every missing field','展开全部缺失字段');const all=el('ul');for(const text of m.missing.slice(8))all.append(el('li',text));rest.append(all);}}else pending.append(el('p',tr('Required technical checks are satisfied for a conditional computation.','条件性计算所需的技术输入检查已通过。')));const actions=el('div',undefined,'actions');editor.append(actions);actions.append(button('Save all changes','保存全部更改',async()=>{await saveAll();await open(m.id);notify(tr('Saved locally','已保存到本机'));}));if(!ready)actions.append(reviewInputs());
  const utilities=details(screen,'Project options','项目管理');renderHandoff(utilities);const leave=details(utilities,'Stop this project','停止此项目');leave.append(el('p',tr('Abandoning stops further actions and retains saved files.','放弃将停止后续操作，已保存文件仍保留。')),button('Abandon workflow','放弃工作流',async()=>{const b=button('Confirm abandonment — keep saved files','确认放弃，保留已存文件',async()=>{await api('abandon',{id:m.id});await open(m.id);});leave.append(el('p',tr('Click the confirmation below to stop. You may continue editing if you change your mind.','点击下方确认按钮才会放弃，也可继续编辑取消此操作。'),'warning'),b);b.scrollIntoView({block:'nearest'});}));}
-function mark(){dirty=true;clearTimeout(saveTimer);notify(tr('Unsaved changes','更改尚未保存'));saveTimer=setTimeout(async()=>{if(busy){mark();return;}try{await save();notify(tr('Saved locally','已自动保存到本机'));}catch(e){notify(e.message,true);}},1100);}
+function mark(){dirty=true;clearTimeout(saveTimer);notify(tr('Unsaved changes','更改尚未保存'),false,'caution');saveTimer=setTimeout(async()=>{if(busy){mark();return;}try{await save();notify(tr('Saved locally','已自动保存到本机'),false,'success');}catch(e){notify(e.message,true);}},1100);}
 async function save(){
  if(!current)return;
  const invalid=document.querySelector('input:invalid,textarea:invalid');if(invalid){invalid.reportValidity();throw Error(tr('Correct the highlighted value before continuing','请先修正标出的无效值'));}
@@ -382,6 +420,24 @@ function renderBanks(parent,review){
 function renderResults(screen){
  const r=current.results,pages=resultPages(screen);
  const overview=pages.overview;
+ const recovery=details(pages.review,'Task details and recovery','批次详情与恢复',false,'result-task-recovery');
+ recovery.id='qa-tool-recovery';
+ renderTaskRecovery(recovery,current);
+ if(current.feedback_spec&&current.job?.status==='FAILED')recovery.append(button('Resume confirmed field check','继续已确认的现场情景',async()=>{await api('field/resume',{id:current.id,confirmed:true});await open(current.id);}));
+ if(!recovery.childElementCount)recovery.parentElement.hidden=true;
+ const summary=el('section',undefined,'result-summary');overview.append(summary);
+ const profiles=r.metrics||[];
+ const values=profiles.map(p=>p.flow_cfs).filter(Number.isFinite);
+ const flows=values.length===profiles.length&&values.length
+  ?(Math.min(...values)===Math.max(...values)?String(values[0]):Math.min(...values)+'–'+Math.max(...values))+' cfs':'';
+ const available=(current.report_files||[]).some(file=>file.name.endsWith('.pdf'));
+ const report=available?tr('PDF reports available','PDF 报告可查看'):tr('Check report export','请检查报告导出');
+ const profileCount=profiles.length===1?profiles[0].profile_id:profiles.length+tr(' profiles',' 个工况');
+ summary.append(el('p',[profileCount,flows,report].filter(Boolean).join(' · '),'status'));
+ renderGuidance(summary,pages.review);
+ if(batchHeadline(current))summary.prepend(button('Review unfinished checks','查看未完成的复核',()=>openGuidanceTool('recovery')));
+ else if(recovery.childElementCount)summary.prepend(button('Review task and recovery options','查看任务详情与恢复操作',()=>openGuidanceTool('recovery')));
+
  overview.append(el('h2',tr('Hydraulic results','水力计算结果')));
  const fmt=v=>v==null?'—':Number(v).toFixed(3);
  const river=current.model_type==='river';
@@ -391,7 +447,7 @@ function renderResults(screen){
  if(current.field_response)renderFieldResponse(overview,current.field_response);
  const d=current.delivery;
  if(!d||!['READY_FOR_REVIEW'].includes(d.status)||current.exports_need_refresh)overview.append(el('p',tr('Review the export status under Reports and maps before sharing.','发送前请打开“报告与地图”核对导出状态。'),'warning'));
- renderGuidance(overview,pages.review);
+
  if(!current.native_review){const revise=guidanceTarget(details(pages.review,'Revise inputs / compare a new run','修改参数／对比重算'),'revision');revise.append(el('p',tr('Create a separate editable revision. This completed project and its results remain saved. No calculation starts until you confirm the revised parameters.','创建独立可编辑修订版，保留当前完整项目和结果。核对并确认修订参数后才会重新计算。')),button('Create editable revision','创建可编辑修订版',async()=>{const next=await api('revision',{id:current.id,revision:current.revision,confirmed:true});await open(next.id);notify(tr('Revision ready. Edit parameters, then confirm to calculate.','修订版已就绪；修改参数后统一确认计算。'));}));}
  if(current.comparison)renderRevisionComparison(pages.review,current.comparison);
 
@@ -411,9 +467,9 @@ function renderResults(screen){
   (f.name.toLowerCase().endsWith('.pdf')?pdf:other).append(a);
  }
  if(!reports.length)files.append(el('p',tr('Report files are pending.','报告文件待生成。'),'warning'));
- files.append(el('h2',tr('Delivery packages','交付包')));
+ files.append(guidanceTarget(el('h2',tr('Delivery packages','交付包')),'recipient'));
  if(d){
-  files.append(el('p',tr('Delivery status: ','交付状态：')+d.status,'status'));
+  files.append(el('p',tr('Delivery status: ','交付状态：')+deliveryState(d.status),d.status==='INCOMPLETE'?'warning':'status'));
   for(const key of ['minimal','complete'])if(d[key]){
    files.append(button(key==='minimal'?'Open Minimal':'Open Complete',key==='minimal'?'打开最小交付包':'打开完整交付包',()=>api('open-folder',{id:current.id,path:d[key].path})));
   }
@@ -421,7 +477,7 @@ function renderResults(screen){
   renderDeliveryRecovery(files,d);
  }else files.append(el('p',tr('Delivery packages are pending.','交付包待生成。'),'warning'));
  const actions=details(pages.delivery,'Export again without solving','重新导出（不重新求解）');actions.append(button('Regenerate reports','重新生成报告',async()=>{await api('report',{id:current.id});await open(current.id);}),button('Regenerate delivery','重新生成交付包',async()=>{await api('delivery',{id:current.id});await open(current.id);}));
- renderHandoff(delivery);
+ renderPilotClock(delivery);renderHandoff(delivery);
  const technical=details(pages.review,'Technical details / provenance','技术详情／来源记录');
  technical.append(el('pre',JSON.stringify({summary:current.summary,job:current.job,results:r},null,2)));
 }

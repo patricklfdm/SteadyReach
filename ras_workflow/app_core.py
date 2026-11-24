@@ -650,6 +650,8 @@ def view(key,detail=True):
         result['delivery']=delivery
         from .app_revision import compare
         result['comparison']=compare(m,s)
+        from .iteration_choice import latest as iteration_choice
+        result['iteration_choice']=iteration_choice(m)
         if s['configuration'].get('field_feedback'):
             from .field_results import collect as field_results
             result['field_response']=field_results(s)[0]

@@ -1,12 +1,22 @@
 function renderRecipientHandoff(parent){
  const output=el('div');output.setAttribute('aria-live','polite');
- parent.append(button('Verify packages and create recipient guide','校验双包并生成收件人说明',async()=>{
+ const action=button('Verify packages and create recipient guide','校验双包并生成收件人说明',async()=>{
   const id=current.id,revision=current.revision;
   const info=await api('handoff-export',{id,revision,summary_hash:current.summary.sha256});
   output.replaceChildren(el('p',tr('English and Chinese opening guides saved','已保存中英文打开说明')+' · L'+info.level+' · '+info.run_id,'status'),
    el('p',tr('Copy this folder alongside Complete and Minimal. Open Start_EN.html or Start_zh-CN.html.','请将本文件夹与 Complete、Minimal 并列转交。双击 Start_zh-CN.html 或 Start_EN.html 即可阅读。')),
    button('Open recipient guide folder','打开收件人说明文件夹',()=>api('open-folder',{id,path:info.folder})));
- }),output);
+ });
+ const state=el('p');state.id='recipient-action';
+ function reflect(){
+  const choice=current.iteration_choice?.choice;
+  const blocked=['parent','wait','unavailable'].includes(choice);
+  action.hidden=blocked;state.hidden=!blocked;output.replaceChildren();
+  state.textContent=choice==='parent'?tr('The previous edition was selected. Open it under Summary to hand off its files.','已选用上一版。请从结果总览打开该基准版，再交接其文件。'):tr('Waiting for field records. Resume review under Summary before handoff.','正在等现场资料。资料就绪后可从结果总览继续复核并交接。');
+  if(choice==='unavailable')state.textContent=tr('Check the saved choice under Summary before handoff.','交接前请在结果总览重新核对使用版本。');
+ }
+ state.addEventListener('iteration-updated',reflect);reflect();
+ parent.append(state,action,output);
 }
 function renderHandoff(parent) {
  const box=details(parent,'Handoff, local files and optional pilot timing','交付预览、本地文件与可选试点计时');

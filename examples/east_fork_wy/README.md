@@ -10,6 +10,8 @@ This short Wyoming reach has four monumented USGS sections, 0220, 0301, 0421 and
 | Calibration, 30 May 1979 | Table 10, printed p. 33, staff stages from 14:10 to 14:12 local survey time. Table 11, printed p. 35, discharge at section 0000 of 16.3 m³/s at 14:16. [USGS OFR 80-1189](https://pubs.usgs.gov/of/1980/1189/report.pdf) |
 | Holdout, 10 June 1980 | Tables 49 and 50, printed pp. 100, 110. Left/right readings at the four sections from 11:59 to 12:09, using their mean. Discharge at 0000 was 19.3 m³/s at 12:15. [USGS OFR 82-359](https://pubs.usgs.gov/of/1982/0359/report.pdf) |
 
+The optional home-page exercise reads [practice.json](practice.json). It includes water surface elevations at all four sections from three recorded runs of the 30 May 1979 event. The roughness values are 0.030, 0.035 and 0.040. Each case identifies its native HDF by SHA-256. The exercise compares against 0.030 in metres, NGVD29. RS 220 supplies the downstream stage. The Windows procedure below can reproduce these runs.
+
 ## Repeat on Windows
 
 Prepare SteadyReach and its supported HEC-RAS as described in the main guide. From the repository root run the following. Outputs go to a new directory for each step.

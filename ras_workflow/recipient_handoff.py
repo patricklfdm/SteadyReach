@@ -69,6 +69,14 @@ def page(language, model, assessment, folders, receipt, pair):
 def export(key, body):
     model=app_core.model(key)
     app_core.require_idle(model)
+    from .iteration_choice import latest
+    decision = latest(model) or {}
+    if decision.get('choice') == 'unavailable':
+        raise ValueError('Check the saved edition choice before handoff. / 请在结果总览重新核对工作版，再交接。')
+    if decision.get('choice') == 'parent':
+        raise ValueError('Open the selected baseline to hand it off. / 请打开已选用的基准版，再交接该版成果。')
+    if decision.get('choice') == 'wait':
+        raise ValueError('Resume this review before handoff. / 本版正在等资料，请先在结果总览继续复核。')
     receipt=handoff.bound_package(model)
     if (model['revision']!=body.get('revision') or not receipt or model.get('exports_need_refresh')
             or receipt['summary']!=model.get('summary') or body.get('summary_hash')!=receipt['summary']['sha256']):

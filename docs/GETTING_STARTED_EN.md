@@ -2,6 +2,8 @@
 
 [English](GETTING_STARTED_EN.md) | [简体中文](GETTING_STARTED_CN.md)
 
+On your first visit, open **Try a worked river example**. Choose a Manning’s n, inspect the water-level change at RS 516 for the same East Fork flood, and open the practice report to compare all four sections. The exercise uses verified HEC-RAS outputs and keeps your selection in this browser tab. When starting your own location, choose the site type. Use the river option for a reach between bridges whose structures are excluded. Use the culvert option to calculate barrel flow, headwater or road overflow.
+
 Open **Start a new project** or expand an entry under **Saved projects** to continue a previous version. Use coordinates for a new site, a survey package when you already have `survey.json` with its referenced files, or native input for a supported existing culvert model. At final confirmation, check the separate HEC-RAS, report and GIS rows. A mapped project checks its projected terrain crop before solving. If GIS needs attention, correct the terrain or choose hydraulic results and reports only, then confirm the revised outputs. Native geometry can require a second extent check after compilation. After preparation, choose **Review calculation inputs** when the required data are ready. To inspect a draft, expand the site data, geometry or hydraulic parameters. Check the assumptions and delivery options before authorizing a run.
 
 After the run, **Summary** shows flow, water levels and the first issue requiring judgment. **Hydraulic review** contains the warnings and scenario studies. **Reports and maps** opens the PDFs, QGIS and both delivery packages. On the home page, expand a site's entry to find the original and its revisions. Version management is inside each entry.

@@ -100,6 +100,7 @@ function showResultAssessment(overview,a,box=overview){
    if(row.target==='floodplain'&&f.station)document.getElementById('qa-tool-floodplain')?.dispatchEvent(new CustomEvent('steadyreach-inspect-floodplain',{detail:{rs:f.station,geometry:f.case}}));
   }));
  }
+ renderIterationChoices(overview,a,primary);
  if(primary){const first=el('div');overview.append(first);first.append(el('strong',tr('First action','优先处理')));action(first,primary);}
  if(a.event_tailwaters?.length){
   const panel=details(box,'Measured tailwater by observed event','按实测事件核对尾水');

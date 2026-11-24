@@ -34,7 +34,7 @@ for (const hasProjects of [false,true]) {
     const panels = {};
     const context = {
       poll: null, clearTimeout() {}, rememberView() {}, shell() {}, tr: a => a, el: node, button: node, check:node,
-      viewRequest:0,pendingChanges:new Map(),draftKey:()=>'',restoreForm(){},observeForm(){},Event:class{},surveyLimit:()=>'',
+      renderPractice(){},viewRequest:0,pendingChanges:new Map(),draftKey:()=>'',restoreForm(){},observeForm(){},Event:class{},surveyLimit:()=>'',
       $: id => fields[id], nativeSelector(){fields['#native-files']=node();}, scopeFields(){fields['#project-flow-paths']={dispatchEvent(){}};}, renderSavedProjects(saved) {
         saved.querySelector = () => hasProjects;
       },
@@ -51,6 +51,8 @@ for (const hasProjects of [false,true]) {
     await vm.runInNewContext(home+';home()', context);
     assert.equal(panels['Start a new project'].parentElement.open,!hasProjects);
     const route=fields['#route'], scope=fields['#model-type'];
+    assert.equal(scope.value,'');
+    scope.value='river';scope.onchange();
     route.value='survey';route.onchange();
     assert.equal(fields['#latitude'].parentElement.hidden,true);
     assert.equal(scope.value,'river');
@@ -60,5 +62,6 @@ for (const hasProjects of [false,true]) {
     route.value='coordinates';route.onchange();
     assert.equal(fields['#latitude'].parentElement.hidden,false);
     assert.equal(scope.disabled,false);
+    assert.equal(scope.value,'river');
   });
 }

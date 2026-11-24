@@ -79,7 +79,7 @@ function renderSurveyPriorities(parent,review){
  panel.append(button('Add a drawing or survey record','补充图纸或测量资料',()=>openModelTool('site-file-import')));
 }
 function renderFinalReview(){
- const review=finalReview;rememberView({project:current.id,page:'confirm'});shell(2);window.scrollTo(0,0);const screen=$('#screen');screen.append(el('h1',tr('Confirm calculation inputs','开算前确认')),el('p',current.title,'status'),
+ const review=finalReview;rememberView({project:current.id,page:'confirm'});shell(2);window.scrollTo(0,0);const screen=$('#screen');screen.append(el('h1',tr('Confirm calculation inputs','开算前确认')),el('p',projectHeading(current),'status'),
  el('p',tr('Nothing has been solved yet. Edit any field; changes cancel this confirmation. No name, reason, or signature is required.','尚未开始求解。可以修改任意字段，修改后本次确认会失效。无需姓名、理由或签名。')),
  button('← Back to preparation','← 返回准备页面',async()=>{await save();finalReview=null;await open(current.id);}));
  const state=el('p',review.ready?tr('Technical input checks passed. Assumptions remain conditional.','必要输入检查通过。假设仍属于条件性输入。'):tr('Fill the items below, then refresh this list. The solver is paused.','请补齐下列项目并刷新清单，求解器处于等待状态。'),review.ready?'status':'warning');state.id='review-state';screen.append(state);

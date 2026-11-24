@@ -1,5 +1,63 @@
 'use strict';
 function guidanceTarget(node,key){node.id='qa-tool-'+key;return node;}
+function deliveryState(status){
+ const names={READY_FOR_REVIEW:['Packages available for review','交付包可供复核'],READY_NATIVE_ONLY:['Native model and report available','原生模型与报告可查看'],INCOMPLETE:['Export incomplete','交付导出未完成']};
+ return names[status]?tr(...names[status]):tr('Check delivery details','请核对交付详情');
+}
+
+function renderIterationChoices(parent,assessment,primary){
+ const model=current, comparison=model.comparison;
+ if(!assessment.run_id||assessment.level===0)return;
+ const box=details(parent,'Choose an edition or pause this review','选择使用版本或暂停复核',false,'iteration-choice');
+ const status=el('p');status.setAttribute('role','status');
+ const saved={current:tr('Working edition: this run','工作版本：本次计算'),parent:tr('Working edition: previous calculation','工作版本：上一次计算'),wait:tr('Review paused for field records','复核已暂停，等待现场资料'),review:tr('Review in progress','正在复核'),unavailable:tr('The saved edition choice needs review. Choose again before handoff.','上次使用版本的记录需要核对，请重新选择后交接。')};
+ // Keep the decision visible even when the actions are collapsed.
+ box.parentElement.before(status);
+ const selected=el('div',undefined,'actions');box.append(selected);
+ function show(record){
+  status.textContent=record?saved[record.choice]||'':'';
+  status.hidden=!record;selected.replaceChildren();
+  if(['wait','parent','unavailable'].includes(record?.choice))selected.append(button('Resume review of this edition','继续复核本版',()=>saveChoice('review')));
+  if(record?.choice==='parent'){
+   selected.append(button('Open selected baseline','打开选用的基准版',async()=>{
+    const target=record.selected;
+    await open(target.project_id);
+    if(current?.summary?.sha256!==target.summary.sha256){
+     await open(model.id);
+     throw Error(tr('The baseline has changed. Review this comparison again.','基准版已变化，请重新核对本次对比。'));
+    }
+   }));
+  }
+ }
+ async function saveChoice(choice){
+  const record=await api('iteration-choice',{id:model.id,revision:model.revision,summary_hash:model.summary.sha256,previous:model.iteration_choice?.token||null,choice});
+  model.iteration_choice=record;show(record);
+  document.getElementById('recipient-action')?.dispatchEvent(new Event('iteration-updated'));
+  notify(saved[choice],false,'success');
+ }
+ show(model.iteration_choice);
+ const comparable=comparison?.status==='COMPARISON_NOT_ACCEPTANCE'&&comparison.profiles?.length>0;
+ if(comparable){
+  const old=comparison.diagnostics?.previous,now=comparison.diagnostics?.current;
+  const warnings=[old?.severity?.WARNING,now?.severity?.WARNING],wet=[old?.wet_ends?.length,now?.wet_ends?.length];
+  if(warnings.every(Number.isFinite)&&wet.every(Number.isFinite))box.append(el('p',tr('Native warnings','原生警告')+' '+warnings.join(' → ')+' · '+tr('Wet ends','过水端点')+' '+wet.join(' → ')));
+  const peak=comparison.review?.maximum_at_verified_center;
+  if(peak)box.append(el('p',peak.profile+' · RS '+peak.station+' · Δ '+peak.change.toFixed(4)+' ft'));
+  box.append(button('Inspect the two editions','核对两版差异',()=>openGuidanceTool('comparison')));
+ }else if(model.parent_revision)box.append(el('p',tr('Comparable results are needed to select between these two editions.','两版结果具备可比性后可选择使用版本。'),'warning'));
+ const choices=el('div',undefined,'actions');box.append(choices);
+ if(comparable)choices.append(button('Keep previous calculation','保留上一版基准',()=>saveChoice('parent')));
+ if(comparable||!model.parent_revision)choices.append(button(model.parent_revision?'Use this revision':'Keep this result',model.parent_revision?'采用本修订作工作版':'保留本次结果',()=>saveChoice('current')));
+ choices.append(button('Wait for field records','等待补充资料',()=>saveChoice('wait')));
+ if(primary)box.append(el('p',tr('Evidence to address first: ','优先核对的依据：')+tr(primary.reason.en,primary.reason.zh)));
+ if(model.model_type==='river'&&!model.native_review)box.append(button('Prepare a field data request','准备现场索资清单',()=>openGuidanceTool('field-feedback')));
+ if(assessment.level>=2)box.append(button('Hand off this edition with its limitations','按本版用途交接',()=>{
+  if(model.iteration_choice?.choice==='parent')throw Error(tr('Open the selected baseline to hand off its files, or explicitly select this revision.','请打开选用的基准版交接其文件，或明确选择当前修订版。'));
+  if(model.iteration_choice?.choice==='wait')throw Error(tr('Resume this review when field records are ready.','现场资料就绪后，请先点击“继续复核本版”。'));
+  openGuidanceTool('recipient');
+ }));
+ box.append(el('small',tr('Your choice is saved with this result. Its assessment level and hydraulic checks stay in effect.','选择保存在本次结果下，交接仍受本版评估等级和水力检查限制。')));
+}
 function warningCoverageLabel(value){
  const labels={
   ALL_COMPUTED_PROFILES_VERIFIED_SINGLE_REACH:tr('Verified for all computed profiles in this reach','已核对本河段所有已计算工况的原生表'),
@@ -76,6 +134,7 @@ function renderDeliveryRecovery(parent,delivery){
 
 function renderRevisionComparison(parent,comparison){
  const box=details(parent,'Comparison with previous calculation','与上次计算对比',true);
+ guidanceTarget(box,'comparison');
  const format=value=>Number.isFinite(value)?value.toFixed(4):'—';
  if(comparison.status!=='COMPARISON_NOT_ACCEPTANCE'){
   box.append(el('p',tr('Comparison needs attention. ','对比需要处理。')+(comparison.error||comparison.status),'warning'));
