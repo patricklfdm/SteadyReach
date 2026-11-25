@@ -131,6 +131,10 @@ def collect(summary_path, comparisons=()):
         from .river_review_report import collect as collect_river_checks
         river_checks,check_sources=collect_river_checks(summary_path,s)
         sources+=check_sources
+    from .app_check_batch import reported_question
+    question,question_sources=reported_question(summary_path,s,studies)
+    if question:river_checks['bounded_question']=question
+    sources+=question_sources
     from .field_results import collect as field_results
     feedback,feedback_sources=field_results(s)
     sources+=feedback_sources

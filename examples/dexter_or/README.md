@@ -1,0 +1,17 @@
+# Middle Fork Willamette River near Dexter, Oregon
+
+**English** | [简体中文](README.zh-CN.md)
+
+The November 25, 2026 same-machine release replay produced 599.3010 ft at RS 500 against 599.0555 ft NAVD88 observed, a signed residual of +0.2455 ft. The original and revised native runs agreed at all nine sections. The final purpose decision was `NEED_EVIDENCE`. The browser replay recorded 20 control clicks, 14 explicit field or file entries, zero repeated explicit entries and zero manual project JSON edits. These are automated interaction counts.
+
+A one-dimensional steady-flow field comparison at USGS 14150000. The frozen investigation follows one 2015 field visit, with 1,540 cfs, nine cross sections and the gage at interior RS 500. Channel and overbank Manning’s n are conditional screening values of 0.035 and 0.065. The downstream normal-depth slope comes from surveyed channel elevations. The prespecified investigation threshold is 0.50 ft. [Protocol](protocol.json) · [Original file hashes](frozen_sources.json)
+
+Download the lidar tile, field measurements, monitoring-location metadata, datum conversion and map background to a local folder as `tb_43122h71.tif`, `measurements.json`, `gage.json`, `vertcon.json` and `background.tif`. Use the archived bytes matching the frozen hashes for release verification. A newly published record or reprocessed TIFF may have a different hash. Keep the updated source as a separate version.
+
+- [NOAA Oregon lidar metadata](https://www.fisheries.noaa.gov/inport/item/62797) · [tb_43122h71.tif](https://noaa-nos-coastal-lidar-pds.s3.us-east-1.amazonaws.com/dem/OLC_willamette_river_topobathy_interp_2015_9170/tb_43122h71.tif)
+- [USGS field-measurement records](https://api.waterdata.usgs.gov/ogcapi/v0/collections/field-measurements/items?f=json&monitoring_location_id=USGS-14150000&datetime=2015-09-16/2016-01-01&limit=300) · [USGS gage metadata](https://api.waterdata.usgs.gov/ogcapi/v0/collections/monitoring-locations/items/USGS-14150000?f=json)
+- [NOAA vertical datum conversion](https://geodesy.noaa.gov/api/ncat/llh?lat=43.94568&lon=-122.83729&inDatum=NAD83%282011%29&outDatum=NAD83%282011%29&inVertDatum=NGVD29&outVertDatum=NAVD88&orthoHt=0) · [USGS map background](https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?bbox=512350,4865250,513750,4866650&bboxSR=6339&imageSR=6339&size=700,700&format=tiff&pixelType=F32&interpolation=RSP_Bilinear&renderingRule=%7B%22rasterFunction%22%3A%22None%22%7D&f=image)
+
+With the project Python, run `python examples/dexter_or/prepare.py <raw-folder> <new-survey-folder>`. The script samples the submerged terrain and writes a survey folder plus `event_return.csv` alongside it. In the release gate the browser initially receives only the visit discharge, terrain, source index, datum information and frozen model. The original water-level record enters through **Import a field return** after the first native solve. The check recalculates an independent edition, reads native water surfaces at all nine stations and verifies the signed residual in the English and Chinese reports and offline handoff.
+
+Station zero is 592.30 ft NGVD29; the NOAA vertical shift at the gage is +1.102 m. Add the field gage reading of 3.14 ft after converting zero to NAVD88. Stage measurement uncertainty remains undocumented. This is a single-event diagnostic trial. [Release instructions](../../docs/LOCAL_RELEASE_EN.md)

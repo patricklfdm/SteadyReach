@@ -28,5 +28,15 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'../ras_workflow/templates/a
  context.renderCheckBatch(element());
  assert.equal(fields.get('checks-intervals').value,7);assert.equal(fields.get('checks-rounds').value,0);
  assert.equal(fields.get('checks-width').value,1500);assert.equal(namedChecks.get('Include already adopted parameter ranges').checked,false);
- console.log('Batch scope, consent gate, preview retention and same-confirmation retry PASS');
+ fields.get('checks-question').value='boundary';
+ fields.get('checks-threshold').value='0.37';
+ fields.get('checks-threshold').disabled=true; // The shared busy indicator locks every control during submission.
+ fields.get('checks-threshold-basis').value='Frozen project agreement';
+ await buttons.get('Prepare checks and delivery preview')();
+ assert.equal(calls.at(-1).body.threshold_ft,.37);
+ assert.equal(calls.at(-1).body.threshold_basis,'Frozen project agreement');
+ fields.get('checks-question').value='spacing';
+ await buttons.get('Prepare checks and delivery preview')();
+ assert.equal(calls.at(-1).body.threshold_ft,null);
+ console.log('Batch scope, consent gate, project threshold, preview retention and same-confirmation retry PASS');
 })().catch(e=>{console.error(e);process.exitCode=1});

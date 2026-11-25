@@ -2,6 +2,11 @@
 
 [简体中文](LOCAL_RELEASE_CN.md) · [Production priorities and acceptance criteria](PRODUCTION_ROADMAP_EN.md)
 
+The P4 gate includes the complete P3 gate. Add `--p4 --dexter-survey <survey-folder> --dexter-observation <event_return.csv> --dexter-imagery <NAIP-folder> --historical-root <archived-project-checkout>` to the P3 command. The archive contains the original Pagosa and Merced project trees and native evidence. It is read only. Use an isolated checkout for the release run.
+
+Inspect the release manifest and the three receipts under `p4/`. They cover the new-site holdout, wrong-datum / partial / assumed Midway returns, Siletz’s measured-event decision and the station-level historical comparisons. The Dexter receipt records automated interaction counts; live engineer time and second-machine acceptance are separately deferred. [Frozen sources and preparation](../examples/dexter_or/README.md)
+
+
 Open **Handoff, local files and optional pilot timing** on the project page. Inspect the registered attachments and their inclusion in each package, additional sources, coordinates and PDFs. If a single PDF changes, restore its registered bytes using the button beside its name. The model and other exports keep the same run ID. For older deliveries without an identical copy, restore a verified backup or publish a new edition. Original project files and re-downloadable setup archives appear separately.
 
 To run an actual same-machine release replay with a frozen Siletz review packet, add `--packet <packet_folder> --fresh-benchmark` to the release command. The checker imports the fingerprinted survey into a new project, confirms that its inputs are complete, invokes HEC-RAS, verifies both new mapped packages and compares all station flows and water levels to the frozen HDF. Both packages must trace to the new run. The 0.002 ft / 0.002 cfs reproducibility tolerances apply to repeat calculation with identical inputs. The separate observed-stage investigation threshold remains 0.15 m.

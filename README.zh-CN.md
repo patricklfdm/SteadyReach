@@ -2,7 +2,7 @@
 
 [English](README.md) | **简体中文**
 
-[本机生产复核与恢复](docs/LOCAL_RELEASE_CN.md) · [Siletz 河实测基准](examples/siletz_or/README.zh-CN.md)
+[本机生产复核与恢复](docs/LOCAL_RELEASE_CN.md) · [Siletz 河实测基准](examples/siletz_or/README.zh-CN.md) · [Dexter 补测回传实例](examples/dexter_or/README.zh-CN.md)
 
 基于 HEC-RAS 的 Windows 本地一维恒定流河道与涵洞分析工具，无需 AI 服务。浏览器会带你完成 **建立项目 → 准备模型 → 开算确认 → 查看结果**。首次打开可先展开 **试做一个河道算例**，对比已算水位并打开练习报告，再建立自己的项目。[入门指南](docs/GETTING_STARTED_CN.md)
 

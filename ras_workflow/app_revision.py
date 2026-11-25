@@ -12,7 +12,7 @@ def create(key, body):
     return create_draft(parent,body)
 
 
-def create_draft(parent,body,preparation_task=None):
+def create_draft(parent,body,preparation_task=None,field_return=None):
     """Internal snapshot; a worker-owned task keeps its new draft read-only while preparing."""
     if preparation_task:
         task=read(ROOT/preparation_task)
@@ -39,8 +39,12 @@ def create_draft(parent,body,preparation_task=None):
         d['geometry_edit_sources']=d.get('geometry_edit_sources',[])+source['sources']
         c,g=source['config'],source['geometry']
         source_base=source['config_path'].parent
-    key2='site_'+unique_id().lower();folder=core.folder(key2);folder.mkdir(parents=True)
+    key2=field_return['id'] if field_return else 'site_'+unique_id().lower()
+    folder=core.folder(key2);folder.mkdir(parents=True)
     c=copy.deepcopy(c);g=copy.deepcopy(g)
+    if field_return:
+        from .field_return import apply_to_draft
+        apply_to_draft(c,d,field_return)
     c['delivery']=delivery_settings
     for field in ('raster','provenance'):
         if c.get('terrain',{}).get(field):
@@ -73,6 +77,7 @@ def create_draft(parent,body,preparation_task=None):
     save(new_sp.parent/'draft.json',draft)
     m=copy.deepcopy(parent)
     m.pop('compiled_checkpoint',None)
+    m.pop('latest_question',None)
     m.pop('recovered_task',None)
     for field in ('summary','engine_state','active_project','latest_reports','latest_delivery','previous_delivery','run_confirmation','pending_review','task','run_scenario','exports_need_refresh','pending_study','active_study','latest_study','latest_spacing','latest_coverage','latest_coverage_exports','automatic_preparation','automatic_options','exit_code','sensitivity_suggestions','latest_reports_binding','pending_check_batch','active_check_batch','latest_check_batch','automatic_next_review',
                   'latest_geometry_comparison','latest_warning_study','river_observations','latest_observed_event','observed_event_history','native_export_attempt','assessment_area','extent_review','extent_decision'):

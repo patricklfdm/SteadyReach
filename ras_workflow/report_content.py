@@ -235,6 +235,17 @@ def build(data, plots, folder, language='en', detail='full', details=None):
     p('These are workflow review findings, not regulatory acceptance criteria. Review decisions and further calculations must retain the original thresholds and source evidence.',
       '上述属于工作流复核发现，不是法规验收标准。后续复核和计算应保留原始判据及来源证据。')
     d.add_heading(tr('Sensitivity and comparison coverage','敏感性与对比覆盖'),2)
+    question=data.get('river_checks',{}).get('bounded_question')
+    if question:
+        labels={'FIELD_REVIEW_BEFORE_ANOTHER_BATCH':('Inspect affected stations before further trials','继续试算前，核实超限断面'),
+                'STOP_WITHIN_TESTED_RANGE':('Close this investigation within its tested ranges','可结束本次已测范围内的调查'),
+                'INSUFFICIENT_EVIDENCE':('Obtain the missing evidence or applicable ranges','补齐证据或适用范围')}
+        d.add_heading(tr('Boundary investigation','边界影响调查') if question['question']=='boundary' else tr('Roughness investigation','糙率影响调查'),3)
+        d.add_paragraph(tr(*labels[question['status']])+' · '+str(question['threshold_ft'])+' ft · '+
+                        (question['basis'] or tr('Workflow screening threshold','流程筛查门槛')))
+        table(d,[tr('Case and profile','工况与剖面'),tr('Peak change (ft) / RS','最大变化（ft）／河站'),tr('Stations above threshold','超限断面')],
+              [[r['case']+' · '+r['profile'],f"{r['signed_peak_ft']:+.3f} / {r['peak_rs']}",
+                ', '.join(str(v['rs']) for v in r['affected']) or '—'] for r in question['cases']])
     for comp in data.get('reference_comparisons',[]):
         d.add_heading(tr('Published reference comparison','公开参考结果对比'),2)
         p('Profile '+comp['profile']+'. Recomputed against the hash-bound original published CSV. Agreement at printed precision is not field calibration or engineering acceptance.',

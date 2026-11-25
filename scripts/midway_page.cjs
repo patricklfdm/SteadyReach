@@ -8,6 +8,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function main() {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
   const {url, project, decision, run_id, mode} = input;
+  const enteredFields=[];
   const executables = [process.env.STEADYREACH_RELEASE_BROWSER];
   for (const root of [process.env.PROGRAMFILES, process.env['PROGRAMFILES(X86)']].filter(Boolean)) {
     executables.push(path.join(root, 'Microsoft/Edge/Application/msedge.exe'),
@@ -62,6 +63,14 @@ async function main() {
     const tab=await send('Target.createTarget',{url:'about:blank'});
     session=(await send('Target.attachToTarget',{targetId:tab.targetId,flatten:true})).sessionId;
     await send('Page.enable');
+    if(input.metrics)await send('Page.addScriptToEvaluateOnNewDocument',{source:`
+      window.__p4={clicks:0,entries:[]};
+      document.addEventListener('click',e=>{if(e.target.closest?.('button,a,input,select,summary'))window.__p4.clicks++;},true);
+      for(const kind of ['change','input'])document.addEventListener(kind,e=>{
+        const t=e.target;
+        if(!t.id||!['INPUT','SELECT','TEXTAREA'].includes(t.tagName))return;
+        if(kind===(t.type==='file'||t.type==='checkbox'||t.tagName==='SELECT'?'change':'input'))window.__p4.entries.push(t.id);
+      },true);`});
     await send('Page.navigate',{url});
     if(mode==='recipient-copy'){
       await until('document.readyState==="complete" && document.querySelector("main")?.textContent.includes('+JSON.stringify(run_id)+')');
@@ -103,6 +112,7 @@ async function main() {
       await until('!busy');
     }
     async function fieldValue(id,value){
+      enteredFields.push(id);
       await until('!busy && !!document.getElementById('+JSON.stringify(id)+')');
       await evaluate('(()=>{const f=document.getElementById('+JSON.stringify(id)+');for(let p=f;p;p=p.parentElement)if(p.tagName==="DETAILS")p.open=true; f.value='+JSON.stringify(String(value))+';f.dispatchEvent(new Event(f.tagName==="SELECT"?"change":"input",{bubbles:true}));})()');
       await until('!busy');
@@ -117,6 +127,7 @@ async function main() {
       await until('!busy && current?.acquisition?.documents?.some(d=>d.source.original_name==='+JSON.stringify(path.basename(files.at(-1)))+') && !!document.getElementById("attachments")',1400);
     }
     async function selectFiles(selector,files){
+      enteredFields.push(selector);
       await until('!busy && !!document.querySelector('+JSON.stringify(selector)+')');
       await evaluate('(()=>{for(let p=document.querySelector('+JSON.stringify(selector)+');p;p=p.parentElement)if(p.tagName==="DETAILS")p.open=true;})()');
       const {root}=await send('DOM.getDocument');
@@ -136,6 +147,7 @@ async function main() {
           await until('document.querySelector("#accept-rs").value==="44056"');
         }else{
           await until('document.body.textContent.includes("Set project-specific limits")');
+          for(const [id,value] of Object.entries(input.criteria||{}))await fieldValue(id,value);
         }
       }else if(mode==='home-coordinates'){
         await fieldValue('model-type','culvert');
@@ -165,7 +177,53 @@ async function main() {
       await until('!current?.summary && !!document.querySelector("#first-crossing")');
       console.log('Originals retained; request for both portals, flow direction and datum available.');return;
     }
+    if(mode==='bounded-pagosa'){
+      await click('#result-tab-review');
+      const tool='document.querySelector("#qa-tool-check-batch")';
+      await fieldValue('checks-question','roughness');
+      await fieldValue('checks-budget','0');
+      await fieldValue('checks-threshold','0.10');
+      await fieldValue('checks-threshold-basis','Prespecified 0.10 ft Pagosa screening threshold');
+      await buttonByName('Prepare checks and delivery preview',tool);
+      await until('current.check_batch_preview?.plan.status==="BUDGET_EXCEEDED"');
+      await fieldValue('checks-question','boundary');
+      await buttonByName('Prepare checks and delivery preview',tool);
+      await until('current.check_batch_preview?.plan.maximum_calculations===0 && current.check_batch_preview?.plan.status==="REVIEW_REQUIRED" && current.check_batch_preview.plan.options.threshold_ft===0.1 && current.check_batch_preview.plan.options.threshold_basis.includes("Pagosa")');
+      await evaluate('Array.from('+tool+'.querySelectorAll("label")).find(l=>l.textContent.includes("I confirm these ranges")).querySelector("input").click()');
+      await buttonByName('Confirm and run checks → deliverables',tool);
+      await until('current.check_batch_progress?.question_result?.status==="FIELD_REVIEW_BEFORE_ANOTHER_BATCH"',2400);
+      await click('#result-tab-review');
+      await until(tool+'.textContent.includes("1400.00")');
+      console.log(JSON.stringify(await evaluate('current.check_batch_progress.question_result')));return;
+    }
+    if(mode==='field-return'){
+      await click('#result-tab-review');
+      await fieldValue('return-mode',input.kind);
+      await selectFiles('#return-csv',[input.file]);
+      if(input.document)await selectFiles('#return-record',[input.document]);
+      await buttonByName('Preview returned values');
+      if(input.error){
+        await until('document.body.textContent.includes('+JSON.stringify(input.error)+')');
+        if(await evaluate('!!Array.from(document.querySelectorAll("button")).find(b=>b.textContent==="Confirm return and open revision")'))throw Error('Invalid return enabled confirmation');
+        console.log('BLOCKED');return;
+      }
+      await until('document.querySelector("#qa-tool-return table")?.textContent.includes('+JSON.stringify(input.expect)+')');
+      await buttonByName('Confirm return and open revision');
+      await until('current?.parent_revision?.project_id==='+JSON.stringify(project));
+      console.log(await evaluate('current.id'));return;
+    }
+    if(mode==='priority-read'){
+      await until('!!document.querySelector("#result-priorities")');
+      const values=await evaluate('Array.from(document.querySelectorAll("#result-priorities>div>p"),r=>r.textContent)');
+      if(values.length>3||!values.length)throw Error('Priority count differs');
+      console.log(JSON.stringify(values));return;
+    }
     if(mode==='transfer-current'){
+      if(input.selection){
+        await until('!!document.getElementById("edition-choice-note")');
+        await fieldValue('edition-choice-note',input.selection);
+        await buttonByName('Use this revision');
+      }
       await click('#result-tab-delivery');
       await buttonByName('Verify packages and create recipient guide');
       await until('document.querySelector("#transfer-status code")?.textContent.includes("Handoff_")');
@@ -326,13 +384,14 @@ async function main() {
       const review="Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()==='Review calculation inputs →' && !b.disabled)";
       await until('!!('+review+')');
       await evaluate('('+review+').click()');
-      await until("!!document.querySelector('#confirm-parameters') && document.querySelector('#confirm-run').disabled");
+      await until("!busy && !!document.querySelector('#confirm-parameters') && !document.querySelector('#confirm-parameters').disabled && document.querySelector('#confirm-run').disabled");
       await until("document.body.textContent.includes('Delivery conditions for this run')");
       if(mode==='solve')await until("document.body.textContent.includes('Source required')");
       await click('#confirm-parameters');
-      await until("document.querySelector('#confirm-run')?.disabled===false");
+      await until("!busy && document.querySelector('#confirm-run')?.disabled===false");
       await click('#confirm-run');
-      await until("!!document.querySelector('#result-tab-overview')",2400);
+      await until("!!document.querySelector('#result-tab-overview') || (!busy && !!document.querySelector('#notice[role=alert]:not([hidden])'))",2400);
+      if(!await evaluate("!!document.querySelector('#result-tab-overview')"))throw Error(await evaluate("document.querySelector('#notice').textContent"));
       console.log('Confirmed frozen inputs and opened native results through the calculation page.');
       return;
     }
@@ -345,6 +404,10 @@ async function main() {
     await until("document.body.innerText.includes('已保存中英文打开说明') && document.body.innerText.includes("+JSON.stringify(run_id)+")");
     console.log('Chromium page passed: purpose controls, selected edition, both verdicts and recipient export.');
   } finally {
+    if(input.metrics&&session){
+      const metrics=await evaluate('window.__p4');
+      fs.writeFileSync(input.metrics,JSON.stringify({...metrics,enteredFields}));
+    }
     if(child.exitCode===null && !child.killed){
       session=undefined;
       void send('Browser.close').catch(()=>{});

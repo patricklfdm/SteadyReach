@@ -90,6 +90,26 @@ def run(args):
         evidence=root/'p3/journeys.json'
         result['p3']=dict(status='FAILED' if evidence.exists() else 'NOT_RUN',error=result.get('error'),
                           receipt='p3/journeys.json' if evidence.exists() else None)
+    if getattr(args,'p4',False):
+        result['release_gate']='P4'
+        result['p4']=dict(status='NOT_RUN')
+        if passed:
+            from p4_release import run as holdout,midway_returns
+            try:
+                output=root/'p4'
+                holdout(args.dexter_survey.resolve(),args.dexter_observation.resolve(),args.dexter_imagery.resolve(),output)
+                prev=read(root/'p3/journeys.json')['cases']
+                midway_returns(prev['Midway']['revised']['project'],output)
+                from midway_release import page_action,need
+                priorities=page_action(prev['Siletz']['revision']['project'],'priority-read')
+                need('44056' in priorities or '0.524' in priorities,'Missing Siletz event priority')
+                historic=subprocess.check_output([sys.executable,'-B',str(REPO/'scripts/p4_archived.py'),str(args.historical_root.resolve())],cwd=REPO)
+                import json
+                save(output/'historical.json',dict(archives=json.loads(historic),siletz_priorities=priorities))
+                result['p4']=dict(status='PASSED',receipts={n:sha(output/n) for n in ('release.json','midway_returns.json','historical.json')})
+            except (OSError,ValueError,KeyError,TypeError,RuntimeError,subprocess.SubprocessError) as exc:
+                result['p4']=dict(status='FAILED',error=str(exc))
+                passed=False
     result['status']='SOFTWARE_CHECKS_PASSED' if passed else 'NEEDS_ATTENTION'
     save(root/'release.json',result);print(root/'release.json');return 0 if passed else 1
 
@@ -104,7 +124,14 @@ if __name__=='__main__':
     p.add_argument('--p3',action='store_true',help='Require P2 plus fresh browser journeys and observed recipient decisions')
     p.add_argument('--transfer-survey',type=Path,help='Separate complete surveyed site reserved for the transfer test')
     p.add_argument('--transfer-imagery',type=Path,help='Optional dated NAIP Aerial.tif and acquisition.json for the transfer site')
+    p.add_argument('--p4',action='store_true',help='Require P3 plus the frozen Dexter holdout, Midway field returns and archived diagnostic cases')
+    for flag in ('dexter-survey','dexter-observation','dexter-imagery','historical-root'):
+        p.add_argument('--'+flag,type=Path)
     args=p.parse_args()
+    if args.p4:
+        if not all((args.dexter_survey,args.dexter_observation,args.dexter_imagery,args.historical_root)):
+            p.error('--p4 requires --dexter-survey, --dexter-observation, --dexter-imagery and --historical-root')
+        args.p3=True
     if args.p3:
         if not args.transfer_survey:p.error('--p3 requires --transfer-survey')
         args.p2=True

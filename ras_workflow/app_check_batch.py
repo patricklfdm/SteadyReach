@@ -11,10 +11,20 @@ def eligible(model):
         raise ValueError('Baseline summary changed')
 
 
-def adopted_choices(packet):
+def in_scope(path, question):
+    if question=='boundary':
+        return path.startswith(('boundaries.', 'boundary_slopes.'))
+    if question=='roughness':
+        return path in ('scenario.channel_n','scenario.overbank_n')
+    return True
+
+
+def adopted_choices(packet, question='combined'):
     choices = []
     deferred = []
     for row in packet['parameters']:
+        if not in_scope(row['path'],question) or (question!='combined' and row['inactive']):
+            continue
         option = next((o for o in row['options'] if o['id'] == row.get('recommended_id')
                        and o.get('applicability_confirmed')), None)
         if row['inactive'] or option is None or len(choices) >= 4:
@@ -92,6 +102,19 @@ def prepare_model(model, body):
     spacing = body.get('spacing', True)
     integrated=body.get('integrated',False)
     geometry=body.get('geometry',False)
+    question=body.get('question','combined')
+    if question not in ('combined','boundary','roughness','spacing','geometry'):
+        raise ValueError('Select a supported investigation question')
+    if question!='combined':
+        sensitivity=question in ('boundary','roughness')
+        spacing=question=='spacing'
+        geometry=question=='geometry'
+    threshold=body.get('threshold_ft')
+    basis=body.get('threshold_basis','')
+    from .common import finite
+    if threshold is not None and (not finite(threshold) or threshold<0 or not isinstance(basis,str) or not basis.strip()
+                                  or question not in ('boundary','roughness')):
+        raise ValueError('For a boundary or roughness question, give a nonnegative stage threshold and its project basis / 请填写水位门槛和项目依据')
     if type(integrated) is not bool or type(geometry) is not bool or (geometry and model.get('model_type')!='river'):
         raise ValueError('Choose supported river checks')
     if type(sensitivity) is not bool or type(spacing) is not bool or not (sensitivity or spacing or geometry):
@@ -114,10 +137,12 @@ def prepare_model(model, body):
         from .sensitivity_ranges import current, suggest_model
         packet = current(model,strict=True) if body.get('parameters') is not None else suggest_model(model, dict(revision=model['revision']))
         if not packet:raise ValueError('Prepare and review the sensitivity ranges first')
-        choices, deferred = adopted_choices(packet)
+        choices, deferred = adopted_choices(packet,question)
         if body.get('parameters') is not None:
             if body.get('range_token')!=packet['token']:raise ValueError('Sensitivity options changed; refresh the ranges')
             choices=body['parameters'];deferred=[]
+            if any(not in_scope(row['path'],question) for row in choices):
+                raise ValueError('A selected range is outside the investigation question')
         sources += packet['sources']
         if choices:
             options=dict(revision=model['revision'], range_token=packet['token'], parameters=choices)
@@ -156,6 +181,14 @@ def prepare_model(model, body):
                 sources=list({e['path']: e for e in sources}.values()), refresh='delivery',
                 status='REVIEW_REQUIRED' if any(s['status'] in ('READY','REUSED') for s in steps) else 'NO_AVAILABLE_CHECKS',
                 engineering_acceptance='NOT_ASSESSED')
+    plan['options'].update(question=question,threshold_ft=threshold,threshold_basis=basis if threshold is not None else None)
+    budget=body.get('calculation_budget')
+    if budget is not None:
+        if type(budget) is not int or not 0<=budget<=100:
+            raise ValueError('Choose a run budget between 0 and 100 / 请填写 0 至 100 的计算次数上限')
+        plan['options']['calculation_budget']=budget
+        if plan['maximum_calculations']>budget:
+            plan['status']='BUDGET_EXCEEDED'
     path = core.folder(key)/'check_batches'/unique_id()/'plan.json'; save(path, plan)
     model = core.model(key); model['pending_check_batch'] = item(path); model.pop('pending_study', None)
     core.persist(model, 'PREPARE_CHECK_BATCH', dict(plan=model['pending_check_batch']))
@@ -255,6 +288,16 @@ def execute(key):
         model = core.model(key); model.update(status='PROCESSING', phase='CHECK_BATCH_DELIVERY')
         current_step = 'delivery'
         core.persist(model); record('delivery', 'RUNNING')
+        if plan.get('options',{}).get('question') in ('boundary','roughness'):
+            from .report_studies import collect
+            path_summary=ROOT/model['summary']['path']
+            verified,_=collect(path_summary,read(path_summary))
+            journal['question_result']=question_result(plan,journal['steps'],verified)
+            question_path=path.parent/'question.json'
+            save(question_path,dict(plan=active['plan'],review=active['review'],baseline=model['summary'],
+                                    execution=journal['steps']['sensitivity'],answer=journal['question_result']))
+            model['latest_question']=item(question_path)
+            core.persist(model)
         core.regenerate(key, 'delivery')
         model = core.model(key); delivery = model.get('latest_delivery') or {}
         if model.get('exports_need_refresh') or delivery.get('status') not in ('READY_FOR_REVIEW','READY_NATIVE_ONLY','READY'):
@@ -272,6 +315,53 @@ def execute(key):
             failed.update(status='INCOMPLETE',error=str(error))
         journal.update(status='INCOMPLETE',error=str(error),stopped_utc=utc());save(path,journal)
         raise
+
+
+def question_result(plan, execution, studies):
+    """Only count section comparisons belonging to the chosen ranges and confirmed runs."""
+    from .river_review import response
+    from .qa import THRESHOLDS
+    step=next(s for s in plan['steps'] if s['id']=='sensitivity')
+    options=plan['options']
+    threshold=options.get('threshold_ft')
+    if threshold is None:
+        threshold=THRESHOLDS['sensitivity_hw_ft']
+    records=execution.get('sensitivity',{})
+    fresh=records.get('analysis')
+    reused={ (r['source']['sha256'],tuple((c['path'],c['value']) for c in r['changes']))
+             for r in step.get('reused',[]) }
+    rows=[];matched=set()
+    for study in studies:
+        ref=study['analysis']
+        cases={c['id']:tuple((v['path'],v['after']) for v in c.get('changes',[])) for c in study['cases']}
+        for r in response([study],threshold):
+            key=(ref['sha256'],cases[r['case']])
+            if (ref==fresh or key in reused) and all(in_scope(p,options['question']) for p in r['paths']):
+                rows.append(r);matched.add(key)
+    complete=bool(rows) and reused<=matched and records.get('status') in ('COMPLETED','REUSED') and not plan.get('deferred_parameters')
+    status='INSUFFICIENT_EVIDENCE' if not complete else 'FIELD_REVIEW_BEFORE_ANOTHER_BATCH' if any(r['affected'] for r in rows) else 'STOP_WITHIN_TESTED_RANGE'
+    return dict(question=options['question'],status=status,threshold_ft=threshold,basis=options.get('threshold_basis'),
+                cases=rows,deferred=plan.get('deferred_parameters',[]))
+
+
+def reported_question(summary_path, summary, studies):
+    folder=core.folder(summary['configuration']['project_id'])
+    if not (folder/'app.json').is_file():return None,[]
+    model=read(folder/'app.json');entry=model.get('latest_question')
+    if not entry or model.get('summary')!=item(summary_path):return None,[]
+    if not intact([entry]):raise ValueError('Bounded investigation receipt changed')
+    q=read(ROOT/entry['path'])
+    refs=[entry,q['plan'],q['review']]
+    if q['baseline']!=model['summary'] or not intact(refs):raise ValueError('Bounded investigation belongs to different inputs')
+    plan=read(ROOT/q['plan']['path']);review=read(ROOT/q['review']['path'])
+    if plan['baseline']!=q['baseline'] or review['plan']!=q['plan'] or review.get('confirmed') is not True:
+        raise ValueError('Restore the confirmed investigation plan')
+    if summary['hydraulics'].get('model_type')!='river':
+        from .report_studies import collect
+        studies,more=collect(summary_path,summary);refs.extend(more)
+    verified=question_result(plan,dict(sensitivity=q['execution']),studies)
+    if verified!=q['answer']:raise ValueError('Investigation decision differs from native comparisons')
+    return verified,refs
 
 
 def progress(model):

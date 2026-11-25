@@ -48,7 +48,7 @@ def investigation(review, overbanks):
         delta=review.get('warning_delta')
         note_en=f" Native warning count fell by {-delta}." if delta is not None and delta<0 else ''
         note_zh=f"原生警告减少 {-delta} 条。" if note_en else ''
-        result.append(dict(profile='Q100',station=r['station'],side=side,
+        result.append(dict(kind='overbank_share',profile='Q100',station=r['station'],side=side,
             en=f"Q100 · RS {r['station']} {side} overbank share {facts}."+note_en+" Verify the flow path between adjacent sections and check bank locations against field evidence before selecting an edition.",
             zh=f"Q100 · RS {r['station']} {'左' if i==0 else '右'}滩流量占比 {facts}。"+note_zh+"选版前请检查相邻断面间的过流连通性，并对照现场资料复核岸站。"))
     return result

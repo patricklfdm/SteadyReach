@@ -13,7 +13,7 @@ def collect(summary_path, summary):
     if not model_path.is_file():return {},[]
     from .app_core import edition_record
     model=edition_record(read(model_path))
-    measured,sources=records(summary) if model.get('route')=='survey' else ([],[])
+    measured,sources=records(summary) if model.get('route')=='survey' or summary['configuration'].get('returned_observations') else ([],[])
     data={'events':measured} if measured else {}
     if model.get('summary')!=ref:return data,sources
     def load(entry):

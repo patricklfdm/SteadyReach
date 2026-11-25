@@ -43,9 +43,12 @@ def key_inputs(fields):
     return result
 
 
-def response(studies):
+def response(studies, threshold=None):
     report = []
-    threshold = THRESHOLDS['sensitivity_hw_ft']
+    if threshold is None:
+        threshold = THRESHOLDS['sensitivity_hw_ft']
+    if not finite(threshold) or threshold < 0:
+        raise ValueError('Choose a finite nonnegative water-level threshold')
     for study in studies:
         if study.get('coverage') or study.get('convergence'):
             continue
@@ -63,6 +66,7 @@ def response(studies):
                 affected = [r for r in rows if abs(r['delta_wse_ft'])>threshold]
                 report.append(dict(case=comp['case'],profile=profile,paths=paths,threshold_ft=threshold,
                     compared=len(rows),peak_rs=peak['station'],signed_peak_ft=peak['delta_wse_ft'],
+                    minimum_ft=min(r['delta_wse_ft'] for r in rows), maximum_ft=max(r['delta_wse_ft'] for r in rows),
                     affected=[dict(rs=r['station'],delta_ft=r['delta_wse_ft']) for r in affected],
                     source=study['analysis']))
     return report

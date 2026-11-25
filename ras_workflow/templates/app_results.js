@@ -312,6 +312,7 @@ function resultPages(parent){
  return pages;
 }
 function renderResultTools(parent,delivery){
+ renderFieldReturn(parent);
  renderNextReview(parent);
  const advanced=details(parent,'Investigate the results and compare scenarios','深入核查结果与比较工况');
  if(current.model_type==='river'&&!current.native_review){renderWarningStudy(advanced);renderFloodplain(advanced);renderRiverComparison(advanced);renderRiverObservations(advanced);renderFieldFeedback(advanced);}

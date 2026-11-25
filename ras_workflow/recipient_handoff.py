@@ -187,9 +187,15 @@ def export(key, body):
         report_data=read(verified_member(folders['complete']/'Reports',Path(data['path']).name,data['sha256']))
         review=(report_data.get('revision_comparison') or {}).get('review') or {}
         field_names={r['source_file'] for r in report_data.get('river_checks',{}).get('events',[]) if r.get('source_file')}
-        evidence={r['sha256'] for r in report_data.get('sources',[]) if r.get('role')=='survey_source' and Path(r['path']).name in field_names}
+        evidence={r['sha256'] for r in report_data.get('sources',[]) if r.get('role') in ('survey_source','returned_observations') and Path(r['path']).name in field_names}
         field_sources=[r['path'] for r in read(ROOT/receipt['complete']['manifest']['path'])['files']
                        if r['path'].startswith('Sources/') and r['sha256'] in evidence]
+        originals={r['sha256'] for r in report_data.get('sources',[]) if r.get('role')=='field_original'}
+        if originals:
+            archived=read(folders['complete']/'Evidence/ReportSources/index.json')['entries']
+            linked={r['source']['sha256']:r['package_path'] for r in archived if r['source']['sha256'] in originals}
+            if set(linked)!=originals:raise ValueError('Restore the supporting field originals before handoff')
+            field_sources=list(dict.fromkeys([*field_sources,*linked.values()]))
         pages={name:page(lang,model,assessment,folders,receipt,pair,review,chosen,field_sources) for lang,name in [('en','Start_EN.html'),('zh','Start_zh-CN.html')]}
         guide_hashes={name:hashlib.sha256(html.encode('utf-8')).hexdigest() for name,html in pages.items()}
         pages['HANDOFF.json']=json.dumps(dict(run_id=pair['run_id'],pages=guide_hashes),sort_keys=True,indent=2)

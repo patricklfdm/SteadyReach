@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-[Local production review and recovery](docs/LOCAL_RELEASE_EN.md) · [Measured Siletz River benchmark](examples/siletz_or/README.md)
+[Local production review and recovery](docs/LOCAL_RELEASE_EN.md) · [Measured Siletz River benchmark](examples/siletz_or/README.md) · [Dexter field-return example](examples/dexter_or/README.md)
 
 A Windows desktop workflow for one-dimensional steady-flow river and culvert analysis with HEC-RAS. The workflow runs locally without an AI service. The browser guides you through **Project → Prepare model → Confirm inputs → Results**. On a first visit, **Try a worked river example** lets you compare recorded water levels and open a practice report before creating a project. [Getting started](docs/GETTING_STARTED_EN.md)
 

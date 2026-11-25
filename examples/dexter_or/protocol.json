@@ -1,0 +1,17 @@
+{
+  "site": "Middle Fork Willamette River near Dexter, Oregon",
+  "gage": "USGS-14150000",
+  "purpose": "review",
+  "terrain": "OLC Middle Fork Willamette 2015 topobathymetric lidar (NOAA 9170); document interpolation and map section placement",
+  "event_selection": "First published direct discharge measurement with gage height after 2015-09-15 for this station. Freeze the observation original before hydraulic calculation. Only use paired discharge and stage; document availability and datum.",
+  "station": "At the public gage, within the reach, never a stage boundary",
+  "threshold_ft": 0.5,
+  "threshold_basis": "Predeclared software-pilot investigation threshold only. Report signed modeled minus observed stage; record missing gage uncertainty and datum evidence.",
+  "initial_roughness": {
+    "channel_n": 0.035,
+    "overbank_n": 0.065,
+    "basis": "conditional screening assumptions; fixed before the event is compared"
+  },
+  "revision": "Introduce withheld observed stage as supplemental evidence and recalculate or regenerate the appropriate edition. Keep the hydraulic inputs fixed. Exclude observed stage from boundary assignment, slope derivation and roughness tuning.",
+  "acceptance": "Homepage through input confirmation, real native results, supplemental evidence, selected revised edition and both verified mapped packages; record automated UI clicks, repeated form entries and manual project JSON edits. Preserve conditional verdicts and original files."
+}

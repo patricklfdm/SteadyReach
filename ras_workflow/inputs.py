@@ -41,6 +41,11 @@ def load(config_path):
 
 def dependencies(path, c):
     files = [path]
+    returned=c.get('field_return_sources',[])
+    if returned:
+        if not intact(returned):
+            raise ValueError('Restore the field return bound to these inputs / 请恢复本版绑定的回传资料')
+        files.extend(safe_path(ROOT,r['path']) for r in returned)
     if c.get('field_feedback'):
         ref=c['field_feedback']
         if not intact([ref]):raise ValueError('Field feedback record differs from its confirmed source')

@@ -28,7 +28,72 @@ def published_series(folder):
     return events
 
 
+def profile_rows(content,summary,filename='observed_profiles.csv'):
+    reader = csv.DictReader(io.StringIO(content.lstrip('\ufeff')))
+    if set(reader.fieldnames or []) != set(COLUMNS) | {'profile'} or len(reader.fieldnames) != len(COLUMNS)+1:
+        raise ValueError('observed_profiles.csv requires the observation template plus profile.')
+    groups = {}
+    for index,raw in enumerate(reader,1):
+        if index>2000:
+            raise ValueError('Use a maximum of 2,000 survey observations.')
+        if None in raw or any(v is None for v in raw.values()):
+            raise ValueError('Incomplete observed profile CSV row')
+        profile = raw.pop('profile').strip()
+        row = {k:v.strip() for k,v in raw.items()}
+        groups.setdefault((profile,row['event'],row['date']),[]).append(row)
+    rows=[]
+    for (profile,event,date),observations in groups.items():
+        spec=dict(profile=profile,event=event,date=date)
+        matched=screen(observations,summary,spec)
+        ambiguous=sum(k[0]==profile for k in groups)>1
+        boundary_mismatch=any(r['role']=='boundary' and (r['issues'] or r['model_ft'] is None or
+                              r['observed_ft'] is None or abs(r['model_ft']-r['observed_ft'])>.002) for r in matched)
+        for r in matched:
+            for applies,issue in [(ambiguous,'MULTIPLE_EVENTS_FOR_PROFILE'),(boundary_mismatch,'OBSERVED_BOUNDARY_MISMATCH')]:
+                if applies:
+                    r['issues'].append(issue)
+                    r.update(model_ft=None,residual_ft=None,event_eligible=False)
+            rows.append(dict(r,profile=profile,source_file=filename))
+    return rows
+
+
+def merge_holdouts(existing, incoming):
+    """Replace a documented interior observation only in the selected child edition."""
+    def location(r):
+        return (r['profile'],(r.get('location') or {}).get('rs'))
+    rows=list(existing);seen=set()
+    for row in incoming:
+        key=location(row)
+        if key[1] is None or key in seen or row['role']!='holdout':
+            raise ValueError('Duplicate or unlocated independent observation / 独立观测重复或未定位')
+        seen.add(key)
+        same_profile=[r for r in rows if r['profile']==row['profile']]
+        if any((r['event'],r['date'])!=(row['event'],row['date']) for r in same_profile):
+            raise ValueError('A different event requires its own profile / 不同事件需要独立工况')
+        if any(r['role']=='boundary' and r.get('issues') for r in same_profile):
+            raise ValueError('Resolve the original boundary evidence before comparing this event')
+        prior=[r for r in same_profile if location(r)==key]
+        if len(prior)>1 or any(r['role']!='holdout' for r in prior):
+            raise ValueError('A control or calibration station cannot be used as a holdout / 控制或率定位置不可作为独立观测')
+        if prior:rows[rows.index(prior[0])]=row
+        else:rows.append(row)
+    return rows
+
+
 def records(summary):
+    returned=summary.get('configuration',{}).get('returned_observations',[])
+    rows,refs=survey_records(summary)
+    originals=summary.get('configuration',{}).get('returned_observation_originals',[])
+    if (returned or originals) and not intact([*returned,*originals]):
+        raise ValueError('Restore the observation source bound to this calculation.')
+    for record in returned:
+        name=Path(record['path']).name
+        extra=profile_rows((ROOT/record['path']).read_text('utf-8-sig'),summary,name)
+        rows=merge_holdouts(rows,extra)
+    return rows,[*refs,*returned,*originals]
+
+
+def survey_records(summary):
     _,geometry,_=bound_inputs(summary)
     refs=[r for r in geometry.get('provenance',[]) if isinstance(r,dict) and r.get('role') in ('survey_manifest','survey_source')]
     if refs and not intact(refs):
@@ -40,32 +105,7 @@ def records(summary):
     manifest = ROOT/manifests[0]['path']
     named = {Path(r['path']).name: ROOT/r['path'] for r in refs if r.get('role') == 'survey_source'}
     if 'observed_profiles.csv' in named:
-        reader = csv.DictReader(io.StringIO(named['observed_profiles.csv'].read_text('utf-8-sig')))
-        if set(reader.fieldnames or []) != set(COLUMNS) | {'profile'} or len(reader.fieldnames) != len(COLUMNS)+1:
-            raise ValueError('observed_profiles.csv requires the observation template plus profile.')
-        groups = {}
-        for index,raw in enumerate(reader,1):
-            if index>2000:
-                raise ValueError('Use a maximum of 2,000 survey observations.')
-            if None in raw or any(v is None for v in raw.values()):
-                raise ValueError('Incomplete observed profile CSV row')
-            profile = raw.pop('profile').strip()
-            row = {k:v.strip() for k,v in raw.items()}
-            groups.setdefault((profile,row['event'],row['date']),[]).append(row)
-        rows=[]
-        for (profile,event,date),observations in groups.items():
-            spec=dict(profile=profile,event=event,date=date)
-            matched=screen(observations,summary,spec)
-            ambiguous=sum(k[0]==profile for k in groups)>1
-            boundary_mismatch=any(r['role']=='boundary' and (r['issues'] or r['model_ft'] is None or
-                                  r['observed_ft'] is None or abs(r['model_ft']-r['observed_ft'])>.002) for r in matched)
-            for r in matched:
-                for applies,issue in [(ambiguous,'MULTIPLE_EVENTS_FOR_PROFILE'),(boundary_mismatch,'OBSERVED_BOUNDARY_MISMATCH')]:
-                    if applies:
-                        r['issues'].append(issue)
-                        r.update(model_ft=None,residual_ft=None,event_eligible=False)
-                rows.append(dict(r,profile=profile,source_file='observed_profiles.csv'))
-        return rows, refs
+        return profile_rows(named['observed_profiles.csv'].read_text('utf-8-sig'),summary),refs
     protocol = ROOT/'examples/siletz_or/protocol.json'
     if 'protocol.json' not in named or not protocol.is_file() or sha(named['protocol.json']) != sha(protocol):
         return [], []

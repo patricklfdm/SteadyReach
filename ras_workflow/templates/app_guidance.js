@@ -94,6 +94,7 @@ function purposeAction(parent,row){
   parent.append(button('Request inlet and outlet elevations','索取各组进出口涵底高程',()=>openInvertRequest(out)),out);return;
  }
  const labels={atlas:['Inspect computed section','查看计算断面'],revision:['Revise inputs and conditions','修订输入和用途条件'],native:['Check this run’s native output','核对此次原生输出'],observations:['Check observed event','检查实测事件'],comparison:['Compare editions','比较两版'], 'field-feedback':['Request surveyed channel geometry','索取河槽测量资料']};
+ Object.assign(labels,{qa:['Review hydraulic checks','查看水力检查'],coverage:['Review section coverage','复核断面覆盖'],delivery:['Inspect delivery evidence','检查交付证据'],sensitivity:['Review sensitivity','复核敏感性']});
  let target=tool==='invert-request'?'native':tool;
  if(target==='comparison'&&!current.comparison)target=current.native_review?'native':'revision';
  if(target==='field-feedback'&&current.native_review)target='native';
@@ -105,18 +106,95 @@ function purposeAction(parent,row){
  }));
 }
 
+function renderFieldReturn(parent){
+ if(current.native_review||!current.summary)return;
+ const box=details(parent,'Import a field return and compare changes','导回补测并核对变化');
+ box.id='qa-tool-return';
+ const mode=field(box,'return-mode','Returned evidence','回传内容','geometry','select',[
+  ['geometry','Elevations and surveyed profiles','涵底、道路、河床剖面或下游边界水位'],
+  ...(current.model_type==='river'?[['observation','Independent event stage','独立事件实测水位']]:[])]);
+ box.append(el('p',tr('Keep unused rows blank. For a surveyed profile, enter elevations at the listed stations. Reported values require the original record.','无新资料的行留空。实测剖面按表内站距顺序填写高程。填报实测值时请附原始记录。')));
+ const identity={id:current.id,summary_hash:current.summary.sha256};
+ box.append(button('Download field-return worksheet','下载本版补测表',async()=>{
+  let csv;
+  if(mode.value==='observation')csv='event,date,role,kind,x,y,horizontal_crs,elevation,unit,vertical_datum,gage_zero,flow,flow_unit,vertical_uncertainty,horizontal_uncertainty_m,source,profile\r\n';
+  else csv=(await api('return-request',identity)).csv;
+  const a=el('a'),url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));
+  a.href=url;a.download='Field_return_'+mode.value+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ }));
+ function picker(id,en,zh,accept){
+  const label=el('label',tr(en,zh)),input=el('input');input.id=id;input.type='file';input.accept=accept;label.append(input);box.append(label);return input;
+ }
+ const csv=picker('return-csv','Returned CSV','回传 CSV','.csv'),doc=picker('return-record','Field original','测量原件','.pdf,.txt,.csv,.json,.jpg,.jpeg,.png');
+ const output=el('section');output.setAttribute('aria-live','polite');let preview=null;
+ const invalidate=()=>{preview=null;output.replaceChildren();};
+ for(const f of [mode,csv,doc])f.addEventListener('change',invalidate);
+ box.append(button('Preview returned values','预览回传数值',async()=>{
+  invalidate();
+  if(!csv.files[0]||csv.files[0].size>2000000)throw Error(tr('Choose a CSV up to 2 MB.','请选择 2 MB 以内的 CSV。'));
+  const f=doc.files.length?(await encodeFiles(doc.files))[0]:null;
+  const body={...identity,mode:mode.value,csv:await csv.files[0].text(),document:f?{name:f.name,data:f.content}:null};
+  const view=await api('return-preview',body);preview={body,token:view.token};
+  output.append(el('p',tr('Source run','来源运行')+' · '+view.run));
+  table(output,[tr('Location or event','位置或事件'),tr('Previous','原值'),tr('Returned','回传值'),tr('Unit and datum','单位和基准'),tr('Basis','依据')],
+    view.rows.map(r=>[r.location,JSON.stringify(r.before)??'—',JSON.stringify(r.after),r.unit+' '+r.datum,r.classification+' · '+r.source]));
+  for(const r of view.rows.filter(r=>'uncertainty_ft' in r)){
+   const unknown=tr('unreported','未说明');
+   output.append(el('p',r.location+' · '+tr('Measurement uncertainty (ft)','测量不确定度（ft）')+' · '+(r.prior_uncertainty_ft??unknown)+' → '+(r.uncertainty_ft??unknown)));
+  }
+  if(view.other_fields.length)output.append(el('p',tr('Other values retained','沿用原值的其他位置')+' · '+view.other_fields.join(', ')));
+  output.append(button('Confirm return and open revision','确认回传并打开修订版',async()=>{
+   if(!preview)throw Error(tr('Preview current selections again.','请重新预览当前文件。'));
+   const child=await api('return-apply',{...preview.body,token:preview.token,confirmed:true});await open(child.id);
+   notify(tr('Return saved. Review the complete inputs before starting HEC-RAS.','回传已保存。核对本版完整输入后可启动 HEC-RAS。'));
+  },'primary'));
+ }),output);
+}
+function priorityRows(assessment,comparison){
+ const rows=assessment.purpose_decision?.rows||[],review=comparison?.review,items=[];
+ const seen=new Set();
+ function add(key,en,zh,target,action){
+  if(seen.has(key))return;
+  seen.add(key);items.push({en,zh,action:action||{tool:target,stations:[]}});
+ }
+ const errors=(assessment.findings||[]).filter(f=>['OUTPUT_CONSISTENCY','EVIDENCE_GAPS','WARNING_COVERAGE'].includes(f.code));
+ for(const f of errors)add(f.code,f.reason.en,f.reason.zh,f.target);
+ if(review?.flags?.includes('CHECK_WATER_LEVEL_CHANGE')&&review.maximum_at_verified_center){
+  const v=review.maximum_at_verified_center,delta=Number(v.change).toFixed(3);
+  let en=v.profile+' · RS '+v.station+' · signed stage change '+delta+' ft.',zh=v.profile+' · RS '+v.station+' · 水位变化 '+delta+' ft。';
+  const split=(review.investigation||[]).find(r=>r.kind==='overbank_share'||r.en.includes('overbank share'));
+  if(split){en+=' '+split.en;zh+=' '+split.zh;}
+  add('revision-change',en,zh,'comparison');
+ }
+ for(const state of ['exceeded','missing']){
+  for(const row of rows.filter(r=>r.state===state&&r.action)){
+   const key=row.action.tool;
+   add(key,row.en,row.zh,key,row.action);
+  }
+ }
+ for(const f of assessment.next_actions||[])if(f.target&&f.reason)add(f.target,f.reason.en,f.reason.zh,f.target);
+ return items;
+}
 function showResultAssessment(overview,a,box=overview){
  const label=s=>tr(s.en,s.zh),ordered=a.next_actions||a.findings,primary=ordered[0];
  overview.append(el('h2',tr('Delivery assessment','结果交付评估')+' · L'+a.level+' · '+label(a.title)));
  if(a.purpose_decision){
   const d=a.purpose_decision, panel=el('section',undefined,'card');overview.append(panel);
   panel.append(el('h3',label(d)),el('p',tr(d.note_en,d.note_zh)));
-  for(const row of d.rows){panel.append(el('p',label(row),row.state==='met'?'muted':'warning'));purposeAction(panel,row);}
+  const priorities=priorityRows(a,current.comparison).slice(0,3);
+  if(priorities.length){
+   const first=el('section');first.id='result-priorities';panel.append(first);
+   first.append(el('h3',tr('What should I review first?','现在先处理什么？')));
+   for(const row of priorities){const card=el('div');first.append(card);card.append(el('p',label(row)));purposeAction(card,row);}
+  }
+  const all=details(panel,'All project acceptance conditions','查看全部用途条件');
+  for(const row of d.rows){all.append(el('p',label(row),row.state==='met'?'muted':'warning'));if(!priorities.some(p=>p.action===row.action))purposeAction(all,row);}
   if(current.model_type!=='river')for(const p of current.results?.metrics||[]){
    if(!Number.isFinite(p.metrics?.roadway_flow_software_cfs))panel.append(el('p',p.profile_id+' · '+tr('Native roadway discharge is unknown.','原生路面越流量未知。'),'warning'),
     button('Inspect native roadway discharge','核对原生路面流量',()=>openGuidanceTool('native')));
   }
  }
+ if(!current.native_review&&a.run_id)overview.append(button('Compare and import returned field records','补测回来了，核对并导入',()=>openGuidanceTool('return')));
  if(a.use_guide){
   const panel=el('section',undefined,'card');overview.append(panel);
   panel.append(el('h3',tr('What can I use this run for?','这次计算可以用到什么程度？')),
@@ -147,7 +225,7 @@ function showResultAssessment(overview,a,box=overview){
   }));
  }
  renderIterationChoices(overview,a,primary);
- if(primary){const first=el('div');overview.append(first);first.append(el('strong',tr('First action','优先处理')));action(first,primary);}
+ if(primary&&!a.purpose_decision){const first=el('div');overview.append(first);action(first,primary);}
  if(a.event_tailwaters?.length){
   const panel=details(box,'Measured tailwater by observed event','按实测事件核对尾水');
   table(panel,[tr('Event / date','事件／日期'),'RS','cfs',tr('Datum','基准'),tr('Observed interval (ft)','观测区间（ft）')],a.event_tailwaters.map(r=>[r.event+' / '+r.date,r.rs,r.flow_cfs,r.datum,r.interval_ft?.map(v=>v.toFixed(3)).join('–')??tr('Need verified event record and uncertainty','待补匹配事件资料与测量精度')]));
@@ -260,6 +338,15 @@ function renderGuidance(parent,reviewPage=parent){
     }
    }
    if(data.parameter_response?.length){
+    const stopped=details(content,'When to stop this check','这轮检查何时结束',true);
+    for(const r of data.parameter_response){
+     const affected=r.affected.map(v=>'RS '+v.rs).join(', ');
+     stopped.append(el('p',r.profile+' · '+r.case+' · '+r.paths.map(sensitivityParameterLabel).join(', ')+' · ΔWSE '+r.minimum_ft.toFixed(3)+' … '+r.maximum_ft.toFixed(3)+' ft. '+
+      (affected?tr('Above the screening limit at ','超过筛查值的断面为 ')+affected+tr('. Check field support for this range before choosing another condition.','。先查清该范围的现场依据，随后决定是否另设条件。'):
+       tr('All compared sections are within the screening limit. End this comparison for the tested range.','本次可比断面均在筛查值内，这组范围的比较可结束。'))));
+    }
+    stopped.append(el('p',tr('Each result covers only the named profile, compared stations and tested range. Missing controls require evidence before another batch.','各结论只覆盖所列工况、可比断面和已试范围。缺少控制依据时应先补资料，再启动下一批。')));
+
     const panel=details(content,'Where did the tested inputs change water levels?','已测试参数影响了哪些断面的水位？',true);
     table(panel,[tr('Case and profile','工况'),tr('Tested parameter','测试参数'),tr('Peak signed change (ft)','最大有符号变化（ft）'),tr('Stations above screening threshold','超过筛查值的断面')],data.parameter_response.map(r=>[r.case+' · '+r.profile,r.paths.map(sensitivityParameterLabel).join(' + '),'RS '+r.peak_rs+' · '+r.signed_peak_ft.toFixed(3),r.affected.length+' / '+r.compared+' ('+r.threshold_ft+' ft) · '+r.affected.map(a=>a.rs).join(', ')]));
    }
