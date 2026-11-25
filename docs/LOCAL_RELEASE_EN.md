@@ -2,6 +2,22 @@
 
 [简体中文](LOCAL_RELEASE_CN.md) · [Production priorities and acceptance criteria](PRODUCTION_ROADMAP_EN.md)
 
+## P6 intake and offline replay gate
+
+In an isolated checkout on the same workstation, use the full P5 command with `--p6` in place of `--p5`. Retain the independent survey, private Midway fixture, Dexter observation, imagery, archive directory and `--historical-root`. The historical root must contain the registered Soquel source edition and receipt. Require both `status=SOFTWARE_CHECKS_PASSED` and `p6.status=PASSED`. Open `status/release_checks/<run>/p6/release.json` for site-specific gaps and boundary findings, evidence hashes, carried confirmations, browser input counts and the fresh replay run ID.
+
+This gate covers missing Midway inverts, an off-site Soquel gage and the Dexter surveyed reach with a paired event discharge. Geometry returns and independent observation returns are scored separately. Frozen intake reconstruction blocks DNS and socket connections. During a fresh solve from the recovered survey, Python application processes allow only loopback connections. Install the solver and GIS tools beforehand. Human, second-machine and independent engineering acceptance are separate. [Engineering intake guide](HYDRAULIC_INTAKE_EN.md)
+
+**Same-workstation results, November 25, 2026.** All three inventories reproduced their frozen fingerprints offline. The final source tree passed 502 Python checks and 44 page tests. Midway returns were explicitly assumed test values. Dexter discharge and independent stage came from the measured event.
+
+| Site | Acceptance case | Result |
+|---|---|---|
+| Midway | Missing inverts, wrong datum, partial and complete returns | The intake requested both inverts and barrel length. A wrong-datum return was blocked. A one-end return reopened 1 field and retained 312. A two-end return reopened 2 and retained 311. Zero unchanged hydraulic values were re-entered. |
+| Soquel | Off-site gage and detached historical sources | USGS 11160000 matched RS 1700, 714.39 m from the downstream section center. The station lists NGVD29 and the model uses NAVD88. An event-specific transferred stage was unavailable. All 16 frozen objects replayed after removal of the staged original project. |
+| Dexter | Measured reach, independent observation return and fresh frozen-input solve | Returning the RS 500 holdout retained all 126 hydraulic inputs. A new HEC-RAS project prepared from the recovered survey and local imagery reproduced 1,540 cfs across nine sections, with maximum stage and discharge differences of 0.000 ft and 0.000 cfs. The Complete package contained 96 files and the Minimal package 20. Both report languages opened with 10 pages each. |
+
+Replay differences compare two native calculations. Dexter's independent stage still lacks measurement uncertainty and its purpose decision remains `NEED_EVIDENCE`. The P6-specific receipt has SHA-256 `f2a68065be4916e14487e5484c8f290340064a0bd7890f899a163c7ffbcae445`.
+
 ## P5 baseline on one workstation
 
 On 2026-11-25 the isolated release gate passed 492 Python tests, 44 page tests and the inherited native regressions. It retired and restored two river editions through the browser. While each was archived, HEC-RAS 7.0.1 opened the Complete and Minimal projects from detached copies. QGIS 3.44.15 reopened each Complete project with six valid layers and both exhibit layouts. After restoration, each site generated new paired packages from a fresh native run.

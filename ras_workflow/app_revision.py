@@ -76,6 +76,13 @@ def create_draft(parent,body,preparation_task=None,field_return=None):
     draft.update(consent=False,reviewer=None,basis='Editable revision of an existing conditional calculation; confirm all current parameters before a new solve.')
     save(new_sp.parent/'draft.json',draft)
     m=copy.deepcopy(parent)
+    m.pop('intake_return',None)
+    if field_return:
+        confirmed=parent.get('run_confirmation')
+        prior_review=read(ROOT/confirmed['path']).get('review') if confirmed and intact([confirmed]) else None
+        m['intake_return']=dict(mode=field_return['mode'],fields=[r['key'] for r in field_return['rows'] if field_return['mode']=='geometry'],
+            sources=field_return['sources'],confirmation=confirmed,review=prior_review,
+            summary=parent['summary'],parent_project=parent['project'])
     m.pop('compiled_checkpoint',None)
     m.pop('latest_question',None)
     m.pop('recovered_task',None)

@@ -136,7 +136,7 @@ def midway_returns(project,directory):
             need(float(draft['answers'][other['field']]['value'])==float(other['prior']),'Partial return overwrote the other invert')
         cases[name]=dict(project=child,fields=fields)
         if fields==2:
-            page_action(child,'survey-solve')
+            page_action(child,'survey-solve',metrics=str(directory/'midway_both_solve_page.json'))
             summary=read(ROOT/core.model(child)['summary']['path'])
             need(summary['hydraulics']['run_id']!=read(ROOT/original['path'])['hydraulics']['run_id'],'Revision did not recalculate')
             from ras_workflow.revision_inputs import bound_inputs

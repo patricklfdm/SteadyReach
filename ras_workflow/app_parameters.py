@@ -332,6 +332,7 @@ def binding(m):
     from .survey_import import verified_sources
     verified_sources(m)
     sources=[item(ROOT/m['project'])]+m.get('attachments',[])+m.get('input_choices',[])
+    sources.extend(m.get('intake_source_notes',[]))
     if m.get('road_sample'):sources.append(m['road_sample'])
     if m.get('source_analysis'):sources.append(m['source_analysis'])
     if m.get('terrain',{}).get('raster'):sources.append(m['terrain']['raster'])
@@ -419,6 +420,9 @@ def review(m):
         from .app_automation import preflight
         for q in preflight(m,data['geometry'])['issues']:
             if q['blocking']:errors.append(dict(code=q['code'],field=q.get('field',''),en=q['message'],zh=q['zh']))
+    if not native and m.get('model_type')=='river':
+        from .intake_boundary import controls_for_run
+        errors.extend(controls_for_run(m,data['configuration'],data['geometry'],fields))
     from .feasibility import assess
     from .app_acquisition import snapshot
     reach = read(ROOT/m['public_reach']['path']) if m.get('public_reach') else None
@@ -439,6 +443,9 @@ def review(m):
         inputs=data,fields=fields,native=native,errors=errors,ready=not errors,created_utc=utc(),engineering_acceptance='NOT_ASSESSED',
         refreshed_equivalent_fields=[change['field'] for change in refreshed],
         attention=[] if native else attention(m, fields), feasibility=feasibility)
+    if m.get('intake_return'):
+        from .return_scope import assess as return_scope
+        packet['return_scope']=return_scope(m,fields)
     if m.get('model_type')=='river' and not native:
         from .river_review import key_inputs
         packet['key_inputs'] = key_inputs(fields)
@@ -459,6 +466,9 @@ def verify(m,token):
 def confirm(m,token):
     from . import app_core as core
     packet=verify(m,token)
+    if m.get('intake_return'):
+        from .return_scope import assess
+        if assess(m,packet['fields'])!=packet.get('return_scope'):raise ValueError('Source confirmation changed. Review this edition again.')
     # Final bank acceptance changes only the persisted review stamps. Record both hashes.
     if not m.get('native_review'):
         sp,d=reviewed_draft(m)
@@ -467,6 +477,7 @@ def confirm(m,token):
             d['revision']+=1;save(sp.parent/'draft.json',d)
     receipt=dict(action='CONFIRM_DISPLAYED_PARAMETERS_AND_RUN',review=m['pending_review'],reviewed_fingerprint=packet['fingerprint'],
         execution_fingerprint=digest(binding(m)),created_utc=utc(),engineering_acceptance='NOT_ASSESSED',identity='LOCAL_USER_ACTION_NO_NAME_REQUIRED')
+    if packet.get('return_scope'):receipt['return_scope']=packet['return_scope']
     path=core.folder(m['id'])/'reviews'/unique_id()/'confirmation.json';save(path,receipt)
     m['run_confirmation']=item(path);core.persist(m,'CONFIRM_PARAMETERS',dict(confirmation=m['run_confirmation']))
     return receipt

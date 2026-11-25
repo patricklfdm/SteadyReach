@@ -2,6 +2,8 @@
 
 [English](GETTING_STARTED_EN.md) | [简体中文](GETTING_STARTED_CN.md)
 
+Before choosing the boundary or requesting field records, open **Hydraulic evidence and offline replay → Inspect hydraulic evidence** to check gaps, station applicability and source editions. A field return reopens the affected inputs for confirmation. [Evidence intake and returns](HYDRAULIC_INTAKE_EN.md)
+
 To see disk usage, keep an edition online, or recover working files while keeping its published packages, use **Saved projects → Manage this version → Storage and recovery by edition**. [Edition storage and recovery](LOCAL_RELEASE_EN.md#archive-and-recover-one-edition)
 
 **Agree the delivery conditions before computing.** Open **Intended use and flow paths → Delivery conditions for this purpose**. Choose screening, comparison or engineering review, then enable the conditions. Select the modeled profile, any required dry section ends and source-backed geometry. For a culvert you can specify minimum road margin. For a river you can name a registered independent event, an optional observation RS and the maximum absolute stage error in feet. Give the project basis for numerical limits. The confirmation screen records these choices with that run.

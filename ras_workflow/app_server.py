@@ -88,6 +88,9 @@ def create():
                     key=body['id']
                     if route in ('storage-preview','storage-archive','storage-retire','storage-restore','storage-pin'):
                         result=edition_storage.perform(ROOT,key,route.removeprefix('storage-'),body)
+                    elif route in ('intake-inspect','intake-freeze','intake-replay','intake-survey-copy','intake-note'):
+                        from .intake_freeze import perform
+                        result=perform(key,route.removeprefix('intake-'),body)
                     elif route in ('delete-project','restore-project'):result=core.set_deleted(key,body,deleted=route=='delete-project')
                     elif route in ('handoff-inspect','handoff-repair'):
                         from . import handoff

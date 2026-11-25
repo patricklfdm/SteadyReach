@@ -17,6 +17,8 @@
 
 **开发顺序。** P5 已于 2026-11-25 通过同机发版验收。Dexter 与 Big River 的两种交付包均可打开，恢复后各自重现全部 9 个断面与工况组合的原生结果。[存储实测与操作指南](LOCAL_RELEASE_CN.md#p5-同机实测基准)
 
+**P6 已于 2026-11-25 通过同机验收。** Midway 回传单端或双端涵底分别重开 1、2 项。Soquel 异地测站保留为背景资料。Dexter 从冻结实测包重新计算，9 个断面的流量和水位全部复现。真人、独立工程签审和跨机器验收仍待安排。[资料清单与操作](HYDRAULIC_INTAKE_CN.md) · [验收及复现](LOCAL_RELEASE_CN.md#p6-资料清单与离线重放验收)
+
 P6 形成的输入版本和适用性记录供 P7 使用；P7 的结论和限制随 P8 的正式版本移交；P9 固定软件与数据升级方式，P10 冻结同一发行物复验。二维水动力、非恒定流、桥梁设计及多租户云部署另立需求。真人与跨机器验收继续暂缓，恢复时间由项目负责人决定。
 
 水力验收方法参考 USACE 的恒定流校准案例；发行完整性及来源留存参考 NIST SSDF。上述阶段的验收数量与性能目标由本项目提出。[USACE 恒定流校准](https://www.hec.usace.army.mil/confluence/rasdocs/hgt/latest/tutorials/1d-steady-flow/calibration-of-a-steady-flow-hydraulics-model-workshop-solution) · [NIST SSDF](https://csrc.nist.gov/Projects/SSDF)

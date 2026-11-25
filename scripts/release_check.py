@@ -59,13 +59,13 @@ def run(args):
                    holdout_rmse_m=data['east_fork']['holdout_rmse_m'],native_warnings=matching[0]['warnings'],
                    siletz_field_screen=field_screen(packet,matching[0],hashes),east_fork_field_screen=east)
             write_field_notes(root,result['field_packet']['siletz_field_screen'],east)
-            if getattr(args,'p3',False):
+            if passed and getattr(args,'p3',False):
                 result['release_gate']='P3'
                 from p3_release import run as journeys
                 fixture=Path(args.midway_fixture or os.environ['STEADYREACH_MIDWAY_FIXTURE']).resolve()
                 journeys(packet,fixture,args.transfer_survey.resolve(),root/'p3',args.transfer_imagery)
                 result['p3']=dict(status='PASSED',receipt='p3/journeys.json',sha256=sha(root/'p3/journeys.json'))
-            if args.fresh_benchmark:
+            if passed and args.fresh_benchmark:
                 from release_benchmark import replay
                 result['fresh_benchmark']=replay(packet,matching[0],hashes,root,p2=args.p2)
         elif args.fresh_benchmark:raise ValueError('--fresh-benchmark requires --packet with the frozen source inventory')
@@ -119,6 +119,15 @@ def run(args):
                 result['p5']=dict(status='PASSED',receipt='p5/release.json',sha256=sha(receipt))
             except (OSError,ValueError,KeyError,RuntimeError,TypeError,subprocess.SubprocessError) as exc:
                 result['p5']=dict(status='FAILED',error=str(exc));passed=False
+    if getattr(args,'p6',False):
+        result['release_gate']='P6';result['p6']=dict(status='NOT_RUN')
+        if passed:
+            from p6_release import run as intake_acceptance
+            try:
+                receipt=intake_acceptance(root,args.historical_root.resolve())
+                result['p6']=dict(status='PASSED',receipt='p6/release.json',sha256=sha(receipt))
+            except (OSError,ValueError,KeyError,RuntimeError,TypeError,subprocess.SubprocessError) as exc:
+                result['p6']=dict(status='FAILED',error=str(exc));passed=False
     result['status']='SOFTWARE_CHECKS_PASSED' if passed else 'NEEDS_ATTENTION'
     save(root/'release.json',result);print(root/'release.json');return 0 if passed else 1
 
@@ -138,7 +147,9 @@ if __name__=='__main__':
         p.add_argument('--'+flag,type=Path)
     p.add_argument('--p5',action='store_true',help='Require P4 plus edition storage, offline packages and native restore replay')
     p.add_argument('--p5-archive-dir',type=Path,help='Existing local archive folder outside this isolated checkout')
+    p.add_argument('--p6',action='store_true',help='Require P5 and the three-site frozen intake and return checks')
     args=p.parse_args()
+    if args.p6:args.p5=True
     if args.p5:
         if not args.p5_archive_dir or not args.p5_archive_dir.is_dir() or args.p5_archive_dir.resolve().is_relative_to(REPO):
             p.error('--p5 requires an existing external --p5-archive-dir')

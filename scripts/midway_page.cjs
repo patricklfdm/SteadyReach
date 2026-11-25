@@ -134,6 +134,32 @@ async function main() {
       const {nodeId}=await send('DOM.querySelector',{nodeId:root.nodeId,selector});
       await send('DOM.setFileInputFiles',{nodeId,files});
     }
+    if(mode==='p6-evidence'){
+      await buttonByName('Inspect hydraulic evidence');
+      await until('document.body.textContent.includes("Current edition") && document.body.textContent.includes("Next request if needed")');
+      await buttonByName('Freeze these sources');
+      await buttonByName('Replay last frozen intake offline');
+      await until('document.body.textContent.includes("Rebuilt from frozen files") && document.body.textContent.includes("source references verified")');
+      console.log('VERIFIED');return;
+    }
+    if(mode==='p6-annotate'){
+      await buttonByName('Inspect hydraulic evidence');
+      const source=await evaluate('Array.from(document.querySelector("#evidence-original").options).find(o=>/\\.(pdf|docx|jpe?g)\\b/i.test(o.textContent))?.value');
+      if(!source)throw Error('Missing original document to annotate');
+      await fieldValue('evidence-original',source);
+      await fieldValue('evidence-category','structure');
+      await fieldValue('evidence-version','SHA-256 '+source);
+      await buttonByName('Save source metadata');
+      await buttonByName('Inspect hydraulic evidence');
+      await until('document.body.textContent.includes('+JSON.stringify('SHA-256 '+source)+')');
+      console.log(source);return;
+    }
+    if(mode==='p6-review-changes'){
+      await buttonByName('Review calculation inputs →');
+      await until('!!document.getElementById("return-scope") && !!document.getElementById("confirm-parameters")');
+      if(enteredFields.length)throw Error('Previously confirmed fields re-entered');
+      console.log(JSON.stringify({reentered:enteredFields.length,caption:await evaluate('document.getElementById("return-scope").textContent.slice(0,500)')}));return;
+    }
     if(mode==='home-storage-retire'||mode==='home-storage-restore'){
       const scope='document.querySelector('+JSON.stringify(selector)+')';
       await until('!!'+scope);

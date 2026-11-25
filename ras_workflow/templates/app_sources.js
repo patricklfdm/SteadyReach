@@ -376,6 +376,40 @@ function drawRoadChange(parent,rows){
  }
 }
 
+function renderIntakeEvidence(parent,edition){
+ const panel=details(parent,'Hydraulic evidence and offline replay','水力资料清单与离线重放');
+ const area=el('div');area.setAttribute('aria-live','polite');const id=edition.id;
+ const names={terrain:tr('Terrain','地形'),channel:tr('Submerged channel','水下河槽'),flow:tr('Discharge','流量'),stage:tr('Stage and boundary','水位与边界'),structure:tr('Crossing geometry','设施几何')};
+ const labels={MISSING:tr('Missing','缺失'),AVAILABLE:tr('Available','已取得'),ASSUMED:tr('Conditional','含假设'),CHECK_SOURCE:tr('Check source','需查依据'),DOCUMENTED_BASIS:tr('Documented survey basis','已有测量依据'),SOURCE_RECORDED:tr('Source recorded','已登记来源'),NOT_APPLICABLE:tr('Outside this reach type','本河段类型无需此项'),EMPTY:tr('Searched, no match','已查无匹配'),UNAVAILABLE:tr('Source unavailable','资料服务不可用'),FOUND:tr('Found','有结果'),PARTIAL:tr('Partial response','部分响应'),OUTSIDE_COVERAGE:tr('Outside coverage','超出覆盖'),CONFLICT:tr('Conflicting evidence','证据冲突'),ELIGIBLE:tr('Eligible for this event','可支持本事件边界'),BLOCKED:tr('Boundary unsupported','边界依据不足'),CONTEXT:tr('Context or independent observation','背景或独立观测'),NO_BOUNDARY_OBSERVATION:tr('No supported boundary observation','缺少可用于边界的观测')};
+ function show(r,offline){area.replaceChildren();area.append(el('h3',offline?tr('Rebuilt from frozen files','已用冻结原件重建'):tr('Current edition','当前版本')),el('p',r.edition));
+  table(area,[tr('Evidence','资料'),tr('State','状态'),tr('Next request if needed','需要补资料时的下一步')],r.records.map(x=>[names[x.category],labels[x.status]||x.status,['MISSING','ASSUMED','CHECK_SOURCE'].includes(x.status)?tr(...x.request):'—']));
+  for(const row of r.records.filter(x=>x.status!=='NOT_APPLICABLE')){const d=details(area,names[row.category],names[row.category]);
+   d.append(el('p',[row.unit,row.datum,(row.dates||[]).join(', ')||tr('Measurement date unreported','测量日期未注明')].filter(Boolean).join(' · ')));
+   if(row.conflicting_datums?.length)d.append(el('p',tr('Document the vertical transformation before adopting elevations in ','采用以下基准的高程前请补充转换依据：')+row.conflicting_datums.join(', '),'warning'));
+   if(row.coverage)d.append(el('p',tr('Coverage / stations: ','覆盖／站号：')+JSON.stringify(row.coverage)));
+   if(row.requested_fields?.length)d.append(el('p',tr('Request these values: ','优先索取：')+row.requested_fields.join(', ')));
+   if(row.fields.length)table(d,[tr('Parameter','参数'),tr('Current','当前值'),tr('Source class','来源分类'),tr('Candidates','候选')],row.fields.map(f=>[f.label?.[lang==='zh'?'zh':'en']||f.key,format(f.value),f.classification,(f.candidates||[]).map(c=>format(c.value)).join(' / ')]));
+   if(row.metadata.length)d.append(el('pre',JSON.stringify(row.metadata,null,2)));
+   if(row.sources.length)table(d,[tr('Source','原件'),'SHA-256'],row.sources.map(s=>[s.original_name||s.path.split('/').pop(),s.sha256]));
+  }
+  const b=r.boundary;area.append(el('h3',labels[b.status]||b.status));
+  for(const s of b.stations)area.append(el('p',s.station+' · '+s.name+' · '+(s.distance_to_boundary_center_m??'—')+' m '+tr('to downstream section center','至下游断面中心')+' · '+(s.datum||'—')+(s.transfer_required?' · '+tr('Site transfer required','需异地水位传递依据'):'')+(s.datum_check==='CONVERSION_REQUIRED'?' · '+tr('Check vertical transformation','须核对高程基准转换'):'')));
+  if(b.rows.length)table(area,[tr('Event','事件'),tr('Station','测站'),tr('Use','用途'),tr('Check','核对')],b.rows.map(x=>[x.event,x.station||'—',labels[x.status],x.stage_ft!=null?x.stage_ft+' ft':x.issues.join(' · ')]));
+  if(b.status!=='ELIGIBLE')area.append(el('p',tr('Check the station, event, elevation datum and boundary location. An off-site gage needs a dated transfer and its uncertainty. Retain the existing boundary until supported.','核对测站、事件、高程基准和边界位置。异地测站需有注明日期的水位传递依据与不确定度。在取得依据前保留当前边界。')));
+  if(r.searches.length)table(area,[tr('Search','查询'),tr('Outcome','结果'),tr('Detail','详情')],r.searches.map(s=>[s.route,labels[s.outcome]||s.outcome,s.error||s.status]));
+ }
+ panel.append(button('Inspect hydraulic evidence','查看水力资料',async()=>{await save();const v=await api('intake-inspect',{id});show(v.register,false);
+  if(!edition.summary&&!edition.active_project&&v.register.sources.length){
+   const meta=details(area,'Add metadata from an original document','从原件补录资料信息');
+   const options=v.register.sources.filter(s=>s.role!=='source_metadata_note').map(s=>{const label=(s.original_name||s.path)+' · '+s.sha256.slice(0,8);return [s.sha256,label,label];});
+   const source=field(meta,'evidence-original','Original document','来源原件','','select',[['','Select a document','选择原件'],...options]);
+   const category=field(meta,'evidence-category','Evidence type','资料类型','','select',[['','Select a type','选择类型'],...Object.entries(names).map(([key,label])=>[key,label,label])]);
+   const inputs={};for(const [key,en,zh] of [['date','Measurement date (YYYY-MM-DD)','测量日期（YYYY-MM-DD）'],['footprint','Covered area or stations','覆盖范围或站号'],['unit','Reported units','原件注明的单位'],['datum','Reported vertical datum','原件注明的高程基准'],['version','Source edition or revision','原件版次或修订号']])inputs[key]=field(meta,'evidence-'+key,en,zh);
+   meta.append(el('p',tr('Enter only what the original documents. A saved entry replaces the metadata for this document and evidence type.','仅录入原件载明的信息。保存后会替换该原件在此资料类型中的元数据。')),button('Save source metadata','保存来源信息',async()=>{await api('intake-note',{id,token:v.token,category:category.value,source_sha256:source.value,...Object.fromEntries(Object.entries(inputs).map(([k,i])=>[k,i.value]))});await open(id);notify(tr('Source metadata saved. Inspect again to see the update.','来源信息已保存。再次查看清单可核对更新。'));}));
+  }
+  area.append(button('Freeze these sources','冻结本次资料',async()=>{const f=await api('intake-freeze',{id,token:v.token});notify(tr('Frozen and verified: ','资料已冻结并核验：')+f.archive.path);}));}),button('Replay last frozen intake offline','离线重放最近冻结资料',async()=>{const f=await api('intake-replay',{id});show(f.register,true);area.append(el('p',f.files+tr(' source references verified · ',' 份来源引用已核验 · ')+f.register_hash));}),area);
+ if(edition.route==='survey')panel.append(button('Recover frozen original survey folder','恢复冻结的原始实测包',async()=>{const v=await api('intake-survey-copy',{id});notify(tr('Original survey folder ready: ','原始实测目录已恢复：')+v.folder);}));
+}
 function renderSources(parent){
  const a=current.acquisition,card=el('section',undefined,'card source-hub');parent.append(card);
  card.append(el('h2',tr('Find, import and inspect source material','查找、导入与核查资料')),el('p',tr('Local search and extraction retain the original files and identify parameter candidates. Automatic draft preparation fills supported values and labels estimates for the final review. Conflicting sources remain available for your choice.','在本机查询和提取资料，保留原件并识别参数候选。自动准备草稿会填入有依据的数值，并标注估计项供最终核对；来源冲突集中保留供选择。')));

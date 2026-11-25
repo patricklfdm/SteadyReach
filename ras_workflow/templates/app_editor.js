@@ -92,7 +92,14 @@ function renderFinalReview(){
   ...(c.site_geometry?[[tr('Field geometry','场地几何'),tr('Source required','须有来源')]]:[]),
   ...(c.min_freeboard_ft!=null?[[tr('Road margin','道路余高'),'≥ '+c.min_freeboard_ft+' ft']]:[]),
   ...(c.event?[[c.event+(c.rs?' · RS '+c.rs:''),'≤ '+c.max_residual_ft+' ft']]:[]),...(c.basis?[[tr('Basis','依据'),c.basis]]:[])]);
- if(!review.native)renderSurveyPriorities(screen,review);
+ const returned=review.return_scope,scoped=returned?.mode==='CHANGES_ONLY';
+ if(scoped){const box=el('section',undefined,'card');box.id='return-scope';screen.append(box);box.append(el('h2',tr('Review changes from the field return','集中确认本次补资料的变化')),el('p',returned.affected.length+tr(' affected · ',' 项受影响 · ')+returned.retained.length+tr(' previously confirmed inputs carried forward',' 项沿用原确认')));
+  if(returned.affected.length){const keys=new Set(returned.affected.map(r=>r.key));parameterTable(box,review.fields.filter(f=>keys.has(f.key)));}
+  else if(!returned.removed?.length)box.append(el('p',tr('The return updates evidence only. All hydraulic values carry forward.','本次回传仅更新证据，水力参数均沿用。')));
+  if(returned.removed?.length)box.append(el('p',tr('Inputs removed from this edition: ','本版本移除的输入：')+returned.removed.join(', ')));
+  if(returned.sources.length)table(box,[tr('Field return','回传原件'),'SHA-256'],returned.sources.map(r=>[r.path.split('/').pop(),r.sha256]));
+ }else if(returned)screen.append(el('p',tr('The parent confirmation could not be verified. Review all inputs.','原版确认未能核验，请完整核对输入。'),'warning'));
+ if(!review.native&&!scoped)renderSurveyPriorities(screen,review);
  if(review.run_readiness){
   const r=review.run_readiness,labels={CHECKED:tr('Checks passed','检查通过'),BLOCKED:tr('Action needed','需处理'),EXTENT_PENDING:tr('Confirm extent after compilation','原生几何编译后核对范围'),NOT_REQUESTED:tr('Not requested','未选择')};
   table(screen,[tr('Before calculating','开算前预检'),tr('Status','状态')],[[tr('HEC-RAS installation and session','HEC-RAS 安装与会话'),labels[r.solver.status]],[tr('Report tools','报告工具'),labels[r.reports.status]],['GIS / Mapper',labels[r.gis.status]]]);
@@ -122,7 +129,7 @@ function renderFinalReview(){
  else{
   const assumptions=review.fields.filter(f=>!f.missing&&['assumed','inferred'].includes(f.evidence_class));screen.append(el('p',`${review.fields.length} `+tr('input fields · ','项输入 · ')+assumptions.length+tr(' marked estimates/assumptions.','项标为估计／假设。'),'status'));
   if(assumptions.length){const a=details(screen,'Estimates / assumptions ('+assumptions.length+')','估计／假设（'+assumptions.length+'）',false);parameterTable(a,assumptions);}
-  if(review.key_inputs?.length){
+  if(review.key_inputs?.length&&!scoped){
    const box=details(screen,'Which inputs need a decision?','哪些关键输入需要判断？',true);
    const labels={MISSING:['Missing','缺失'],BASIS_MISSING:['Locate the input source','补查输入来源'],OTHER_CANDIDATES:['Compare alternatives','比较其他候选'],CHECK_APPLICABILITY:['Check applicability','核对适用性'],SOURCE_RECORDED:['Basis available','已有依据']};
    table(box,[tr('Input','输入'),tr('Current value','当前值'),tr('Review','复核'),tr('Evidence and alternatives','依据及候选')],review.key_inputs.map(r=>[tr(r.label.en,r.label.zh),format(r.value)+' '+(r.unit||''),tr(...labels[r.priority]),[r.basis,...r.sources.map(s=>s.path.split(/[\\/]/).pop()),Array.isArray(r.adopted_range)?r.adopted_range.join(' – '):'',r.alternatives.length?tr('Other candidates: ','其他候选：')+r.alternatives.map(v=>format(v)).join(', '):''].filter(Boolean).join(' · ')]));
@@ -134,7 +141,7 @@ function renderFinalReview(){
   const edit=details(fields,'Edit values (all fields)','修改数值（全部字段）');for(const f of review.fields)parameterInput(edit,{...f,parameter_candidates:[]});
  }
  const actions=el('div',undefined,'card confirm-card');screen.append(actions);actions.append(button('Save and refresh parameter list','保存并刷新参数清单',showFinalReview));
- const consent=check(actions,'I have checked these inputs, including estimates, bank positions and limitations, and want to run this conditional calculation.','我已核对这些输入、估计值、左右岸及限制，确认采用它们进行本次条件性计算。',false,v=>{const b=$('#confirm-run');if(b)b.disabled=!v||!finalReview?.ready||dirty;});consent.id='confirm-parameters';
+ const consent=check(actions,scoped?'I reviewed the field return and affected inputs and want to run this revision.':'I have checked these inputs, including estimates, bank positions and limitations, and want to run this conditional calculation.',scoped?'我已核对本次回传及受影响参数，确认运行此修订。':'我已核对这些输入、估计值、左右岸及限制，确认采用它们进行本次条件性计算。',false,v=>{const b=$('#confirm-run');if(b)b.disabled=!v||!finalReview?.ready||dirty;});consent.id='confirm-parameters';
  const run=button('Confirm and run HEC-RAS','确认并运行 HEC-RAS',async()=>{if(!consent.checked||dirty||!finalReview?.ready)throw Error(tr('Refresh and confirm the current parameters first.','请先刷新并确认当前参数。'));await api('start',{id:current.id,revision:current.revision,start:true,confirmed:true,review_token:finalReview.review_token});finalReview=null;await open(current.id);},'primary');run.id='confirm-run';run.disabled=true;actions.append(run);
 }
 function renderDependencyReview(parent,review){

@@ -363,6 +363,7 @@ function render(){const m=current;rememberView({project:m.id,page:'model'});shel
  screen.append(el('div',undefined,'progress'),el('p',tr('Working locally. You may close this browser tab; keep the launcher running.','正在本机处理。可关闭浏览器标签页，请保留启动程序。')),region);
  const record=el('pre');record.id='task-record';details(screen,'Technical details','技术详情').append(record);updateProcessing(m);return;
  }
+ if(!m.native_review&&typeof renderIntakeEvidence==='function')renderIntakeEvidence(screen,m);
  if(m.results&&m.status!=='ABANDONED'){renderResults(screen);return;}
  renderTaskRecovery(screen,m);if(m.calculation_recovery&&m.calculation_recovery.mode!=='REVIEW_INPUTS'&&!m.results?.run_id)return;if(m.feedback_spec&&(m.job?.status==='FAILED'||!m.results)){screen.append(button('Resume confirmed field check','继续已确认的现场情景',async()=>{await api('field/resume',{id:m.id,confirmed:true});await open(m.id);}));if(!m.results)return;}if(m.summary){screen.append(el('p',tr('L0 · The saved calculation evidence is unavailable. Restore the matching summary before reviewing results.','L0 · 保存的计算证据不可用。请恢复对应的汇总文件后再复核结果。'),'warning'));}if(m.feasibility?.state==='outside'){renderFeasibility(screen,m.feasibility,true);return;}
  if(m.intake&&!m.native&&m.model_type!=='river'){

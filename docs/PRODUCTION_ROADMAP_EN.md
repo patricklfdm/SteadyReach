@@ -17,6 +17,8 @@ The P4 baseline runs a native 1D steady-flow calculation on Windows, supports in
 
 **Sequence.** P5 passed the same-workstation gate on 2026-11-25. Dexter and Big River each reopened both packages and reproduced all nine native station/profile results after restoration. [Storage baseline and operating guide](LOCAL_RELEASE_EN.md#p5-baseline-on-one-workstation)
 
+**P6 passed same-workstation acceptance on November 25, 2026.** Midway returns reopened one or two inverts. The off-site Soquel gage remained contextual. A fresh Dexter run from frozen survey sources reproduced stage and discharge at all nine sections. Human, independent engineering and cross-machine acceptance remain outstanding. [Intake operations](HYDRAULIC_INTAKE_EN.md) · [Acceptance and replay](LOCAL_RELEASE_EN.md#p6-intake-and-offline-replay-gate)
+
 P6 supplies versioned, applicable inputs for P7. P8 hands off P7 findings and their limits. P9 fixes the distribution and migration process, and P10 replays a frozen release. Two-dimensional hydraulics, unsteady flow, bridge design and multitenant cloud hosting have separate scopes. Human and cross-machine acceptance remain deferred until the project owner authorizes them.
 
 The hydraulic approach draws on the USACE steady-flow calibration workshop. Release integrity and provenance draw on NIST SSDF. Test counts and performance targets above are proposed for SteadyReach. [USACE steady-flow calibration](https://www.hec.usace.army.mil/confluence/rasdocs/hgt/latest/tutorials/1d-steady-flow/calibration-of-a-steady-flow-hydraulics-model-workshop-solution) · [NIST SSDF](https://csrc.nist.gov/Projects/SSDF)
