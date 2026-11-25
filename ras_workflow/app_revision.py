@@ -169,8 +169,11 @@ def compare(m,summary):
     from .river_review import overbank_changes
     overbanks = overbank_changes(old,summary,locations) if current.get('model_type')=='river' else None
     diagnostics=dict(previous=_diagnostic_summary(old),current=_diagnostic_summary(summary))
-    from .revision_review import interpret
+    from .revision_review import interpret,metric_rows
     review=interpret(diagnostics,profiles,old_water.keys()==new_water.keys(),THRESHOLDS['sensitivity_hw_ft'])
+    from .revision_endpoints import summary as endpoint_summary
+    review['endpoints']=endpoint_summary(previous,current,locations,old_water,new_water)
+    review['metrics']=metric_rows(rows)
     diagnostic_sources=[ref for s,d in ((old,diagnostics['previous']),(summary,diagnostics['current']))
                         if d['status']=='VERIFIED' for ref in (s['hydraulics'].get('diagnostics'),s.get('native_supplement')) if ref]
     return dict(status='COMPARISON_NOT_ACCEPTANCE',parent=parent,rows=rows,cross_sections=sections,profiles=profiles,input_context=input_context,overbank_changes=overbanks,

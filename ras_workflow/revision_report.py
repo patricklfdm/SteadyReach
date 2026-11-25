@@ -20,6 +20,18 @@ def compose(doc,data,tr,full):
     if comparison['status']!='COMPARISON_NOT_ACCEPTANCE':
         doc.add_paragraph(tr('Revision comparison unavailable: ','修订对比不可用：')+str(comparison.get('error',comparison['status'])))
         return
+    review=comparison.get('review') or {}
+    endpoints=review.get('endpoints')
+    if endpoints:
+        doc.add_paragraph(tr(endpoints['en'],endpoints['zh']))
+    if full and review.get('metrics'):
+        def displayed(row,key):
+            if row[key] is not None:
+                return value(row[key])
+            return tr('Unavailable','不可比') if key=='change' else tr('Unknown','未知')
+        table(doc,[tr('Profile','工况'),tr('Result','结果'),tr('Baseline','基准'),tr('Revision','本版'),tr('Change','差值')],
+              [[r['profile'],tr(r['en'],r['zh']),*(displayed(r,k) for k in ('previous','current','change'))]
+               for r in review['metrics']],[.85,2.35,1.1,1.1,1.2])
     context=comparison['input_context']
     if context['status']!='VERIFIED':
         doc.add_paragraph(tr('Input and geographic correspondence could not be verified. Same station IDs alone do not establish the same location. ',
@@ -40,7 +52,13 @@ def compose(doc,data,tr,full):
             labels={'boundary_slopes.upstream':tr('Upstream normal-depth slope','上游正常水深坡降'),
                     'boundary_slopes.downstream':tr('Downstream normal-depth slope','下游正常水深坡降'),
                     'channel_n':tr('Channel n','主槽 n'),'overbank_n':tr('Overbank n','漫滩 n'),
-                    'flow_regime':tr('Flow regime','流态')}
+                    'flow_regime':tr('Flow regime','流态'),
+                    'structure.road.width_ft':tr('Modeled road width (ft)','模型路宽（ft）'),
+                    'structure.road.distance_us_ft':tr('Road offset from upstream section (ft)','道路距上游断面（ft）'),
+                    'structure.road.station_ft':tr('Upstream crest stations (ft)','上游路顶横距（ft）'),
+                    'structure.road.elevation_ft':tr('Upstream crest elevations (ft)','上游路顶高程（ft）'),
+                    'structure.road.downstream_station_ft':tr('Downstream crest stations (ft)','下游路顶横距（ft）'),
+                    'structure.road.downstream_elevation_ft':tr('Downstream crest elevations (ft)','下游路顶高程（ft）')}
             table(doc,[tr('Changed input','改变的输入'),tr('Previous','上次'),tr('Current','本次')],
                   [[labels.get(r['field'],r['field']),value(r['previous']),value(r['current'])] for r in context['input_changes'][:12]],[2.7,2.,2.])
             if len(context['input_changes'])>12:
@@ -61,8 +79,9 @@ def compose(doc,data,tr,full):
             levels=[value((d.get('severity') or {}).get(key)) for d in (old,now)]
             doc.add_paragraph(tr(en,zh)+' · '+' → '.join(levels))
     if old['status']==now['status']=='VERIFIED':
-        doc.add_paragraph(tr('Native messages, previous/current: ','原生信息条数，上次／本次：')+str(old['native_messages'])+' / '+str(now['native_messages'])+
-                          tr('. Fewer messages do not establish hydraulic acceptance.','；信息减少不代表水力验收通过。'))
+        counts=[tr('Unknown','未知') if d['native_messages'] is None else str(d['native_messages']) for d in (old,now)]
+        doc.add_paragraph(tr('Native messages, baseline and revision','原生信息条数（基准版／本版）')+
+                          ' · '+' / '.join(counts))
     if context['status']=='VERIFIED':
         doc.add_paragraph(tr('The parent calculation and input snapshots are hash-verified.','父计算及输入快照经过哈希核验。'))
     doc.add_paragraph(tr('Available per-section changes, correspondence checks and source references are retained in report_data.json. New geometry needs its own boundary and spacing assessment.',

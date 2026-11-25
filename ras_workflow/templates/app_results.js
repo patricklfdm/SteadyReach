@@ -5,6 +5,36 @@ function deliveryState(status){
  return names[status]?tr(...names[status]):tr('Check delivery details','请核对交付详情');
 }
 
+function renderEndpointChanges(parent,ends){
+ if(!ends)return;
+ const summary=el('p',tr(ends.en,ends.zh));summary.dataset.review='endpoints';parent.append(summary);
+ if(!ends.rows.length)return;
+ const box=details(parent,'Inspect section ends','查看各断面端点');
+ box.append(el('p',tr('Depth is water level minus ground at that edition’s end. Inspect floodplain connectivity before extending a section again.','端点水深为本版水位减去本版端点地面高程。再次延伸前，请核对外侧漫滩是否连通。')));
+ const labels={new_wet:['Newly wet','新增过水'],still_wet:['Still wet','持续过水'],became_dry:['Now dry','转为干端'],unmatched:['Unmatched','无法配对']};
+ const reasons={absent:['Missing profile or section','缺工况或断面'],location:['Reach or center differs or is unverified','河段或中心不一致或未核验'],direction:['Check section direction','需核对断面方向'],missing:['Elevation unavailable','缺高程']};
+ const states=Object.entries(labels).filter(([key])=>ends.counts[key]>0);
+ const filter=field(box,'endpoint-status','Show ends','筛选端点',states[0][0],'select',states.map(([k,v])=>[k,...v]));
+ const body=el('div');box.append(body);
+ function draw(){
+  body.replaceChildren();
+  const rows=ends.rows.filter(r=>r.state===filter.value);
+  table(body,[tr('Profile','工况'),'RS',tr('Side','侧别'),tr('Status','变化'),tr('Baseline (ft)','基准（ft）'),tr('Revision (ft)','本版（ft）')],
+   rows.map(r=>[r.profile,r.station,r.side==='left'?tr('Left','左'):tr('Right','右'),tr(...labels[r.state])+(r.reason?' · '+tr(...reasons[r.reason]):''),r.previous_depth_ft?.toFixed(3)??'—',r.current_depth_ft?.toFixed(3)??'—']));
+  const options=rows.filter(r=>r.current_depth_ft!=null);
+  if(options.length){
+   const station=field(body,'endpoint-map-station','Section to inspect','定位断面','0','select',options.map((r,i)=>{
+    const title=r.profile+' · RS '+r.station+' · '+(r.side==='left'?tr('Left','左'):tr('Right','右'));
+    return [String(i),title,title];
+   }));
+   body.append(button('Open current section on map','在地图中打开本版断面',()=>{
+    const r=options[Number(station.value)];openGuidanceTool('atlas');
+    document.getElementById('qa-tool-atlas').dispatchEvent(new CustomEvent('steadyreach-inspect-section',{detail:{profile:r.profile,rs:r.station}}));
+   }));
+  }
+ }
+ filter.addEventListener('change',draw);draw();
+}
 function renderIterationChoices(parent,assessment,primary){
  const model=current, comparison=model.comparison;
  if(!assessment.run_id||assessment.level===0)return;
@@ -50,11 +80,12 @@ function renderIterationChoices(parent,assessment,primary){
    if(evidence.fields.length)table(box,[tr('Input','输入'),tr('Baseline value and basis','基准值与依据'),tr('Revision value and basis','修订值与依据')],evidence.fields.map(f=>[f.field,evidenceValue(f.previous),evidenceValue(f.current)]));
    if(!evidence.fields.length&&!evidence.added.length&&!evidence.removed.length)box.append(el('p',tr('The confirmed source records match.','两版确认输入的来源记录一致。')));
   }else box.append(el('p',tr('Source comparison unavailable for this edition. Inspect both input registers.','本版缺少可核验的来源对照，请查看两版输入清单。')));
-  const metrics=(comparison.rows||[]).filter(r=>['headwater_wse_ft','tailwater_wse_ft','roadway_flow_software_cfs'].includes(r.metric));
+  const metrics=comparison.review?.metrics||[];
   if(metrics.length){
-   const names={headwater_wse_ft:tr('Headwater (ft)','涵前水位（ft）'),tailwater_wse_ft:tr('Tailwater (ft)','涵后水位（ft）'),roadway_flow_software_cfs:tr('Road flow (cfs)','路面越流（cfs）')};
-   table(box,[tr('Profile','工况'),tr('Result','结果'),tr('Baseline','基准'),tr('Revision','修订'),tr('Matched change','可比差值')],metrics.map(r=>[r.profile,names[r.metric],r.previous??'—',r.current??'—',r.change??'—']));
+   const shown=v=>v==null?tr('Unknown','未知'):Number(v.toPrecision(8)).toString();
+   table(box,[tr('Profile','工况'),tr('Result','结果'),tr('Baseline','基准'),tr('Revision','修订'),tr('Matched change','可比差值')],metrics.map(r=>[r.profile,tr(r.en,r.zh),shown(r.previous),shown(r.current),r.change==null?tr('Unavailable','不可比'):shown(r.change)]));
   }
+  renderEndpointChanges(box,comparison.review?.endpoints);
   const openConditions=(assessment.purpose_decision?.rows||[]).filter(r=>r.state!=='met');
   if(openConditions.length){box.append(el('h3',tr('Remaining limits on this edition','本版尚存限制')));for(const c of openConditions)box.append(el('p',tr(c.en,c.zh),'warning'));}
   const old=comparison.diagnostics?.previous,now=comparison.diagnostics?.current;

@@ -1,5 +1,7 @@
 """Portable, bilingual reading notes for a specific verified delivery pair."""
 from html import escape
+import hashlib
+import json
 from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
@@ -7,10 +9,10 @@ from urllib.parse import quote
 
 from . import app_core, handoff, result_guidance, site_delivery
 from .common import ROOT, digest, item, lock, read, rel, safe_path
-from .delivery_pair import check
+from .delivery_pair import check, verified_member
 
 
-def page(language, model, assessment, folders, receipt, pair):
+def page(language, model, assessment, folders, receipt, pair, review):
     zh = language == 'zh'
     def t(en, cn):
         return cn if zh else en
@@ -26,6 +28,20 @@ def page(language, model, assessment, folders, receipt, pair):
             '<p>L'+str(assessment['level'])+' · '+escape(assessment['title'][language])+'</p>',
             '<p>'+escape(assessment['use_guide']['allowed'][language])+'</p>',
             '<p>'+escape(assessment['use_guide']['deferred'][language])+'</p>']
+    if review.get('endpoints'):
+        ends=review['endpoints']
+        result.append('<h2>'+t('Changes since the baseline','相对基准版的变化')+'</h2><p>'+escape(ends[language])+'</p>')
+        if review.get('metrics'):
+            result.append('<table><thead><tr>'+''.join('<th>'+v+'</th>' for v in
+                          [t('Profile','工况'),t('Result','指标'),t('Baseline','基准'),t('Revision','本版'),t('Change','差值')])+'</tr></thead><tbody>')
+            for row in review['metrics']:
+                values=[row['profile'],row[language]]
+                for k in ('previous','current','change'):
+                    v=row[k]
+                    values.append(format(v,'.8g') if v is not None else
+                                  (t('Unavailable','不可比') if k=='change' else t('Unknown','未知')))
+                result.append('<tr>'+''.join('<td>'+escape(v)+'</td>' for v in values)+'</tr>')
+            result.append('</tbody></table>')
     decision=assessment.get('purpose_decision')
     if decision:
         if decision.get('state')!='CONDITIONS_MET':
@@ -75,6 +91,15 @@ def page(language, model, assessment, folders, receipt, pair):
     for kind,folder in folders.items():
         result.append('<p>'+package_link(kind,'PACKAGE_MANIFEST.json',folder.name+' · '+t('file manifest','文件清单'))+
                       ' · SHA-256 <code>'+escape(receipt[kind]['manifest']['sha256'])+'</code></p>')
+    verify_js=(Path(__file__).parent/'templates/recipient_verify.js').read_text('utf-8')
+    result.extend(['<section><h2>'+t('Verify a copied folder','校验复制后的交接目录')+'</h2>',
+                   '<p>'+t('Select the folder containing both start pages. Files are checked locally against the selected edition.',
+                             '选择同时包含两个入口页的目录。浏览器将在本地按所选版本逐文件校验。')+'</p>',
+                   '<label>'+t('Handoff folder','交接目录')+' <input type="file" id="verify-directory" webkitdirectory multiple '+
+                   'data-run="'+escape(pair['run_id'])+'" data-complete="'+escape(receipt['complete']['manifest']['sha256'])+
+                   '" data-minimal="'+escape(receipt['minimal']['manifest']['sha256'])+'"></label>',
+                   '<p id="verify-status" role="status">'+t('Awaiting folder selection','请选择待校验目录')+'</p></section>',
+                   '<script>'+verify_js+'</script>'])
     result.append('<p>'+t('Transfer this entire folder. Its Complete and Minimal subfolders contain the selected edition. Open the model and GIS files in their desktop applications.',
                           '请整体转交本目录。Complete 和 Minimal 子目录均属于所选版本，模型及 GIS 文件可用相应的桌面软件打开。')+'</p></main></html>')
     return '\n'.join(result)
@@ -125,7 +150,13 @@ def export(key, body):
         if (pair['run_id']!=assessment.get('run_id') or pair['summary_sha256']!=body['summary_hash']
                 or not assessment.get('evidence_hash') or assessment.get('summary')!=receipt['summary']):
             raise ValueError('The delivery and use assessment refer to different runs')
-        pages={name:page(lang,model,assessment,folders,receipt,pair) for lang,name in [('en','Start_EN.html'),('zh','Start_zh-CN.html')]}
+        reports=read(folders['complete']/'Evidence/report_manifest.original.json')
+        data=reports['data']
+        report_data=read(verified_member(folders['complete']/'Reports',Path(data['path']).name,data['sha256']))
+        review=(report_data.get('revision_comparison') or {}).get('review') or {}
+        pages={name:page(lang,model,assessment,folders,receipt,pair,review) for lang,name in [('en','Start_EN.html'),('zh','Start_zh-CN.html')]}
+        guide_hashes={name:hashlib.sha256(html.encode('utf-8')).hexdigest() for name,html in pages.items()}
+        pages['HANDOFF.json']=json.dumps(dict(run_id=pair['run_id'],pages=guide_hashes),sort_keys=True,indent=2)
         tag=digest(dict(pages=pages,assessment=assessment['evidence_hash']))
         destination=base/('Handoff_'+tag[:16])
         latest=app_core.model(key)

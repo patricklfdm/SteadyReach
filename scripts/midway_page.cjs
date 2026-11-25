@@ -65,6 +65,19 @@ async function main() {
     await send('Page.navigate',{url});
     if(mode==='recipient-copy'){
       await until('document.readyState==="complete" && document.querySelector("main")?.textContent.includes('+JSON.stringify(run_id)+')');
+      if(input.folder){
+        const {root}=await send('DOM.getDocument');
+        const {nodeId}=await send('DOM.querySelector',{nodeId:root.nodeId,selector:'#verify-directory'});
+        await send('DOM.setFileInputFiles',{nodeId,files:[input.folder]});
+        await until('["failed","verified"].includes(document.querySelector("#verify-status")?.dataset.state)',1200);
+        const state=await evaluate('document.querySelector("#verify-status").dataset.state');
+        const message=await evaluate('document.querySelector("#verify-status").textContent');
+        if(input.problem){
+          if(state!=='failed'||!message.includes(input.problem))throw Error('Expected a named file check failure; '+message);
+          console.log(message);return;
+        }
+        if(state!=='verified'||!message.includes(run_id))throw Error(message);
+      }
       const links=await evaluate('Array.from(document.querySelectorAll("a")).map(a=>a.getAttribute("href"))');
       if(!links.some(v=>v.endsWith('Report_EN.pdf'))||!links.some(v=>v.startsWith('Minimal/HEC_RAS/')&&v.endsWith('.prj')))throw Error('Missing recipient shortcuts');
       await click('nav a');
@@ -100,6 +113,23 @@ async function main() {
       await send('DOM.setFileInputFiles',{nodeId,files});
       await buttonByName('Save and extract selected files');
       await until('!busy && current?.acquisition?.documents?.some(d=>d.source.original_name==='+JSON.stringify(path.basename(files.at(-1)))+') && !!document.getElementById("attachments")',1400);
+    }
+    if(mode==='edition-outcomes'){
+      await until('document.querySelector("[data-review=endpoints]")?.textContent==='+JSON.stringify(input.caption));
+      await until('document.querySelector(".result-assessment")?.textContent.includes('+JSON.stringify(input.metric)+')');
+      if(input.map_case){
+        const {state,profile,station,side}=input.map_case;
+        await fieldValue('endpoint-status',state);
+        const label=profile+' · RS '+station+' · '+(side==='left'?'Left':'Right');
+        const option=await evaluate('Array.from(document.querySelector("#endpoint-map-station").options).find(o=>o.textContent==='+JSON.stringify(label)+')?.value');
+        if(option==null)throw Error('Missing endpoint selection '+label);
+        await fieldValue('endpoint-map-station',option);
+        await buttonByName('Open current section on map');
+        await until('Array.from(document.querySelectorAll("#qa-tool-atlas details[open] > summary")).some(s=>s.textContent.split(" · ")[0]==='+JSON.stringify(profile)+' && Number(s.textContent.split(" · ")[1]?.slice(3))==='+Number(station)+')');
+      }
+      await buttonByName('简体中文');
+      await until('document.querySelector("[data-review=endpoints]")?.textContent==='+JSON.stringify(input.chinese));
+      console.log('Matched the endpoint summary in both languages');return;
     }
     if(mode==='condition-review'||mode==='wet-revision'){
       await until('!!document.querySelector("[id^=qa-wet-]")');

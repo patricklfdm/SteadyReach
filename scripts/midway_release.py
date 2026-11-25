@@ -110,8 +110,9 @@ def verify_detached(folder, expected, baseline):
             for entry in read(manifest)['files']:
                 verified_member(root,entry['path'],entry['sha256'])
         pair=check(copy/'Complete',copy/'Minimal')
-        pair['offline_browser']=browser_action(dict(mode='recipient-copy',url=(copy/'Start_EN.html').as_uri(),
-                                                   run_id=expected['run_id']))
+        browser=dict(mode='recipient-copy',url=(copy/'Start_EN.html').as_uri(),folder=str(copy),run_id=expected['run_id'])
+        pair['offline_browser']=browser_action(browser)
+        pair['detected_files']={}
         need(pair['native_hdf_sha256']==expected['hdf']['sha256'],'Detached transfer belongs to a different calculation')
         # Verify that missing, mixed or edited files are detected in the disposable recipient copy.
         pdf=copy/'Complete/Reports/Report_EN.pdf'
@@ -124,6 +125,7 @@ def verify_detached(folder, expected, baseline):
             for case in ('missing','mixed','changed'):
                 if case=='mixed':shutil.copyfile(baseline_pdf,pdf)
                 if case=='changed':pdf.write_bytes(b'altered recipient test')
+                pair['detected_files'][case]=browser_action(dict(browser,problem='Complete/Reports/Report_EN.pdf'))
                 try:check(copy/'Complete',copy/'Minimal')
                 except (OSError,ValueError) as error:
                     need('Report_EN.pdf' in str(error),'Expected a file-specific recovery message')
@@ -133,6 +135,36 @@ def verify_detached(folder, expected, baseline):
             pdf.with_suffix('.saved').replace(pdf)
         need(pdf.stat().st_size==length and sha(pdf)==fingerprint,'Detached verification did not restore its copy')
     return pair
+
+
+def verify_outcomes(key, folder, model_type):
+    from pypdf import PdfReader
+    from ras_workflow.app_revision import compare
+    model=core.model(key)
+    comparison=compare(model,read(ROOT/model['summary']['path']))
+    review=comparison['review']
+    ends=review['endpoints']
+    metric='roadway_flow_software_cfs' if model_type=='culvert' else 'upstream_wse_ft'
+    required=({'headwater_wse_ft','tailwater_wse_ft','roadway_flow_software_cfs'} if model_type=='culvert'
+              else {'upstream_wse_ft','downstream_wse_ft','max_channel_velocity_fts','max_channel_froude'})
+    for profile in comparison['profiles']:
+        keys={r['metric'] for r in review['metrics'] if r['profile']==profile['profile']}
+        need(keys==required,'Missing or inappropriate metrics for '+profile['profile'])
+    label=next(r['en'] for r in review['metrics'] if r['metric']==metric)
+    manifest=read(folder/'Complete/Evidence/report_manifest.original.json')
+    from ras_workflow.delivery_pair import verified_member
+    ref=manifest['data']
+    archived=read(verified_member(folder/'Complete/Reports',Path(ref['path']).name,ref['sha256']))
+    frozen=archived['revision_comparison']['review']
+    need(frozen['endpoints']==ends and frozen['metrics']==review['metrics'],'Frozen report assessment differs from edition page')
+    need(ends['status']=='COMPARED' and ends['counts']['unmatched']==0,'Expected matching native section sides')
+    section=next((r for r in ends['rows'] if r['current_depth_ft'] is not None),None)
+    page_action(key,'edition-outcomes',caption=ends['en'],chinese=ends['zh'],metric=label,map_case=section)
+    for language,edition,start in [('en','EN','Start_EN.html'),('zh','CN','Start_zh-CN.html')]:
+        text=''.join(p.extract_text() or '' for p in PdfReader(folder/'Complete/Reports'/('Report_'+edition+'.pdf')).pages)
+        need(''.join(ends[language].split()) in ''.join(text.split()),'Endpoint summary missing from '+edition+' PDF')
+        need(ends[language] in (folder/start).read_text('utf-8'),'Endpoint summary missing from '+start)
+    return dict(counts=ends['counts'],rows=ends['rows'],metrics=review['metrics'])
 
 
 def rehearse_return(key, second, directory):
@@ -237,6 +269,11 @@ def replay(fixture, evidence):
     need(len(changed)==1 and changed[0] in {str(float(rs)) for rs in second['wet_stations']}
          and wet['widths_ft'][changed[0]]>second['widths_ft'][changed[0]],'Widened section must match a computed wet end')
     wet['adjusted_station']=changed[0]
+    from ras_workflow.app_revision import compare
+    wet_review=compare(core.model(wet_key),read(ROOT/wet['summary']['path']))['review']['endpoints']
+    need(wet_review['status']=='COMPARED' and wet_review['counts']['unmatched']==0,'Wet revision lost section correspondence')
+    wet['adjusted_ends']=[r for r in wet_review['rows'] if float(r['station'])==float(changed[0])]
+    need(wet['adjusted_ends'],'Cannot locate the previously wet section in the new side-by-side assessment')
     survey_return=rehearse_return(revised,second,evidence.parent/'survey')
     transfer=page_action(revised,'edition-transfer',parent=key)
     choice=iteration_choice.latest(core.model(revised))
@@ -273,6 +310,7 @@ def replay(fixture, evidence):
                 originals=[dict(name=p.name,sha256=sha(p)) for p in originals],fixture_sha256=sha(fixture),
                 supplement_sha256=sha(supplement),brief_sha256=sha(brief),choice=choice,
                 handoff=handoff,pair=pair,engineering_approval='NOT_ASSESSED')
+    result['edition_outcomes']=verify_outcomes(revised,path,'culvert')
     result['browser']=page_action(revised,'handoff',decision=decision,run_id=second['run_id'])
     result.update(wet_revision=wet,survey_return=survey_return,detached=detached,
                   first_page=first_page, geometry_proposal=item(proposals[0]), seed=layout['seed']['basis'],

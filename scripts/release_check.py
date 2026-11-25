@@ -16,7 +16,7 @@ from ras_workflow.release_metrics import cohort,metrics
 
 def run(args):
     root=REPO/'status/release_checks'/unique_id();root.mkdir(parents=True)
-    result=dict(scope='same-machine',tests={},projects=[],field_packet=None,engineering_approval='PENDING')
+    result=dict(scope='same-machine',release_gate='P2' if args.p2 else 'standard',tests={},projects=[],field_packet=None,engineering_approval='PENDING')
     def execute(name,cmd):
         start=time.monotonic()
         with (root/(name+'.log')).open('wb') as log:
@@ -61,9 +61,10 @@ def run(args):
             write_field_notes(root,result['field_packet']['siletz_field_screen'],east)
             if args.fresh_benchmark:
                 from release_benchmark import replay
-                result['fresh_benchmark']=replay(packet,matching[0],hashes,root)
+                result['fresh_benchmark']=replay(packet,matching[0],hashes,root,p2=args.p2)
         elif args.fresh_benchmark:raise ValueError('--fresh-benchmark requires --packet with the frozen source inventory')
-    except (OSError,ValueError,KeyError) as exc:result['error']=str(exc);passed=False
+    except (OSError,ValueError,KeyError,TypeError,RuntimeError,subprocess.SubprocessError) as exc:
+        result['error']=str(exc);passed=False
     fixture = args.midway_fixture or os.environ.get('STEADYREACH_MIDWAY_FIXTURE')
     if not fixture:
         result['midway'] = dict(status='REQUIRED',reason='Set --midway-fixture to the private source manifest to exercise all three native calculations and the detached handoff.')
@@ -86,6 +87,12 @@ if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--packet',type=Path)
     p.add_argument('--project',action='append',default=[]);p.add_argument('--session',type=Path)
     p.add_argument('--cohort',type=Path,help='JSON object mapping pilot site names to their project IDs')
+    p.add_argument('--p2',action='store_true',help='Require the measured river replay, independent river revision and Midway recipient checks')
     p.add_argument('--fresh-benchmark',action='store_true',help='Create an isolated project and repeat the native solve and mapped exports from the verified packet')
     p.add_argument('--midway-fixture',type=Path,help='Private Midway originals, terrain and operator choices for the mandatory fresh lifecycle replay')
-    raise SystemExit(run(p.parse_args()))
+    args=p.parse_args()
+    if args.p2:
+        if not args.packet or not (args.midway_fixture or os.environ.get('STEADYREACH_MIDWAY_FIXTURE')):
+            p.error('--p2 requires --packet and --midway-fixture (or STEADYREACH_MIDWAY_FIXTURE)')
+        args.fresh_benchmark=True
+    raise SystemExit(run(args))

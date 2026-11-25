@@ -48,3 +48,13 @@ During a pilot, **Record a sticking point** captures the page, project phase, ed
 After `release_check.py --packet` with the frozen field packet, open `Field_review.md` beside the new release.json. For Siletz the check reselects the withheld event from archived discharge and sensor series and reads the interior station from the native HDF. Its investigation threshold is 0.15 m. For East Fork the check uses a separate event with the previously selected roughness and scores three nonboundary sections. Both exclude the prescribed outlet from accuracy statistics.
 
 Before copying the two packages, the exporter checks free space against known native copies and input snapshots. GIS, reports and temporary files need additional space. Backup restore checks the uncompressed file sizes before extracting. When space runs low, retain the archive and solver outputs, free space on the destination drive or restore the backup into a new folder on another volume.
+
+## Run the P2 gate
+
+In a dedicated local checkout with the supported native tools, supply the private Midway source manifest and the frozen independent field packet. The command creates fresh projects. It checks the Python and page suites, the Siletz baseline and independent revision, and the Midway lifecycle including recipient-side file verification.
+
+```powershell
+.\.venv\Scripts\python.exe scripts\release_check.py --p2 --packet D:\ReleaseInputs\Independent_Review --midway-fixture D:\ReleaseInputs\Midway\fixture.json
+```
+
+Open `status/release_checks/<run>/release.json`. Check `release_gate`, both software test results, `fresh_benchmark.p2.field` for the fresh interior residual and `midway.json` for the selected inputs, calculated runs and detached transfer. A reproduced calculation may still exceed the observed-stage investigation threshold. `engineering_approval` records the independent review status.

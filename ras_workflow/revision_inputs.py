@@ -95,7 +95,8 @@ def geometry_changes(old, new):
         # This is a coordinate matching tolerance, not survey accuracy.
         location = 'UNVERIFIED' if shift is None else 'MOVED' if shift > .01 else 'SAME_CENTER'
         angle = None
-        if factor and all(len(r.get('cutline_xy',[])) >= 2 and all(point(p) for p in r['cutline_xy']) for r in (a,b)):
+        if factor and all(len(r.get('cutline_xy',[])) >= 2 and all(point(p) for p in r['cutline_xy'])
+                          and math.dist(r['cutline_xy'][0],r['cutline_xy'][-1])>0 for r in (a,b)):
             def heading(r):
                 p,q=r['cutline_xy'][0],r['cutline_xy'][-1]
                 return math.degrees(math.atan2(q[1]-p[1],q[0]-p[0]))

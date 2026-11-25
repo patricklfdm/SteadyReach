@@ -35,3 +35,16 @@ Each stage uses Midway and a different river drawn at random without replacement
 All four stages were exercised in isolated Windows copies. Returned worksheets preserved the source classification and identified remaining inputs. Both Midway and Merced had revisions with fewer warnings and a water-level change exceeding the 0.10 ft screening threshold. The recipient pages opened the matching reports, exhibits and project files. Removing an exhibit produced an error naming its package and relative path. Independent same-input runs reproduced the baseline water level and flow at all seven Midway sections and all 18 Siletz sections, with zero maximum absolute difference at output precision.
 
 This evidence supports an engineer-supervised pilot on the tested workstation. Independent engineering review, a timed project by a new user and cross-machine qualification remain open.
+
+## P2 on one workstation
+
+| Order | Engineering question | Software acceptance criterion |
+|---|---|---|
+| 1 | Did widening the section change the wet end on the affected side? | Compare water surface minus native endpoint elevation by profile, station and side. Track newly wet, still wet, now dry and dry in both editions. Changed reach, unmatched centers, missing records or ambiguous direction leave an unmatched item. |
+| 2 | Can sender and recipient explain the same revision? | Compare the native results on the edition page. Carry the same endpoint counts and model-specific metrics into both full reports and the offline start pages. Show unknown values and unavailable differences explicitly. |
+| 3 | Did the complete selected edition arrive? | Open a start page offline, choose the copied folder, verify the guides, package manifests and members. Identify a missing, edited or mixed-edition report by its relative path. |
+| 4 | Does the software pass for a measured river as well as a culvert? | Run the P2 release command in an isolated checkout. Repeat Midway from the originals and Siletz from the frozen survey. Verify the river revision, compare every native stage and flow to the reference, and score the independent interior event separately. |
+
+The P2 gate covers software on the acceptance workstation. Investigation thresholds remain specific to each project. Independent sign-off, first-use timing and cross-machine qualification require separate evidence. See the [local release guide](LOCAL_RELEASE_EN.md).
+
+**Same-machine acceptance, November 24, 2026.** The P2 gate passed 477 Python checks and 43 page regressions with five fresh HEC-RAS calculations. In Midway, widening RS 2600 from 160 to 170 ft left its right endpoint wet (1.178 to 1.214 ft of water at the respective endpoints). The river replay reproduced stage and discharge at all 18 Siletz sections at native output precision. The fresh January 2018 holdout stage at interior RS 44056 was 0.524 m above observation, exceeding the 0.15 m investigation threshold. The downstream boundary was excluded from scoring. Both languages showed the same edition summary; the offline folder checker located a missing, edited or wrong-edition report in three separate trials.

@@ -29,7 +29,7 @@ def hydraulic_matrix(path):
     return profiles,stations,data
 
 
-def field_screen(packet, reference, hashes):
+def field_screen(packet, reference, hashes, fresh=None):
     """Reselect the frozen Siletz event and check an interior sensor against native WSE."""
     from examples.siletz_or.prepare import INTERIOR, OUTLET, archived_input, published_flows, select_events
     edition=reference['id']
@@ -51,6 +51,9 @@ def field_screen(packet, reference, hashes):
     if events!=read(source/'events.json')['events']:
         raise ValueError('Selected event differs from the frozen source series')
     event=next(e for e in events if e['id']=='Holdout')
+    run=reference['run']
+    if fresh:
+        run,native=fresh
     profiles,stations,values=hydraulic_matrix(native)
     stations=[float(rs) for rs in stations]
     if 'Holdout' not in profiles or stations.count(44056)!=1 or stations.count(34913)!=1:
@@ -64,14 +67,15 @@ def field_screen(packet, reference, hashes):
     computed=float(surface[stations.index(44056)])*.3048
     residual=computed-observed
     exported=[r for r in reference['rows'] if r['profile']=='Holdout']
-    if len(exported)!=1 or exported[0]['date']!=event['date'] or not np.isclose(exported[0]['interior_error_m'],residual,atol=1e-8,rtol=0):
+    if len(exported)!=1 or exported[0]['date']!=event['date'] or (not fresh and
+            not np.isclose(exported[0]['interior_error_m'],residual,atol=1e-8,rtol=0)):
         raise ValueError('Reported holdout differs from native and field records')
     return dict(status='BOUNDARY_MISMATCH' if abs(boundary_error_ft)>.002 else
                 'INVESTIGATE' if abs(residual)>.15 else 'WITHIN_SCREEN',
-                run=reference['run'],profile='Holdout',date=event['date'],interior_rs=44056,observed_m=observed,
+                run=run,profile='Holdout',date=event['date'],interior_rs=44056,observed_m=observed,
                 computed_m=computed,signed_residual_m=residual,investigation_threshold_m=.15,
                 scored_locations=1,excluded_boundary_rs=34913,boundary_error_ft=boundary_error_ft,
-                protocol_sha256=sha(source/'protocol.json'),native_sha256=reference['native_hash'],engineering_approval='PENDING')
+                protocol_sha256=sha(source/'protocol.json'),native_sha256=sha(native),engineering_approval='PENDING')
 
 
 def east_fork_screen(packet):
@@ -140,7 +144,7 @@ def write_field_notes(folder, siletz, east):
         (folder/name).write_text('\n\n'.join(rows)+'\n',encoding='utf-8')
 
 
-def replay(packet,reference,hashes,destination):
+def replay(packet,reference,hashes,destination,p2=False):
     source=packet/reference['id']/'Sources/survey.json'
     by_hash={v:packet/k for k,v in hashes.items()}
     data=[dict(name='survey.json',content=base64.b64encode(source.read_bytes()).decode())]
@@ -152,32 +156,51 @@ def replay(packet,reference,hashes,destination):
     thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
     token=server.url.rstrip('/').split('/')[-1]
     progress={}
-    def api(conn,route,body):
-        conn.request('POST','/'+token+'/'+route,body=json.dumps(body).encode(),
-                     headers={'Origin':server.origin,'Content-Type':'application/json','X-Workflow-Token':token})
-        response=conn.getresponse();value=json.loads(response.read())
-        if response.status!=200:raise ValueError(value.get('error',str(response.status)))
-        return value
+    def api(route,body):
+        with closing(http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=180)) as conn:
+            conn.request('POST','/'+token+'/'+route,body=json.dumps(body).encode(),
+                         headers={'Origin':server.origin,'Content-Type':'application/json','X-Workflow-Token':token})
+            response=conn.getresponse()
+            value=json.loads(response.read())
+            if response.status!=200:raise ValueError(value.get('error',str(response.status)))
+            return value
     def wait(key):
         deadline=time.monotonic()+1800
         while time.monotonic()<deadline:
-            model=app_core.model(key)
-            if model['status']!='PROCESSING':return model
+            model=app_core.view(key,detail=False)
+            if model['status']=='INTERRUPTED':
+                raise ValueError('Release job interrupted: '+key)
+            if model['status']!='PROCESSING':
+                return model
             time.sleep(1)
         raise TimeoutError('The local job is still active. Inspect its saved task before retrying.')
     try:
-        with closing(http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=180)) as conn:
-            created=api(conn,'create',dict(route='survey',title='Siletz River · local release regression',
-                        production_scope={'purpose':'review','flow_paths':'single'},survey_files=data,gis=True))
-            key=created['id'];progress.update(project_id=key,preparation=created)
+        created=api('create',dict(route='survey',title='Siletz River · local release regression',
+                    production_scope={'purpose':'review','flow_paths':'single'},survey_files=data,gis=True))
+        key=created['id'];progress.update(project_id=key,preparation=created)
+        save(destination/'fresh_job.json',progress)
+        wait(key)
+        review=api('review',dict(id=key))
+        if not review['ready']:raise ValueError('Published survey requires additional inputs')
+        progress.update(review=review['path'],task=api('start',dict(id=key,revision=review['revision'],
+                      review_token=review['review_token'],start=True,confirmed=True)))
+        save(destination/'fresh_job.json',progress)
+        model=wait(key)
+        if p2:
+            if model['status']!='RESULTS_READY' or not model.get('summary'):
+                raise ValueError('Could not complete the first mapped river edition: '+str(model.get('errors')))
+            revision=api('revision',dict(id=key,revision=model['revision'],confirmed=True))
+            child=revision['id']
+            review=api('review',dict(id=child))
+            if not review['ready']:
+                raise ValueError('Independent river review: '+str(review.get('errors')))
+            task=api('start',dict(id=child,revision=review['revision'],review_token=review['review_token'],
+                                       start=True,confirmed=True))
+            progress.update(revision=child,revision_task=task)
             save(destination/'fresh_job.json',progress)
-            wait(key)
-            review=api(conn,'review',dict(id=key))
-            if not review['ready']:raise ValueError('Published survey requires additional inputs')
-            progress.update(review=review['path'],task=api(conn,'start',dict(id=key,revision=review['revision'],
-                          review_token=review['review_token'],start=True,confirmed=True)))
-            save(destination/'fresh_job.json',progress)
-            model=wait(key)
+            revised=wait(child)
+            if revised['status']!='RESULTS_READY' or not revised.get('summary') or not intact([revised['summary']]):
+                raise ValueError('Independent river revision failed: '+str(revised.get('errors')))
     finally:
         server.shutdown();server.server_close();thread.join()
     if not model.get('summary') or not intact([model['summary']]):raise ValueError('Fresh calculated summary unavailable')
@@ -206,6 +229,19 @@ def replay(packet,reference,hashes,destination):
         if frozen.namelist()!=[e['path'] for e in manifest['code']] or any(
                 hashlib.sha256(frozen.read(e['path'])).hexdigest()!=e['sha256'] for e in manifest['code']):
             raise ValueError('Archived source differs from solver manifest')
-    return dict(project_id=key,baseline_run=reference['run'],new_run=hyd['run_id'],profiles=profiles,stations=stations,
+    checks={}
+    if p2:
+        from midway_release import verify_outcomes
+        from ras_workflow import recipient_handoff
+        revised_run=read(ROOT/revised['summary']['path'])['hydraulics']
+        if revised_run['run_id']==hyd['run_id'] or revised['parent_revision']['summary']!=model['summary']:
+            raise ValueError('River comparison must use an independently computed child')
+        transfer=recipient_handoff.export(child,dict(revision=revised['revision'],summary_hash=revised['summary']['sha256']))
+        if transfer['run_id']!=revised_run['run_id']:
+            raise ValueError('River handoff differs from the chosen revision')
+        checks=dict(revised_run=revised_run['run_id'],handoff=transfer['folder'],
+                    field=field_screen(packet,reference,hashes,fresh=(hyd['run_id'],fresh)),
+                    outcomes=verify_outcomes(child,ROOT/transfer['folder'],'river'))
+    return dict(project_id=key,baseline_run=reference['run'],new_run=hyd['run_id'],p2=checks,profiles=profiles,stations=stations,
                 maximum_absolute_difference=differences,source_archive=archive,pair=pair,
                 replication_tolerance_ft=.002,replication_tolerance_cfs=.002,engineering_approval='PENDING')

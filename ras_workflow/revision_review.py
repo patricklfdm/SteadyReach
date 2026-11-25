@@ -17,6 +17,22 @@ GUIDANCE = {
 }
 
 
+METRIC_LABELS = {
+    'headwater_wse_ft': ('Headwater (ft)', '涵前水位（ft）'),
+    'tailwater_wse_ft': ('Tailwater (ft)', '涵后水位（ft）'),
+    'roadway_flow_software_cfs': ('Roadway discharge (cfs)', '路面越流量（cfs）'),
+    'upstream_wse_ft': ('Upstream water level (ft)', '上游水位（ft）'),
+    'downstream_wse_ft': ('Downstream water level (ft)', '下游水位（ft）'),
+    'max_channel_velocity_fts': ('Maximum channel velocity (ft/s)', '主槽最大流速（ft/s）'),
+    'max_channel_froude': ('Maximum channel Froude number', '主槽最大弗劳德数'),
+}
+
+
+def metric_rows(rows):
+    return [dict(r,en=METRIC_LABELS[r['metric']][0],zh=METRIC_LABELS[r['metric']][1])
+            for r in rows if r['metric'] in METRIC_LABELS]
+
+
 def interpret(diagnostics, profiles, all_profiles_matched, threshold):
     old, new = diagnostics['previous'], diagnostics['current']
     comparable = bool(all_profiles_matched and old.get('severity') is not None and new.get('severity') is not None)

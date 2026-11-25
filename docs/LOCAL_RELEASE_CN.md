@@ -48,3 +48,13 @@
 带冻结复核包执行 `release_check.py --packet` 后，在此次 release.json 旁打开 `Field_review.zh-CN.md`。Siletz 重新从归档水位和流量记录选择留出事件，按原生 HDF 检查内点高程，0.15 m 为本例调查门槛。East Fork 使用另一天的观测和训练时选定的糙率，在三个非边界断面计算偏差。两个例子均排除作为边界的测点。
 
 交付开始时会检查目标盘能否容纳已知的原生文件副本和输入快照；GIS、报告和临时文件还需额外空间。恢复备份前会检查解压文件所需的空间。如遇容量不足，请保留原档案和已完成计算，释放目标盘空间或将备份还原到另一个新目录。
+
+## 运行 P2 发版检查
+
+在具备原生软件的独立检出目录中，指定 Midway 私有原件清单和冻结的独立实测复核包。命令会新建项目，检查 Python 和页面回归、Siletz 基准版及独立修订版、Midway 原件到交接的全程，以及收件人端的逐文件校验。
+
+```powershell
+.\.venv\Scripts\python.exe scripts\release_check.py --p2 --packet D:\ReleaseInputs\Independent_Review --midway-fixture D:\ReleaseInputs\Midway\fixture.json
+```
+
+查看 `status/release_checks/<运行号>/release.json` 中的 `release_gate` 和两组测试状态。`fresh_benchmark.p2.field` 给出本次实算相对真实内点观测的偏差；同目录的 `midway.json` 记录采用的输入、各次计算和脱离项目后的目录校验。复算一致的项目仍可能超出实测调查门槛，独立签审状态另见 `engineering_approval`。
