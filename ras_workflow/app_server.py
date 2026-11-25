@@ -8,7 +8,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import urlsplit,unquote,quote
 from .common import ROOT,read,save,rel,safe_path,utc,lock
-from . import app_core as core
+from . import app_core as core, edition_storage
 
 def create():
     token=secrets.token_urlsafe(32)
@@ -39,7 +39,7 @@ def create():
                 route=self.route()
                 if route=='east-fork-practice.json':
                     return self.send(200, read(ROOT/'examples/east_fork_wy/practice.json'))
-                if route=='state':return self.send(200,dict(projects=core.listing(),deleted_projects=core.listing(deleted=True),scope='Single reach, one box/circular culvert crossing, 1D steady flow'))
+                if route=='state':return self.send(200,dict(projects=core.listing(),deleted_projects=core.listing(deleted=True),archived_editions=edition_storage.archived(ROOT),scope='Single reach, one box/circular culvert crossing, 1D steady flow'))
                 if route.startswith('project/'):
                     return self.send(200,core.view(route.split('/',1)[1]))
                 if route.startswith('file/'):
@@ -86,7 +86,9 @@ def create():
                         result=dict(id=m['id'],status=m['status'],preparation_waiting=True)
                 else:
                     key=body['id']
-                    if route in ('delete-project','restore-project'):result=core.set_deleted(key,body,deleted=route=='delete-project')
+                    if route in ('storage-preview','storage-archive','storage-retire','storage-restore','storage-pin'):
+                        result=edition_storage.perform(ROOT,key,route.removeprefix('storage-'),body)
+                    elif route in ('delete-project','restore-project'):result=core.set_deleted(key,body,deleted=route=='delete-project')
                     elif route in ('handoff-inspect','handoff-repair'):
                         from . import handoff
                         result=(handoff.inspection if route=='handoff-inspect' else handoff.repair)(key,body)

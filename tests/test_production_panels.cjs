@@ -11,7 +11,7 @@ function page(){
   button:(label,_,fn)=>{buttons.set(label,fn);return el('button',label);},
   field:(parent,id,en,zh,value)=>{const e=el('select');e.value=value;fields.set(id,e);parent.append(e);return e;},
   table:(_,headers,rows)=>tables.push({headers,rows}),svgEl:(_,tag,data)=>draw.push({tag,data}),
-  document:{createElementNS:(_,name)=>el(name)},notify:()=>{},open:async()=>{},
+  document:{createElementNS:(_,name)=>el(name)},notify:()=>{},home:async()=>{},open:async()=>{},
   api:async(route,body)=>{calls.push({route,body});if(route==='extent-decision')return {station:body.station};return current;}});
  for(const file of ['app_extent.js','app_handoff.js'])
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../ras_workflow/templates',file),'utf8'),context);
@@ -63,6 +63,18 @@ test('pilot marker records the actual review tab without starting a timer or cou
  await ui.buttons.get('Record a sticking point')();
  assert.deepEqual(ui.calls.map(c=>c.body.action),['read','blocker','read']);
  assert.equal(ui.calls[1].body.page,'review');assert.equal(ui.calls[1].body.topic,'hydraulics');
+});
+
+test('storage preview protects dependent editions and uses the verified archive identity for cleanup',async()=>{
+ for(const protectedEdition of [true,false]){
+  const ui=page(),summary={title:'Site',id:'site_test',groups:{inputs:{bytes:4,files:1}},candidates:[],candidate_files:0,
+   logical_bytes:16,shared_bytes:4,exclusive_bytes:12,dependents:protectedEdition?['child']:[],reclaimable_bytes:protectedEdition?0:8,
+   token:'list',archive_hash:'zip',matches_archive:true};
+  let refreshed=false;ui.context.api=async(route,body)=>{ui.calls.push({route,body});return summary;};
+  ui.context.renderEditionStorage(ui.el('div'),ui.current,async()=>{refreshed=true;});assert.equal(ui.calls.length,0);
+  await ui.buttons.get('Inspect edition storage')();const clean=ui.buttons.get('Confirm cleanup of this edition');
+  assert.equal(Boolean(clean),!protectedEdition);if(clean){await clean();assert.equal(ui.calls.at(-1).body.archive_hash,'zip');assert.equal(refreshed,true);}
+ }
 });
 
 test('handoff stays on demand and only exposes single-file recovery for the current edition',async()=>{

@@ -110,6 +110,15 @@ def run(args):
             except (OSError,ValueError,KeyError,TypeError,RuntimeError,subprocess.SubprocessError) as exc:
                 result['p4']=dict(status='FAILED',error=str(exc))
                 passed=False
+    if getattr(args,'p5',False):
+        result['release_gate']='P5';result['p5']=dict(status='NOT_RUN')
+        if passed:
+            from p5_release import run as storage_recovery
+            try:
+                receipt=storage_recovery(root,args.p5_archive_dir.resolve())
+                result['p5']=dict(status='PASSED',receipt='p5/release.json',sha256=sha(receipt))
+            except (OSError,ValueError,KeyError,RuntimeError,TypeError,subprocess.SubprocessError) as exc:
+                result['p5']=dict(status='FAILED',error=str(exc));passed=False
     result['status']='SOFTWARE_CHECKS_PASSED' if passed else 'NEEDS_ATTENTION'
     save(root/'release.json',result);print(root/'release.json');return 0 if passed else 1
 
@@ -127,7 +136,13 @@ if __name__=='__main__':
     p.add_argument('--p4',action='store_true',help='Require P3 plus the frozen Dexter holdout, Midway field returns and archived diagnostic cases')
     for flag in ('dexter-survey','dexter-observation','dexter-imagery','historical-root'):
         p.add_argument('--'+flag,type=Path)
+    p.add_argument('--p5',action='store_true',help='Require P4 plus edition storage, offline packages and native restore replay')
+    p.add_argument('--p5-archive-dir',type=Path,help='Existing local archive folder outside this isolated checkout')
     args=p.parse_args()
+    if args.p5:
+        if not args.p5_archive_dir or not args.p5_archive_dir.is_dir() or args.p5_archive_dir.resolve().is_relative_to(REPO):
+            p.error('--p5 requires an existing external --p5-archive-dir')
+        args.p4=True
     if args.p4:
         if not all((args.dexter_survey,args.dexter_observation,args.dexter_imagery,args.historical_root)):
             p.error('--p4 requires --dexter-survey, --dexter-observation, --dexter-imagery and --historical-root')

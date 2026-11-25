@@ -29,7 +29,45 @@ function renderRecipientHandoff(parent){
  state.addEventListener('iteration-updated',reflect);reflect();
  parent.append(state,action,output);
 }
+function renderArchivedEdition(parent,edition,caption,refresh){
+ const card=el('div',undefined,'card');card.dataset.projectId=edition.id;parent.append(card);
+ const states={ARCHIVED:tr('Archived','已归档'),RETIRING:tr('Cleanup interrupted','清理中断'),RESTORING:tr('Restore interrupted','恢复中断')};
+ card.append(el('h3',caption),el('p',states[edition.phase]+' · '+edition.id),el('p',edition.archive,'muted'));
+ async function change(action){await api('storage-'+action,{id:edition.id,archive_hash:edition.sha256,confirmed:true});await refresh();}
+ card.append(button('Restore this edition','恢复此版本',()=>change('restore')));
+ if(edition.phase==='RETIRING')card.append(button('Resume verified cleanup','继续已核验的清理',()=>change('retire')));
+}
+function renderEditionStorage(parent,edition,refresh){
+ const box=details(parent,'Storage and recovery by edition','版本存储与恢复');
+ const area=el('div');const size=n=>(n/1048576).toLocaleString(undefined,{maximumFractionDigits:2})+' MiB';
+ async function inspect(){
+  const p=await api('storage-preview',{id:edition.id});area.replaceChildren();
+  area.append(el('p',p.title+' · '+p.id));
+  table(area,[tr('Logical','逻辑占用'),tr('Exclusive','独占'),tr('Shared','共享'),tr('Releasable','可释放')],[[p.logical_bytes,p.exclusive_bytes,p.shared_bytes,p.reclaimable_bytes].map(size)]);
+  const categories={inputs:tr('Inputs and project records','原件与项目记录'),delivery:tr('Published packages','已发布交付包'),dependency:tr('Linked data','引用数据'),calculation:tr('Calculation','计算'),export:tr('Temporary exports','临时导出'),study:tr('Studies','复核试算'),preview:tr('Previews','预览'),review:tr('Reviews','复核'),cache:tr('Cache','缓存')};
+  categories.reports=tr('Published reports','已发布报告');categories.terrain=tr('Terrain rasters','地形栅格');
+  table(area,[tr('Contents','内容'),tr('Files','文件数'),tr('Size','大小'),tr('Shared','共享'),tr('Eligible before protection','保护策略生效前的候选量')],Object.entries(p.groups).map(([k,v])=>[categories[k]||k,v.files,size(v.bytes),size(v.shared_bytes||0),size(v.candidate_bytes||0)]));
+  if(p.dependents.length)area.append(el('p',tr('Required by these editions: ','以下版本仍引用本版：')+p.dependents.join(', '),'warning'));
+  if(p.unverified_sources?.length)area.append(el('p',tr('Locate originals with these registered fingerprints before cleanup: ','请在清理前找回指纹相符的原件：')+p.unverified_sources.join(', '),'warning'));
+  if(p.pinned)area.append(el('p',tr('This edition is pinned.','本版本已固定。')));
+  area.append(button(p.pinned?'Unpin edition':'Pin edition',p.pinned?'取消固定':'固定版本',async()=>{await api('storage-pin',{id:edition.id,confirmed:true,pinned:!p.pinned});await inspect();}));
+  const candidates=details(area,'Preview cleanup candidates ('+p.candidate_files+')','查看清理候选（'+p.candidate_files+'）');
+  if(p.candidate_files)candidates.append(el('pre',p.candidates.join('\n')));
+  area.append(el('p',tr('Choose an existing local folder outside the checkout. The archive uses space on that drive. Published packages, original inputs and shared terrain stay online during cleanup.','选择工作目录外已有的本机目录。归档会占用所选磁盘空间。清理时已发布双包、原始输入和共享地形继续可用。')));
+  const dir=field(area,'archive-dir-'+edition.id,'Archive folder','归档目录',p.default_directory);
+  area.append(button('Create verified archive','创建并校验归档',async()=>{await api('storage-archive',{id:edition.id,confirmed:true,token:p.token,directory:dir.value});await inspect();}));
+  if(p.archive)area.append(el('p',tr('Archive','归档')+' · '+size(p.archive_bytes)+' · '+p.archive));
+  if(p.matches_archive&&p.reclaimable_bytes>0){
+   if(p.same_volume)area.append(el('p',tr('Estimated net space gained on this drive including the ZIP: ','计入同盘归档后，预计磁盘净释放：')+size(p.reclaimable_bytes-p.archive_bytes),'muted'));
+   const confirm=details(area,'Release archived working files','释放已归档的工作文件');
+   confirm.append(el('p',tr('Restoring this edition will require the verified ZIP at its registered location.','恢复该版本需要已登记位置的归档 ZIP。')+' '+size(p.reclaimable_bytes)));
+   confirm.append(button('Confirm cleanup of this edition','确认清理此版本',async()=>{const r=await api('storage-retire',{id:edition.id,confirmed:true,token:p.token,archive_hash:p.archive_hash});await refresh();notify(tr('Edition archived. Volume free-space change: ','版本已归档，磁盘可用空间变化：')+size(r.actual_volume_gain));}));
+  }
+ }
+ box.append(button('Inspect edition storage','查看版本占用',inspect),area);
+}
 function renderHandoff(parent) {
+ renderEditionStorage(parent,current,home);
  const box=details(parent,'Handoff, local files and optional pilot timing','交付预览、本地文件与可选试点计时');
  const area=el('div');box.append(area);
  async function inspect(){

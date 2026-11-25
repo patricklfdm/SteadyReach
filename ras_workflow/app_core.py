@@ -41,7 +41,13 @@ def edition_record(record):
     return record
 
 
+def storage_offline(key):
+    from .edition_storage import COLD, state
+    return state(ROOT,key)['phase'] in COLD
+
+
 def model(key):
+    if storage_offline(key):raise ValueError('Restore this edition from Saved projects / 请先在已保存的项目中恢复此版本')
     return edition_record(read(folder(key)/'app.json'))
 
 def deletion_record(key):
@@ -697,7 +703,7 @@ def listing(deleted=False):
     paths=[*BASE.glob('site_*/app.json'),*BASE.glob('field_*/app.json')]
     for path in sorted(paths,reverse=True):
         key=path.parent.name
-        if deletion_record(key).exists()==deleted:
+        if not storage_offline(key) and deletion_record(key).exists()==deleted:
             projects.append(model(key) if deleted else view(key,False))
     return projects
 

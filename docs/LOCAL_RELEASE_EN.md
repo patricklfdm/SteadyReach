@@ -2,6 +2,27 @@
 
 [简体中文](LOCAL_RELEASE_CN.md) · [Production priorities and acceptance criteria](PRODUCTION_ROADMAP_EN.md)
 
+## P5 baseline on one workstation
+
+On 2026-11-25 the isolated release gate passed 492 Python tests, 44 page tests and the inherited native regressions. It retired and restored two river editions through the browser. While each was archived, HEC-RAS 7.0.1 opened the Complete and Minimal projects from detached copies. QGIS 3.44.15 reopened each Complete project with six valid layers and both exhibit layouts. After restoration, each site generated new paired packages from a fresh native run.
+
+| Edition | Logical MiB | ZIP MiB | Actual MiB gained during cleanup | Net MiB gained including same-drive ZIP | Removed and restored files | Verified files |
+|---|---:|---:|---:|---:|---:|---:|
+| Dexter | 120.91 | 37.13 | 16.64 | −20.50 | 132 | 468 |
+| Big River / Rockford | 88.96 | 25.48 | 14.09 | −11.40 | 121 | 412 |
+
+Across nine station/profile pairs per site, the largest change in native stage was 0.000 ft and in flow was 0.000 cfs. The receiver opened and verified both local handoff entry pages. The detailed local receipt is identified by SHA-256 `20de9ecfe535604a7fd8b365c6cc1d5da66b92756f41e54f077969109b8f0111`. Human and cross-machine acceptance are deferred.
+
+## Archive and recover one edition
+
+1. From **Saved projects**, expand the project family and the edition’s **Manage this version → Storage and recovery by edition**. Select **Inspect edition storage**. The same panel is available from the project page. Logical bytes include referenced inputs. Exclusive and shared bytes add up to logical bytes. Adding totals across editions counts their shared files more than once. Expand the candidate list to see each path.
+2. Select **Pin edition** to keep its working files online. A dependent edition, a missing or changed registered original, or a running calculation also protects the project. The two published packages and registered field originals stay at their existing paths. The **Delete project** action in project management moves the entry to the recycle bin and retains its disk usage.
+3. Enter an existing local directory outside the checkout and choose **Create verified archive**. Keep the registered ZIP and the checkout’s edition catalog together in your backup policy. A separate drive gives the largest space saving. When using the same drive, inspect the estimated net saving after the ZIP. Archive creation requires temporary headroom up to approximately the uncompressed inventory size.
+4. Expand **Release archived working files** and confirm the edition. The program checks the ZIP and current file hashes before deletion. The home page then lists the archived edition in its original project family. Its published handoff opens offline while archived. An interrupted cleanup offers **Resume verified cleanup** or **Restore this edition**.
+5. From that family, select **Restore this edition** with the registered drive mounted. The program checks available space, compares existing files, then restores missing members. A conflict shows the path. Preserve independent edits separately and restore the matching bytes before retrying. If the source edition is missing, recover it first. Open the restored edition and use an editable revision for a new calculation. A full-checkout backup remains the recovery path for a lost checkout or archive catalog.
+
+**Same-machine release check.** In an isolated checkout, use the P4 command below with `--p5 --p5-archive-dir <existing-local-directory-outside-checkout>`. The gate includes the P4 cases and exercises two mapped river editions through the storage controls. Inspect `p5/release.json` for bytes before and after, verified members, package checks, native run IDs, and station-level reproduction. Disk-free readings are volume-wide and include other disk activity. Unit regressions cover low space, interruption, inactive or referenced versions, and shared terrain.
+
 The P4 gate includes the complete P3 gate. Add `--p4 --dexter-survey <survey-folder> --dexter-observation <event_return.csv> --dexter-imagery <NAIP-folder> --historical-root <archived-project-checkout>` to the P3 command. The archive contains the original Pagosa and Merced project trees and native evidence. It is read only. Use an isolated checkout for the release run.
 
 Inspect the release manifest and the three receipts under `p4/`. They cover the new-site holdout, wrong-datum / partial / assumed Midway returns, Siletz’s measured-event decision and the station-level historical comparisons. The Dexter receipt records automated interaction counts; live engineer time and second-machine acceptance are separately deferred. [Frozen sources and preparation](../examples/dexter_or/README.md)

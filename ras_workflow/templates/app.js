@@ -272,10 +272,11 @@ function indexEditions(projects,deleted){
 async function renderSavedProjects(parent){
  const data=await api('state');parent.replaceChildren();
  parent.append(el('h2',tr('Saved projects','已保存的项目')));
- if(!data.projects.length)parent.append(el('p',tr('No saved projects yet.','暂无已保存项目。'),'muted'));
+ const available=[...data.projects,...(data.archived_editions||[])];
+ if(!available.length)parent.append(el('p',tr('No saved projects yet.','暂无已保存项目。'),'muted'));
  const deleted=data.deleted_projects||[];
- const sequenceById=indexEditions(data.projects,deleted);
- for(const group of savedProjectGroups(data.projects,deleted)){
+ const sequenceById=indexEditions(available,deleted);
+ for(const group of savedProjectGroups(available,deleted)){
   const title=group.original?.title??group.id;
   const count=group.versions.length;
   const entry=details(parent,title+' · '+count+(count===1?' version':' versions'),title+' · '+count+' 个版本',false,'project-group/'+group.id);
@@ -283,7 +284,9 @@ async function renderSavedProjects(parent){
   else if(group.versions[0].id!==group.id)entry.append(el('p',tr('The original project is in Deleted projects.','原项目已移至回收站。'),'muted'));
   for(const project of group.versions){
    const sequence=sequenceById.get(project.id);
-   renderProjectCard(entry,project,false,parent,project.id===group.id,versionCaption(project,title,sequence));
+   const caption=versionCaption(project,title,sequence);
+   if(['ARCHIVED','RETIRING','RESTORING'].includes(project.phase))renderArchivedEdition(entry,project,caption,()=>renderSavedProjects(parent));
+   else renderProjectCard(entry,project,false,parent,project.id===group.id,caption);
   }
  }
  if(deleted.length){
@@ -308,6 +311,7 @@ function renderProjectCard(parent,project,deleted,list,original=false,caption=pr
  }
  actions.append(button('Open / continue','打开／继续',async()=>{await open(project.id);notify();}));
  const manage=details(card,'Manage this version','管理此版本',false,'manage/'+project.id);manage.append(el('p',project.id,'muted'));const remove=el('button',tr('Delete project','删除项目'),'danger');remove.type='button';manage.append(remove);
+ if(typeof renderEditionStorage==='function')renderEditionStorage(manage,project,()=>renderSavedProjects(list));
  const confirmation=el('div');confirmation.hidden=true;manage.append(confirmation);
  confirmation.append(el('p',tr('Move “','将“')+project.title+tr('” to Deleted projects? You can restore it later. Project files stay available to related revisions.','”移至回收站？之后可恢复，关联修订版仍可使用其文件。'),'warning'));
  const choices=el('div',undefined,'actions');confirmation.append(choices);
@@ -341,7 +345,7 @@ async function open(id){const request=++viewRequest,changed=current?.id!==id,was
  current=next;if(changed)updateProcessing(next);poll=setTimeout(()=>pollProject(id),2500);return;
  }
  if(next.parent_revision&&!readDraft(draftKey('edition',id))){
-  const list=await api('state');if(viewRequest!==request)return;indexEditions(list.projects,list.deleted_projects||[]);
+  const list=await api('state');if(viewRequest!==request)return;indexEditions([...list.projects,...(list.archived_editions||[])],list.deleted_projects||[]);
  }
  current=next;pendingChanges.clear();edited={};metaEdits={};classEdits={};dirty=false;render();if(changed)window.scrollTo(0,0);if(current.status==='PROCESSING')poll=setTimeout(()=>pollProject(id),2500);else if(wasProcessing)notify(current.job?.status==='FAILED'?(current.errors||[]).join('\n'):current.job?.action==='automatic-prepare'?tr('Automatic draft saved. Review the highlighted interpretations, then confirm all calculation inputs.','自动草稿已保存。请核对集中列出的判断项，然后确认全部运算参数。'):current.results?tr('Calculation and export task finished. Review the results and delivery status.','任务已完成，请查看计算结果和交付状态。'):tr('Preparation finished. Review the model inputs.','资料准备完成，请核对模型输入。'),current.job?.status==='FAILED');}
 function projectHeading(m){

@@ -109,7 +109,7 @@ async function main() {
       const b='Array.from('+root+'.querySelectorAll("button")).find(b=>b.textContent.trim()==='+JSON.stringify(label)+' && !b.disabled)';
       await until('!busy && !!('+b+')');
       await evaluate('(()=>{const b='+b+';for(let p=b;p;p=p.parentElement)if(p.tagName==="DETAILS")p.open=true;b.click()})()');
-      await until('!busy');
+      await until('!busy',mode.startsWith('home-storage')?2000:240);
     }
     async function fieldValue(id,value){
       enteredFields.push(id);
@@ -133,6 +133,22 @@ async function main() {
       const {root}=await send('DOM.getDocument');
       const {nodeId}=await send('DOM.querySelector',{nodeId:root.nodeId,selector});
       await send('DOM.setFileInputFiles',{nodeId,files});
+    }
+    if(mode==='home-storage-retire'||mode==='home-storage-restore'){
+      const scope='document.querySelector('+JSON.stringify(selector)+')';
+      await until('!!'+scope);
+      if(mode==='home-storage-restore'){
+        await buttonByName('Restore this edition',scope);
+        await until(scope+'?.textContent.includes("Open / continue")');
+      }else{
+        await buttonByName('Inspect edition storage',scope);
+        await until(scope+'?.textContent.includes("Releasable")');
+        await fieldValue('archive-dir-'+project,input.folder);
+        await buttonByName('Create verified archive',scope);
+        await buttonByName('Confirm cleanup of this edition',scope);
+        await until(scope+'?.textContent.includes("Restore this edition")');
+      }
+      console.log('VERIFIED');return;
     }
     if(mode==='home-survey'||mode==='home-coordinates'||mode==='home-native'){
       await fieldValue('title',input.title);
