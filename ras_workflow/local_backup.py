@@ -34,7 +34,8 @@ def data_files(root):
 
 def checkout_id(root):
     files=[root/'requirements.lock.txt',root/'app.py',root/'workflow.py',*sorted((root/'ras_workflow').rglob('*.py')),
-           *sorted((root/'ras_workflow/templates').glob('*'))]
+           *sorted((root/'ras_workflow/templates').glob('*')),
+           *(root/'examples/siletz_or'/name for name in ('prepare.py','discharge.py','protocol.json'))]
     return {p.relative_to(root).as_posix():sha(p) for p in files if p.is_file()}
 
 

@@ -53,7 +53,9 @@ def verified_observations(data):
         if r['point_type']!='measured' or r['basis']!='documented' or not r['uncertainty_ft']:continue
         rows.append(dict(role=r['role'],kind='boundary_stage' if r['role']=='boundary' else 'stage',
                          location={'rs':r['rs']},event=r['event'],date=r['date'],event_eligible=True,issues=[],
-                         model_datum=r['datum'],source=r['original_source']+' | '+r['reference'],flow_cfs=r['flow_cfs'],
+                         profile='EventBase',observed_datum=r['datum'],model_datum=r['datum'],
+                         model_ft=r['stage_ft']+r['residual_ft'] if r['residual_ft'] is not None else None,
+                         source=r['original_source']+' | '+r['reference'],flow_cfs=r['flow_cfs'],
                          observed_ft=r['stage_ft'],residual_ft=r['residual_ft'],uncertainty_ft=r['uncertainty_ft']))
     return rows
 

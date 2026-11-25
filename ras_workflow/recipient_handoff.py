@@ -12,7 +12,7 @@ from .common import ROOT, digest, item, lock, read, rel, safe_path
 from .delivery_pair import check, verified_member
 
 
-def page(language, model, assessment, folders, receipt, pair, review):
+def page(language, model, assessment, folders, receipt, pair, review, selection=None, field_sources=()):
     zh = language == 'zh'
     def t(en, cn):
         return cn if zh else en
@@ -28,6 +28,26 @@ def page(language, model, assessment, folders, receipt, pair, review):
             '<p>L'+str(assessment['level'])+' · '+escape(assessment['title'][language])+'</p>',
             '<p>'+escape(assessment['use_guide']['allowed'][language])+'</p>',
             '<p>'+escape(assessment['use_guide']['deferred'][language])+'</p>']
+    selection=selection or {}
+    result.append('<h2>'+t('Edition selected for transfer','本次交接选用版本')+'</h2><p>'+
+                  escape(t('Revision','修订版') if model.get('parent_revision') else t('Original calculation','首次计算版'))+' · '+escape(pair['run_id'])+'</p>')
+    if selection.get('reason'):
+        result.append('<p>'+escape(selection['reason'])+'</p>')
+    if not selection.get('reason') and model.get('parent_revision') and review.get('endpoints'):
+        result.append('<p>'+t('Compare the endpoint and hydraulic changes below when applying this edition.',
+                              '采用此版本时，请核对下方端点状态及水力指标的变化。')+'</p>')
+    if selection.get('choice')=='parent':
+        result.append('<p>'+t('The review selected this earlier calculation.','本次对比选用了此基准计算。')+'</p>')
+    decision=assessment.get('purpose_decision') or {}
+    result.append('<p><strong>'+escape(decision.get(language,''))+'</strong></p>')
+    outstanding=[r for r in decision.get('rows',[]) if r['state']!='met']
+    if outstanding:
+        result.append('<h2>'+t('Before the next calculation','触发下一次重算的条件')+'</h2>')
+        result.extend('<p>'+escape(r[language])+'</p>' for r in outstanding)
+    for r in review.get('investigation',[]):
+        result.append('<p>'+escape(r[language])+'</p>')
+    for ref in field_sources:
+        result.append('<p>'+package_link('complete',ref,t('Field source','实测原件')+' · '+Path(ref).name)+'</p>')
     if review.get('endpoints'):
         ends=review['endpoints']
         result.append('<h2>'+t('Changes since the baseline','相对基准版的变化')+'</h2><p>'+escape(ends[language])+'</p>')
@@ -47,8 +67,10 @@ def page(language, model, assessment, folders, receipt, pair, review):
         if decision.get('state')!='CONDITIONS_MET':
             result.append('<p><strong>'+t('Diagnostic handoff. Project delivery conditions remain open.',
                                           '本版供诊断复核，项目约定的交付条件仍有未满足项。')+'</strong></p>')
-        result.append('<h2>'+escape(decision[language])+'</h2>')
-        result.extend('<p>'+escape(row[language])+'</p>' for row in decision['rows'])
+        completed=[row for row in decision['rows'] if row['state']=='met']
+        result.append('<details><summary>'+t('Verified conditions','已核实的条件')+'</summary>')
+        result.extend('<p>'+escape(row[language])+'</p>' for row in completed)
+        result.append('</details>')
         result.append('<p>'+escape(decision['note_'+language])+'</p>')
     scope=assessment.get('area',{}).get('selected') or []
     if scope:
@@ -93,8 +115,8 @@ def page(language, model, assessment, folders, receipt, pair, review):
                       ' · SHA-256 <code>'+escape(receipt[kind]['manifest']['sha256'])+'</code></p>')
     verify_js=(Path(__file__).parent/'templates/recipient_verify.js').read_text('utf-8')
     result.extend(['<section><h2>'+t('Verify a copied folder','校验复制后的交接目录')+'</h2>',
-                   '<p>'+t('Select the folder containing both start pages. Files are checked locally against the selected edition.',
-                             '选择同时包含两个入口页的目录。浏览器将在本地按所选版本逐文件校验。')+'</p>',
+                   '<p>'+t('Select the folder containing both start pages. Files are checked locally against the selected edition. On Windows, copy the whole folder near the drive root if your browser cannot read a long path.',
+                             '选择同时包含两个入口页的目录，浏览器将按所选版本逐文件校验。如果 Windows 浏览器无法读取长路径，请将整个交接目录复制到盘符根目录附近，再重新选择。')+'</p>',
                    '<label>'+t('Handoff folder','交接目录')+' <input type="file" id="verify-directory" webkitdirectory multiple '+
                    'data-run="'+escape(pair['run_id'])+'" data-complete="'+escape(receipt['complete']['manifest']['sha256'])+
                    '" data-minimal="'+escape(receipt['minimal']['manifest']['sha256'])+'"></label>',
@@ -123,14 +145,24 @@ def verify_transfer(destination, pages, receipt, pair):
 def export(key, body):
     model=app_core.model(key)
     app_core.require_idle(model)
-    from .iteration_choice import latest
-    decision = latest(model) or {}
+    from .iteration_choice import latest as latest_choice
+    decision = latest_choice(model) or {}
     if decision.get('choice') == 'unavailable':
         raise ValueError('Check the saved edition choice before handoff. / 请在结果总览重新核对工作版，再交接。')
     if decision.get('choice') == 'parent':
         raise ValueError('Open the selected baseline to hand it off. / 请打开已选用的基准版，再交接该版成果。')
     if decision.get('choice') == 'wait':
         raise ValueError('Resume this review before handoff. / 本版正在等资料，请先在结果总览继续复核。')
+    def selection():
+        origin=body.get('selected_from')
+        if not origin:
+            return latest_choice(model) or {}
+        selected=latest_choice(app_core.model(origin['id'])) or {}
+        if (selected.get('choice')!='parent' or selected.get('token')!=origin.get('token')
+                or selected.get('selected')!=dict(project_id=key,summary=model['summary'])):
+            raise ValueError('Reopen the selected baseline from the revision. / 请从修订版重新打开选用的基准版。')
+        return selected
+    chosen=selection()
     receipt=handoff.bound_package(model)
     if (model['revision']!=body.get('revision') or not receipt or model.get('exports_need_refresh')
             or receipt['summary']!=model.get('summary') or body.get('summary_hash')!=receipt['summary']['sha256']):
@@ -154,11 +186,17 @@ def export(key, body):
         data=reports['data']
         report_data=read(verified_member(folders['complete']/'Reports',Path(data['path']).name,data['sha256']))
         review=(report_data.get('revision_comparison') or {}).get('review') or {}
-        pages={name:page(lang,model,assessment,folders,receipt,pair,review) for lang,name in [('en','Start_EN.html'),('zh','Start_zh-CN.html')]}
+        field_names={r['source_file'] for r in report_data.get('river_checks',{}).get('events',[]) if r.get('source_file')}
+        evidence={r['sha256'] for r in report_data.get('sources',[]) if r.get('role')=='survey_source' and Path(r['path']).name in field_names}
+        field_sources=[r['path'] for r in read(ROOT/receipt['complete']['manifest']['path'])['files']
+                       if r['path'].startswith('Sources/') and r['sha256'] in evidence]
+        pages={name:page(lang,model,assessment,folders,receipt,pair,review,chosen,field_sources) for lang,name in [('en','Start_EN.html'),('zh','Start_zh-CN.html')]}
         guide_hashes={name:hashlib.sha256(html.encode('utf-8')).hexdigest() for name,html in pages.items()}
         pages['HANDOFF.json']=json.dumps(dict(run_id=pair['run_id'],pages=guide_hashes),sort_keys=True,indent=2)
         tag=digest(dict(pages=pages,assessment=assessment['evidence_hash']))
-        destination=base/('Handoff_'+tag[:16])
+        # Browser directory pickers can omit long Windows paths even when Python verifies them.
+        transfer_root=app_core.folder(key)
+        destination=transfer_root/('Handoff_'+tag[:16])
         latest=app_core.model(key)
         if (latest['revision']!=model['revision'] or latest.get('exports_need_refresh') or latest.get('summary')!=model['summary']
                 or handoff.bound_package(latest)!=receipt):
@@ -169,7 +207,7 @@ def export(key, body):
             size=sum(r['size_bytes'] for kind in folders for r in read(ROOT/receipt[kind]['manifest']['path'])['files'])
             if shutil.disk_usage(base).free<size:
                 raise ValueError('Free space needed for the portable copy / 空间不足以生成可转交副本')
-            with TemporaryDirectory(dir=base) as temporary:
+            with TemporaryDirectory(dir=transfer_root) as temporary:
                 stage=Path(temporary)/'transfer'
                 stage.mkdir()
                 for name,html in pages.items():
@@ -177,10 +215,9 @@ def export(key, body):
                 for kind,folder in folders.items():
                     shutil.copytree(folder,stage/kind.capitalize())
                 verify_transfer(stage,pages,receipt,pair)
-                from .iteration_choice import latest as latest_choice
                 current=app_core.model(key)
                 if (current.get('summary')!=model['summary'] or handoff.bound_package(current)!=receipt
-                        or current.get('exports_need_refresh') or (latest_choice(current) or {})!=decision):
+                        or current.get('exports_need_refresh') or (latest_choice(current) or {})!=decision or selection()!=chosen):
                     raise ValueError('Selected edition changed during export / 导出期间所选版本已变化')
                 stage.rename(destination)
         return dict(folder=rel(destination),files=[item(destination/n) for n in pages],level=assessment['level'],run_id=pair['run_id'],

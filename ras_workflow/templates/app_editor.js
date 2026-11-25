@@ -385,7 +385,22 @@ function renderMapEditor(parent){
  parent.append(button('Generate / replace candidate sections','生成／替换候选断面',async()=>{await savePoints();await api('geometry/generate',{id:current.id,revision:current.revision,replace_existing:!!current.intake.section_count,parameters:{section_width_ft:Number(width.value),section_spacing_ft:Number(spacing.value)},external_reaches:['upstream','downstream'].map(id=>({id,anchors_xy:anchors[id]}))});mapData=null;await open(current.id);notify(tr('Sections generated. Inspect the profiles and choose the displayed layout candidates.','候选断面已生成，请查看断面并选择显示的布置候选。'));},'primary'));
  parent.append(button('Sample the selected road crest','采样已点选的路面高点线',async()=>{await savePoints();await api('geometry/estimate',{id:current.id,revision:current.revision});await open(current.id);notify(tr('Road profile candidates are ready in Culvert and road; they have not been adopted.','路面剖面候选已显示在“涵洞与道路”，尚未采用。'));}));
  function draw(){modes.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===anchorMode)));status.textContent=counts();controller?.draw();}
- controller=terrainMap(canvas,{getAnchors:()=>anchors,getMode:()=>anchorMode,onPoint:point=>{if(['inlet','outlet'].includes(anchorMode))anchors[anchorMode]=[point];else anchors[anchorMode].push(point);draw();queuePoints();}});
+ function addPoint(point){
+  if(['inlet','outlet'].includes(anchorMode))anchors[anchorMode]=[point];else anchors[anchorMode].push(point);
+  draw();queuePoints();
+ }
+ const coordinates=details(parent,'Enter a point in the map CRS','按地图坐标系输入点位');
+ const x=field(coordinates,'crossing-x','Easting (map units)','东坐标（地图单位）','','number');
+ const y=field(coordinates,'crossing-y','Northing (map units)','北坐标（地图单位）','','number');
+ const pointInfo=el('p');pointInfo.setAttribute('aria-live','polite');
+ coordinates.append(button('Add coordinate to the selected map tool','把坐标加入当前点选工具',async()=>{
+  const bounds=mapData?.terrain_bounds;
+  if(!anchorMode||!bounds)throw Error(tr('Select a point tool and wait for the DEM.','请先选点位类型，等待地形加载。'));
+  const point=[x.valueAsNumber,y.valueAsNumber];
+  if(!point.every(Number.isFinite)||point[0]<bounds[0]||point[0]>bounds[2]||point[1]<bounds[1]||point[1]>bounds[3])throw Error(tr('Point outside the DEM. Check projected coordinates and CRS.','点位超出地形，请核对投影坐标和坐标系。'));
+  addPoint(point);await savePoints();pointInfo.textContent=tr('Saved point','已保存点位')+' · '+point.join(', ')+' · '+counts();
+ }),pointInfo);
+ controller=terrainMap(canvas,{getAnchors:()=>anchors,getMode:()=>anchorMode,onPoint:addPoint});
  draw();
 }
 

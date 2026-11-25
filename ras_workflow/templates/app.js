@@ -131,13 +131,58 @@ async function home(){
  field(more,'channel_n','Channel Manning n','主槽糙率','','number');
  field(more,'overbank_n','Overbank Manning n','两侧漫滩糙率','','number');
  const native=el('div');card.append(native);nativeSelector(native,false);native.hidden=true;
+ const archived=details(card,'Use previously downloaded site terrain','使用已下载的场地地形');
+ archived.append(el('p',tr('Select the local USGS DEM and its terrain.json. Include the NAIP raster and receipt together if available. The files must cover the site and match their recorded hashes.','选择本机 USGS DEM 和对应的 terrain.json。有航片时可一起选择 NAIP 栅格和回执。程序核对覆盖范围及文件指纹。')));
+ const rasters=field(archived,'local-rasters','Raster and receipt files','栅格与回执','','file');rasters.multiple=true;
+ const demUnit=field(archived,'local-unit','DEM elevation unit','DEM 高程单位','','select',[['','Choose','请选择'],['m','Metres','米'],['international foot','International feet','国际英尺'],['US survey foot','US survey feet','美制测量英尺']]);
+ const demDatum=field(archived,'local-datum','DEM vertical datum from the source','来源所列 DEM 高程基准');
+ const archivedSurvey=details(card,'Use archived imagery for this survey','使用这次测量的离线航片');
+ const surveyAerial=field(archivedSurvey,'survey-aerial','Optional NAIP GeoTIFF and its acquisition receipt','可选 NAIP GeoTIFF 和原始获取回执','','file');surveyAerial.multiple=true;
  const intent=scopeFields(card,{},true);
  const key=draftKey('new-project','home');
  const surveyed=el('label',undefined,'field');surveyed.hidden=true;
  surveyed.append(el('span',tr('Select survey.json, the GeoTIFF and all sources listed in the manifest. Location, flow and roughness are read from the package.','选择 survey.json、GeoTIFF 和清单所列全部来源文件。坐标、流量及糙率取自资料包。')));
  const measured=el('input');measured.type='file';measured.multiple=true;measured.id='survey-files';const selection=el('small');selection.setAttribute('aria-live','polite');const selectionInfo=()=>{const files=Array.from(measured.files);const size=(files.reduce((sum,f)=>sum+f.size,0)/1e6).toFixed(1);selection.textContent=[files.length+tr(' files',' 个文件')+' · '+size+' MB',tr('15 MB per file / 50 MB total','单文件 15 MB／总计 50 MB'),surveyLimit(files)].filter(Boolean).join(' · ');};measured.onchange=selectionInfo;surveyed.append(measured,selection);card.append(surveyed);
+ const folderInput=el('input');folderInput.type='file';folderInput.webkitdirectory=true;folderInput.multiple=true;folderInput.id='survey-directory';
+ const folderLabel=el('label',tr('Or select the survey folder','也可选择实测资料目录'));folderLabel.append(folderInput);
+ const preview=el('div');preview.setAttribute('aria-live','polite');
+ let selectedSurvey=[],surveyEpoch=0;
+ measured.onchange=()=>{surveyEpoch++;folderInput.value='';selectedSurvey=[];preview.replaceChildren();selectionInfo();};
+ folderInput.onchange=async()=>{
+  const epoch=++surveyEpoch;measured.value='';selectedSurvey=[];preview.replaceChildren();
+  try{
+   const files=Array.from(folderInput.files), manifests=files.filter(f=>f.name.toLowerCase()==='survey.json');
+   if(manifests.length!==1)throw Error(tr('Choose a folder containing exactly one survey.json. Found ','请选择只含一份 survey.json 的目录，找到 ')+manifests.length);
+   const manifest=JSON.parse(await manifests[0].text()),chosen=[manifests[0]];
+   for(const ref of manifest.files){
+    const matches=files.filter(f=>f.name===ref.name);
+    if(matches.length!==1)throw Error(ref.name+' · '+tr('matching files','个同名文件')+' '+matches.length);
+    chosen.push(matches[0]);
+   }
+   if(epoch!==surveyEpoch)return;
+   const issue=surveyLimit(chosen);if(issue)throw Error(issue);
+   selectedSurvey=chosen;selection.textContent=chosen.map(f=>f.name).join(' · ');
+  }catch(error){if(epoch===surveyEpoch)selection.textContent=error.message;}
+ };
+ const inspectSurvey=button('Inspect survey sources and event criteria','检查测量原件与事件条件',async()=>{
+  const epoch=surveyEpoch,files=selectedSurvey.length?selectedSurvey:Array.from(measured.files);
+  const info=await api('survey-preview',{survey_files:await encodeFiles(files)});
+  if(epoch!==surveyEpoch)return;
+  preview.replaceChildren(el('p',info.profiles.join(' · ')+' | '+info.files.join(', ')));
+  if(!info.criteria){preview.append(el('p',tr('Set project-specific limits under Intended use if available.','可在“用途和过流路径”下填写本项目有依据的误差限值。')));return;}
+  const c=info.criteria;preview.append(el('p',c.event+' · RS '+c.rs+' · '+c.basis),
+   button('Use these event conditions','采用这组事件条件',()=>{
+    for(const [id,v] of Object.entries({'accept-profile':c.profile,'accept-event':c.event,'accept-rs':c.rs,'accept-error':c.max_residual_ft,'accept-basis':c.basis})){
+     const input=document.getElementById(id);input.value=v;input.dispatchEvent(new Event('input',{bubbles:true}));
+    }
+    notify(tr('Event conditions applied. Review them before computing.','事件条件已采用，可在运算前核对或修改。'));
+   }));
+ });
+ card.append(folderLabel,inspectSurvey,preview);
  let locationScope='';modelType.onchange=()=>{if(route.value==='coordinates')locationScope=modelType.value;};
  route.onchange=()=>{const useSurvey=route.value==='survey';native.hidden=route.value!=='native';surveyed.hidden=!useSurvey;
+ archived.parentElement.hidden=route.value!=='coordinates';archivedSurvey.parentElement.hidden=!useSurvey;
+ for(const part of [folderLabel,inspectSurvey,preview])part.hidden=!useSurvey;
  for(const input of [lat,lon,q,$('#channel_n'),$('#overbank_n'),modelType])input.disabled=useSurvey;
  for(const input of [lat,lon,q,modelType])input.parentElement.hidden=useSurvey;
  coords.hidden=useSurvey;more.parentElement.hidden=useSurvey;modelType.disabled=useSurvey||route.value==='native';
@@ -167,8 +212,10 @@ async function home(){
   if(route.value==='native'&&!$('#native-files').files.length&&!$('#native-path').value.trim())inputError($('#native-files'),tr('Select native inputs or enter a project path.','请选择原生输入文件或填写工程路径。'));
  }
  let body={production_scope:intent(),model_type:modelType.value,route:route.value,title:title.value,latitude:lat.value,longitude:lon.value,flow_cfs:q.value,channel_n:$('#channel_n').value,overbank_n:$('#overbank_n').value,gis:gis.checked};if(route.value==='native')Object.assign(body,await nativeBody());
- if(route.value==='survey'){if(!measured.files.length)inputError(measured,tr('Select the survey package files','请选择实测资料包中的文件'));const selected=Array.from(measured.files);const limit=surveyLimit(selected);if(limit)inputError(measured,limit);body.survey_files=await encodeFiles(measured.files);}
- const r=await api('create',body);forgetForm(key,inputs);await open(r.id);},'primary'));}
+ if(route.value==='survey'){const selected=selectedSurvey.length?selectedSurvey:Array.from(measured.files);if(!selected.length)inputError(measured,tr('Select the survey files or a folder with one complete manifest.','请选择测量文件或含一份完整清单的目录。'));const limit=surveyLimit(selected);if(limit)inputError(measured,limit);body.survey_files=await encodeFiles(selected);}
+ if(route.value==='coordinates'&&rasters.files.length){const issue=surveyLimit(rasters.files);if(issue)inputError(rasters,issue);body.local_rasters=await encodeFiles(rasters.files);body.dem_vertical_unit=demUnit.value;body.dem_vertical_datum=demDatum.value;}
+ if(route.value==='survey'&&surveyAerial.files.length){const issue=surveyLimit(surveyAerial.files);if(issue)inputError(surveyAerial,issue);body.local_rasters=await encodeFiles(surveyAerial.files);}
+ const r=await api('create',body);forgetForm(key,inputs);await open(r.id);if(r.preparation_waiting)notify(tr('Project saved. Another job is running. When it finishes, choose Prepare terrain and inputs in this project.','项目已保存。另一任务正在运行，待其结束后可在此项目继续准备地形和输入。'));},'primary'));}
 
 function savedProjectGroups(projects,deleted){
  const byId=new Map([...projects,...deleted].map(project=>[project.id,project]));

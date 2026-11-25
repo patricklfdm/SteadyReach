@@ -43,6 +43,7 @@ function renderIterationChoices(parent,assessment,primary){
  const saved={current:tr('Working edition: this run','工作版本：本次计算'),parent:tr('Working edition: previous calculation','工作版本：上一次计算'),wait:tr('Review paused for field records','复核已暂停，等待现场资料'),review:tr('Review in progress','正在复核'),unavailable:tr('The saved edition choice needs review. Choose again before handoff.','上次使用版本的记录需要核对，请重新选择后交接。')};
  // Keep the decision visible even when the actions are collapsed.
  box.parentElement.before(status);
+ const reason=field(box,'edition-choice-note','Selection note for the recipient (optional)','留给收件人的选版说明（选填）',model.iteration_choice?.reason||'');reason.maxLength=500;
  const selected=el('div',undefined,'actions');box.append(selected);
  const history=details(box,'Edition selection history','选版历史');
  function show(record){
@@ -55,6 +56,7 @@ function renderIterationChoices(parent,assessment,primary){
   if(record?.choice==='parent'){
    selected.append(button('Open selected baseline','打开选用的基准版',async()=>{
     const target=record.selected;
+    sessionStorage.setItem('selected-baseline/'+target.summary.sha256,JSON.stringify({id:model.id,token:record.token}));
     await open(target.project_id);
     if(current?.summary?.sha256!==target.summary.sha256){
      await open(model.id);
@@ -64,7 +66,8 @@ function renderIterationChoices(parent,assessment,primary){
   }
  }
  async function saveChoice(choice){
-  const record=await api('iteration-choice',{id:model.id,revision:model.revision,summary_hash:model.summary.sha256,previous:model.iteration_choice?.token||null,choice});
+  const record=await api('iteration-choice',{id:model.id,revision:model.revision,summary_hash:model.summary.sha256,previous:model.iteration_choice?.token||null,choice,reason:reason.value});
+  if(choice==='current'||choice==='review')sessionStorage.removeItem('selected-baseline/'+model.summary.sha256);
   model.iteration_choice=record;show(record);
   document.getElementById('recipient-action')?.dispatchEvent(new Event('iteration-updated'));
   notify(saved[choice],false,'success');
@@ -206,6 +209,10 @@ function renderRevisionComparison(parent,comparison){
    [tr('Native errors','原生错误'),metric(old,'ERROR'),metric(now,'ERROR')],
    [tr('Wet ends across profiles','各工况过水端点数'),old?.wet_ends?.length??'—',now?.wet_ends?.length??'—']]);
   for(const item of review.actions)box.append(el('p',tr(item.en,item.zh),'warning'));
+  if(review.investigation?.length){
+   const follow=details(box,'Did the revision resolve the hydraulic question?','修订解决了哪项水力问题？',true);
+   for(const row of review.investigation)follow.append(el('p',tr(row.en,row.zh)));
+  }
   const peak=review.maximum_at_verified_center;
   if(peak)box.append(el('p',peak.profile+' · RS '+peak.station+tr(' · signed WSE change ',' · 水位变化（含方向）')+format(peak.change)+' ft'));
   if(peak&&current.model_type==='river'&&!current.native_review&&comparison.parent?.summary?.sha256){

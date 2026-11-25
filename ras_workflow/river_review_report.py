@@ -9,11 +9,13 @@ def collect(summary_path, summary):
     ref=item(summary_path)
     folder=safe_path(ROOT,'projects/'+summary['configuration']['project_id'])
     model_path=folder/'app.json'
+    from .survey_events import records
     if not model_path.is_file():return {},[]
     from .app_core import edition_record
     model=edition_record(read(model_path))
-    if model.get('summary')!=ref:return {},[]
-    data={};sources=[]
+    measured,sources=records(summary) if model.get('route')=='survey' else ([],[])
+    data={'events':measured} if measured else {}
+    if model.get('summary')!=ref:return data,sources
     def load(entry):
         if not intact([entry]):raise ValueError('River review evidence changed: '+entry['path'])
         sources.append(entry)
@@ -51,8 +53,8 @@ def collect(summary_path, summary):
             measured=screen(match,native,spec)
             if measured!=result['rows']:raise ValueError('Event residuals differ from native output')
             sources.extend([native['hydraulic_results'],native['hydraulics']['raw_hdf'],native['hydraulics']['raw_controller']])
-            events[spec['event'], spec['date']] = measured
-        data['events'] = [row for event_rows in events.values() for row in event_rows]
+            events[spec['event'], spec['date']] = [dict(r,profile=spec['profile']) for r in measured]
+        data.setdefault('events',[]).extend(row for event_rows in events.values() for row in event_rows)
     if model.get('latest_geometry_comparison'):
         result=load(model['latest_geometry_comparison'])
         if result.get('status')=='COMPARISON_REQUIRES_REVIEW' and result['summaries'].get('baseline')==ref:

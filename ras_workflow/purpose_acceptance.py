@@ -118,13 +118,38 @@ def evaluate(summary, events=(), comparison=None):
             event,limit=rules['event'],rules['max_residual_ft']
             rs=rules.get('rs')
             selected=[r for r in events if r.get('event')==event and (not rs or same_rs(rs,(r.get('location') or {}).get('rs')))]
-            selected=[r for r in selected if r.get('role')=='holdout' and r.get('kind') in ('stage','gage_height')]
+            boundaries=[r for r in events if r.get('event')==event and r.get('role')=='boundary'
+                        and (not rules.get('profile') or r.get('profile',event)==rules['profile'])]
+            selected=[r for r in selected if r.get('role')=='holdout' and r.get('kind') in ('stage','gage_height')
+                      and (not rules.get('profile') or r.get('profile',event)==rules['profile'])]
             measured,missing,_=holdout_stages(selected)
             where=event+((' · RS '+rs) if rs else '')
-            if not measured or missing or len(measured)!=len(selected):
+            if missing:
+                add('missing',where+' · Supply documented vertical measurement uncertainty for the interior stage.',
+                    where+' · 请补充内点实测水位的垂直测量不确定度及其依据。')
+            if not measured or len(measured)!=len(selected):
                 add('missing',where+f' · Supply comparable independent stages with uncertainty; allowed error {limit:g} ft.',
                     where+f' · 请补可比的独立实测水位及测量不确定度，允许误差 {limit:g} ft。')
+            for row in boundaries:
+                station=str((row.get('location') or {}).get('rs','?'))
+                add('missing' if row.get('issues') else 'met',f'Prescribed boundary RS {station} excluded from scoring.',
+                    f'给定边界 RS {station} 已从独立评分中排除。')
+            for row in selected:
+                if row.get('issues'):
+                    problems=', '.join(row['issues'])
+                    add('missing',where+' · Resolve '+problems,where+' · 请核实 '+problems)
             if measured:
+                for row in measured:
+                    if not finite(row.get('observed_ft')) or not finite(row.get('model_ft')):
+                        continue
+                    station=str((row.get('location') or {}).get('rs','?'))
+                    where_at=f"{row.get('date','')} · RS {station} · {row.get('observed_datum','')} · "
+                    values=f"{row['observed_ft']*.3048:.4f} / {row['model_ft']*.3048:.4f} m"
+                    delta=f"{row['residual_ft']*.3048:+.4f} m"
+                    src=str(row.get('source') or '')
+                    add('exceeded' if abs(row['residual_ft'])>limit else 'met',
+                        where_at+f'Observed / modeled {values}. Modeled minus observed {delta}. Investigation limit {limit*.3048:.3f} m. '+src,
+                        where_at+f'实测／计算 {values}。计算减实测 {delta}，调查门槛 {limit*.3048:.3f} m。'+src)
                 peak=max(abs(r['residual_ft']) for r in measured)
                 add('met' if peak<=limit else 'exceeded',where+f' · Peak absolute stage error {peak:.3f} ft (limit {limit:g} ft).',
                     where+f' · 最大绝对水位误差 {peak:.3f} ft（限值 {limit:g} ft）。')

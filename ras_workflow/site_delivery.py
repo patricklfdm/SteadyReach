@@ -260,12 +260,21 @@ def generate(summary_path,output,reuse_package=None,refresh_imagery_extent=False
         copy_file(run/'manifest.json',full/'Evidence/run_manifest.original.json')
         # Preserve exact input snapshots; original paths in logs are historical locators.
         total=0;limit=int(settings.get('max_complete_bytes',1_500_000_000))
-        for e in run_manifest['input_snapshots']:
+        shortened_inputs=[]
+        for sequence,e in enumerate(run_manifest['input_snapshots']):
             if not intact([e]):raise ValueError('Input snapshot changed')
             total+=e['size_bytes']
             if total>limit:raise ValueError('Complete-package input budget exceeded; review the selection')
             source=ROOT/e['path'];relative=source.relative_to(run/'inputs_before')
-            copy_file(source,full/'Inputs'/relative)
+            destination=Path('Inputs')/relative
+            # Leave room for the checkout and recipient's folder in Windows file pickers.
+            if len(destination.as_posix())>100:
+                destination=Path('Evidence/InputFiles')/(str(sequence)+source.suffix[:16])
+                shortened_inputs.append(dict(original=relative.as_posix(),package_path=destination.as_posix(),
+                                             sha256=e['sha256'],size_bytes=e['size_bytes']))
+            copy_file(source,full/destination)
+        if shortened_inputs:
+            save(full/'Evidence/input_paths.json',dict(original_root='Inputs',files=shortened_inputs))
         for p in run.iterdir():
             if p.is_file() and p.suffix.lower() in ['.json','.txt','.log']:copy_file(p,full/'Evidence/Run'/p.name)
         for p in native.iterdir():

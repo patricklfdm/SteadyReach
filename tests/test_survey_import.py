@@ -48,6 +48,28 @@ class SurveyImportTests(unittest.TestCase):
                                     profiles=[dict(id='Measured',flow_cfs=53.5,source='Test input')]),files=self.files,
                       terrain=dict(raster='field.tif',vertical_datum='NAVD88',vertical_unit='m'))
 
+    def test_survey_start_reuses_verified_archived_image_without_dem_overrides(self):
+        from ras_workflow import app_core, local_rasters
+        with MemoryFile() as mem:
+            with mem.open(driver='GTiff',crs='EPSG:32615',transform=from_origin(500000,4250100,2,2),
+                          width=50,height=50,count=3,dtype='uint8') as ds:
+                ds.write(np.ones((3,50,50),dtype='uint8'))
+            image=mem.read()
+        receipt=dict(schema_version='naip_acquisition_1.0',source='Fixture imagery',status='READY_FOR_MAP_REVIEW',
+                     valid_fraction=1,raster=dict(sha256=hashlib.sha256(image).hexdigest()))
+        def uploads():
+            return [dict(name=k,content=base64.b64encode(v).decode())
+                    for k,v in [('aerial.tif',image),('acquisition.json',json.dumps(receipt).encode())]]
+        with patch.object(app_core,'BASE',self.root/'projects'),patch.object(app_core,'ROOT',self.root):
+            model=app_core.create(dict(route='survey',title='Survey archive test',survey_files=self.upload(),local_rasters=uploads()))
+        config=common.read(self.root/model['project'])
+        self.assertEqual(config['terrain']['raster'],'survey/field.tif')
+        self.assertEqual(config['delivery']['imagery']['raster'],'local_terrain/imagery.tif')
+        loc=self.m['location']
+        receipt['raster']['sha256']='0'*64
+        with self.assertRaisesRegex(ValueError,'SHA-256'):
+            local_rasters.validate(uploads(),None,None,loc['longitude'],loc['latitude'],imagery_only=True)
+
     def upload(self, manifest=None):
         data = dict(self.raw)
         data['survey.json'] = json.dumps(manifest or self.m).encode()

@@ -213,12 +213,13 @@ def build(data, plots, folder, language='en', detail='full', details=None):
             prefix=case+' · RS '+row['rs']+' · '+side
             p(prefix+' endpoint. WSE '+n(row['stage'])+' ft, ground '+n(row['end'])+' ft, depth '+n(row['stage']-row['end'])+' ft; WSE change '+n(row['delta'])+' ft.',
               prefix+'端点。水位 '+n(row['stage'])+' ft，地面 '+n(row['end'])+' ft，过水深度 '+n(row['stage']-row['end'])+' ft，水位变化 '+n(row['delta'])+' ft。')
-    if checks.get('screen'):
+    if checks.get('events') or checks.get('screen'):
+        checked=checks.get('screen') or []
         d.add_heading(tr('Field measurements and event coverage','实测资料与事件覆盖'),2)
         table(d,[tr('Event / use','事件／用途'),tr('Elevation and datum','高程及基准'),tr('Flow cfs','流量 cfs'),tr('Nearest section','最近断面')],[
-            [r['date']+' · '+r['role'],n(r['observed_ft'])+' ft '+str(r['observed_datum'] or '—'),n(r['flow_cfs']),('RS '+r['location']['rs']+' · '+n(r['location']['distance_m'])+' m') if r['location'] else '—'] for r in checks['screen'][:20]],[2.,2.1,1.,1.6])
+            [r['date']+' · '+r['role'],n(r['observed_ft'])+' ft '+str(r['observed_datum'] or '—'),n(r['flow_cfs']),('RS '+r['location']['rs']+(' · '+n(r['location']['distance_m'])+' m' if 'distance_m' in r['location'] else '')) if r['location'] else '—'] for r in (checked or checks['events'])[:20]],[2.,2.1,1.,1.6])
         candidates=[r for r in checks['events'] if r.get('kind') in ('stage','gage_height')]
-        candidates.extend(r for r in checks['screen'] if r.get('kind')=='bed')
+        candidates.extend(r for r in checked if r.get('kind')=='bed')
         valid=[r for r in candidates if r['residual_ft'] is not None]
         if valid:
             table(d,[tr('Date / quantity','日期／测量量'),'RS',tr('Observed ft','实测 ft'),tr('Calculated ft','计算 ft'),tr('Residual ft','偏差 ft')],[[r['date']+' · '+(tr('Bed','河床') if r['kind']=='bed' else tr('WSE','水位')),r['location']['rs'],n(r['observed_ft']),n(r['model_ft']),n(r['residual_ft'])] for r in valid[:20]],[1.6,.8,1.4,1.4,1.5])
@@ -231,12 +232,12 @@ def build(data, plots, folder, language='en', detail='full', details=None):
                 f'独立水位共对比 {len(held)} 个测点，其中 {len(missing)} 个缺少测量不确定度，{len(exceeds)} 个偏差超过已给出的测量不确定度。'))
         if full:
             matched={(r['event'],r['date']) for r in checks['events']}
-            pending=[r for r in checks['screen'] if (r.get('event'),r['date']) not in matched]
+            pending=[r for r in checked if (r.get('event'),r['date']) not in matched]
             reasons=sorted({(row['date'],issue) for row in pending+checks['events'] for issue in row['issues']})
             for day,issue in reasons:
                 detail=tr('No matching event run linked','该日期尚无关联的事件试算') if issue=='NO_MATCHED_EVENT_RUN' else issue
                 d.add_paragraph(day+' · '+detail)
-            for source in dict.fromkeys(row['source'] for row in checks['screen'] if row['source']):d.add_paragraph(source)
+            for source in dict.fromkeys(row['source'] for row in checked+checks['events'] if row['source']):d.add_paragraph(source)
             p('The complete record and any remaining rows are retained in report_data.json and in the archived source CSV. Forcing at the downstream boundary does not provide an independent observation at that section.',
               '完整逐行记录可在 report_data.json 和归档 CSV 中查阅。下游边界输入不能用于同一断面的独立验证。')
     if full:

@@ -164,18 +164,39 @@ def initial(m,g,c,s,length=400.,maximum=800.):
         try:
             u=np.array(seed['us']);d=np.array(seed['ds']);axis=unit_vector(d-u)
             offset=0. if seed.get('already_exterior') else max(10.,s.cell_ft*3)
-            up,un=anchors_outward(s,u-offset/s.factor*axis,-axis,length)
-            down,dn=anchors_outward(s,d+offset/s.factor*axis,axis,length)
-            reaches=[dict(id='upstream',anchors_xy=up[::-1].tolist()),dict(id='downstream',anchors_xy=down.tolist())]
+            picks=m.get('map_picks') or {}
+            reaches=[];notes=[]
+            for side,start,direction in [('upstream',u-offset/s.factor*axis,-axis),('downstream',d+offset/s.factor*axis,axis)]:
+                points=picks.get(side) or []
+                if len(points)<2:
+                    outward,warnings=anchors_outward(s,start,direction,length)
+                    points=(outward[::-1] if side=='upstream' else outward).tolist()
+                    notes.extend(warnings)
+                reaches.append(dict(id=side,anchors_xy=points))
             rows=[];lines=[];parameters=[]
             for reach in reaches:
-                line,z,ev=corridor_grid(reach['anchors_xy'],40.,max(5.,s.cell_ft),s.sample,s.factor,dict(elevation_weight=1.,uphill_weight=4.,height_scale_ft=10.))
+                saved=picks.get(reach['id']) or []
+                if len(saved)>=2:
+                    line=np.asarray(saved,dtype=float)
+                    if (line.ndim!=2 or line.shape[1]!=2 or not np.isfinite(line).all() or
+                            np.any(np.linalg.norm(np.diff(line,axis=0),axis=1)*s.factor<.1) or not np.isfinite(s.sample(line)).all()):
+                        raise ValueError('Check the saved exterior anchors and DEM coverage.')
+                    near,far=(line[-1],line[0]) if reach['id']=='upstream' else (line[0],line[-1])
+                    portal=u if reach['id']=='upstream' else d
+                    if np.linalg.norm(near-portal)>=np.linalg.norm(far-portal):
+                        raise ValueError('Check upstream-to-downstream order of saved exterior anchors.')
+                    reach['anchors_xy']=line.tolist()
+                    ev=dict(basis='REVIEWED_MAP_ANCHORS',count=len(saved))
+                else:
+                    line,z,ev=corridor_grid(reach['anchors_xy'],40.,max(5.,s.cell_ft),s.sample,s.factor,dict(elevation_weight=1.,uphill_weight=4.,height_scale_ft=10.))
                 # Keep enough vertices for bends but avoid one-grid-step tangent oscillations.
                 chain=np.r_[0,np.cumsum(np.linalg.norm(np.diff(line,axis=0),axis=1))*s.factor]
                 at=np.r_[np.arange(0,chain[-1],max(15.,s.cell_ft*3)),chain[-1]]
+                if len(saved)>=2:
+                    at=np.unique(np.r_[at,chain])
                 line=np.column_stack([np.interp(at,chain,line[:,k]) for k in (0,1)])
                 rr,spacing=adaptive_sections(s,line,reach['id'],maximum);rows+=rr;parameters.append(dict(reach=reach['id'],proposed_spacing_ft=spacing))
-                lines.append(dict(id=reach['id'],xy=line.tolist(),status='TERRAIN_DERIVED_CANDIDATE',screening=ev))
+                lines.append(dict(id=reach['id'],xy=line.tolist(),status='MAP_REVIEWED_CANDIDATE' if len(saved)>=2 else 'TERRAIN_DERIVED_CANDIDATE',screening=ev))
             candidate=copy.deepcopy(g);candidate.update(horizontal_crs=s.crs.to_string(),vertical_datum=s.datum,cross_sections=rows,flowlines=lines,approved_for_model=False)
             for i,row in enumerate(rows):row['rs']=float((len(rows)-i)*100)
             # Rotate only if a bounded joint solution exists. Never shrink to hide a conflict.
@@ -217,7 +238,7 @@ def initial(m,g,c,s,length=400.,maximum=800.):
             issues=spatial_issues(rows)
             for row in rows:row['auto_layout']['endpoints_above_screen']=min(row['elevation_ft'][0],row['elevation_ft'][-1])>row['auto_layout']['terrain_relief_screen_ft']
             annotate(candidate)
-            warnings=list(dict.fromkeys(un+dn+(['DIRECTION_AND_CROSSING_UNCONFIRMED'] if not seed['direction_known'] else [])+['BOUNDARY_REACH_EXTENT_NOT_HYDRAULICALLY_VERIFIED']))
+            warnings=list(dict.fromkeys(notes+(['DIRECTION_AND_CROSSING_UNCONFIRMED'] if not seed['direction_known'] else [])+['BOUNDARY_REACH_EXTENT_NOT_HYDRAULICALLY_VERIFIED']))
             layouts.append(dict(id='layout_'+str(number+1),seed=seed,anchors=reaches,parameters=parameters,geometry=candidate,issues=issues,warnings=warnings,
                 changed_sections=list(range(len(rows))),missing_heights=0,can_apply=not issues,
                 basis='Exterior DEM candidates; adaptive spacing at bends/slope breaks; relief-screen width is not flood extent. No buried opening geometry inferred.'))

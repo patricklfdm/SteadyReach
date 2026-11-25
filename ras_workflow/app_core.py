@@ -101,7 +101,15 @@ def create(body):
     for k in ['channel_n','overbank_n']:
         c['scenarios'][0][k]=number(body.get(k),k,0,1)
     if any(c['scenarios'][0].get(k) is not None for k in ['channel_n','overbank_n']):c['scenarios'][0]['parameter_source']=USER_SOURCE
+    archive=None
+    if body.get('local_rasters'):
+        from . import local_rasters
+        if route not in ('coordinates','survey'):
+            raise ValueError('Archived site rasters require a site location.')
+        archive=local_rasters.validate(body['local_rasters'],body.get('dem_vertical_unit'),body.get('dem_vertical_datum'),lon,lat,imagery_only=route=='survey')
     f.mkdir(parents=True)
+    if archive:
+        local_rasters.install(f,c,archive,body.get('dem_vertical_unit'),body.get('dem_vertical_datum'))
     evidence=survey_import.install(f,c,survey) if survey else []
     save(f/'project.json',c);save(f/'initial.json',c)
     m=dict(id=key,title=title,model_type=model_type,route=route,revision=0,status='NEW',phase='CREATED',project=rel(f/'project.json'),
@@ -398,6 +406,10 @@ def execute_approved(m,cp,*,fresh):
         except Exception:
             traceback.print_exc()  # Preserve the completed solver/export outcome.
 
+class ActiveProjectJob(ValueError):
+    """A project draft may be saved while the local worker is occupied."""
+
+
 def launch(key,action,*,run_review=None):
     if action not in ('prepare','run','resume-run','report','delivery','acquire','analyze','study','catalog','native-export','automatic-prepare','check-batch','next-review','field-run'):raise ValueError('Unknown task')
     global_state=ROOT/'status/app/active.json'
@@ -407,7 +419,7 @@ def launch(key,action,*,run_review=None):
             previous=read(global_state)
             if previous.get('record') and (ROOT/previous['record']).exists():
                 prev=read(ROOT/previous['record'])
-                if prev['status']=='RUNNING' and task_alive(prev):raise ValueError('Another project is processing; keep this draft and wait')
+                if prev['status']=='RUNNING' and task_alive(prev):raise ActiveProjectJob('Another project is processing; keep this draft and wait')
         if action=='run':
             from . import app_parameters
             app_parameters.confirm(m,run_review)

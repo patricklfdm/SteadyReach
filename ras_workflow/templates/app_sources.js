@@ -273,6 +273,14 @@ function renderCrossingIntake(parent,fields){
    group.append(row);}
  }
  panel.append(el('p',tr('Use the pin and photos to identify the inlet and outlet of each opening group on the DEM. A site pin alone does not establish flow direction. Get buried elevations from a survey or carry them as explicit screening assumptions.','结合定位点和照片，在 DEM 上辨认各组进口与出口。单个定位点不能确定流向。埋藏涵底需查测量资料，用于初筛的估计须保留假设标记。')));
+ if(!(current.map_picks?.inlet?.length&&current.map_picks?.outlet?.length)){
+  const request=details(panel,'Cannot locate both portals? Request a field return','还无法辨认两个洞口？导出现场补资料单');
+  const message=tr('For each opening group, return labeled inlet and outlet coordinates, horizontal CRS, flow direction, and a marked photo or plan. Give both invert elevations, units and vertical datum if surveyed. Resume this saved project, import the originals and locate the two centers on the map.','请逐组提供标明进出口的中心坐标、平面坐标系、流向和标注照片或平面图。如已测内底，请附两端高程、单位和高程基准。回到这个已保存项目，导入返回的原件，再在地图定位两端。');
+  request.append(el('p',message),button('Download portal survey request','下载洞口补测单',()=>{
+   const url=URL.createObjectURL(new Blob([current.title+'\n'+message+'\n'],{type:'text/plain;charset=utf-8'}));
+   const a=el('a');a.download='portal-request.txt';a.href=url;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }));
+ }
  panel.append(button('Locate inlet and outlet on the DEM','在 DEM 上定位进出口',()=>openModelTool('crossing-map')));
  panel.append(el('p',tr('Preview the proposed reach anchors and sections. Check the arrow, opening positions and bank profiles, then adopt the geometry to fill dependent inputs and review the assumptions together.','程序会提出上下游锚点和断面。预览箭头、洞口和岸站剖面，采用后会补齐关联参数，运算前可集中核对假设。')),
   button('Preview reach anchors and sections','预览河段锚点与断面',()=>openModelTool('dem-layout'),'primary'));
@@ -376,7 +384,20 @@ function renderSources(parent){
  const imports=details(card,'Add PDFs, photos, survey CSV or a local site folder','添加 PDF、照片、测量 CSV 或本站资料文件夹',!a);
  imports.id='site-file-import';
  const fi=field(imports,'attachments','Choose source files (multiple allowed)','选择资料（可多选）','','file');fi.multiple=true;fi.accept='.pdf,.jpg,.jpeg,.png,.tif,.tiff,.csv,.txt,.xml,.docx,.kml,.kmz';
- imports.append(button('Save and extract selected files','保存并解析所选资料',async()=>{await save();if(!fi.files.length)throw Error(tr('Select files first.','请先选择文件。'));const chosen=[...fi.files];let batch=[],bytes=0;for(const f of chosen){if(f.size>15000000)throw Error(tr('Each file must be at most 15 MB. Use the single-site folder import for many files.','单文件不能超过 15 MB，多份资料可使用本站文件夹导入。'));batch.push(f);bytes+=f.size;}if(bytes>48000000)throw Error(tr('Selection exceeds 48 MB; use the local site folder below.','所选资料超过 48 MB，请使用下方本机资料文件夹导入。'));await api('attach',{id:current.id,files:await encodeFiles(batch)});await open(current.id);}));
+ const folderFiles=field(imports,'site-source-directory','Or inspect a folder of site originals','也可选取现场原件目录','','file');folderFiles.webkitdirectory=true;folderFiles.multiple=true;
+ let selectedFolder=[];
+ const inventory=el('p');inventory.setAttribute('aria-live','polite');imports.append(inventory);
+ folderFiles.onchange=()=>{
+  selectedFolder=[];fi.value='';
+  const files=Array.from(folderFiles.files),supported=files.filter(f=>fi.accept.split(',').some(ext=>f.name.toLowerCase().endsWith(ext)));
+  const same=new Set(),repeated=new Set();
+  for(const f of supported){const name=f.name.toLowerCase();if(same.has(name))repeated.add(name);same.add(name);}
+  if(repeated.size){inventory.textContent=tr('Choose the intended files individually. Duplicate names: ','有同名文件，请单独选择正确原件：')+Array.from(repeated).join(', ');return;}
+  selectedFolder=supported;
+  inventory.textContent=tr('Ready to import ','待导入 ')+supported.length+' · '+tr('Skipped unsupported files ','略过不支持的文件 ')+(files.length-supported.length)+' · '+supported.map(f=>f.name).join(', ');
+ };
+ fi.onchange=()=>{folderFiles.value='';selectedFolder=[];inventory.textContent=Array.from(fi.files).map(f=>f.name).join(', ');};
+ imports.append(button('Save and extract selected files','保存并解析所选资料',async()=>{await save();const chosen=selectedFolder.length?selectedFolder:[...fi.files];if(!chosen.length)throw Error(tr('Select files first.','请先选择文件。'));let batch=[],bytes=0;for(const f of chosen){if(f.size>15000000)throw Error(tr('Each file must be at most 15 MB. Use the single-site folder import for many files.','单文件不能超过 15 MB，多份资料可使用本站文件夹导入。'));batch.push(f);bytes+=f.size;}if(bytes>48000000)throw Error(tr('Selection exceeds 48 MB; use the local site folder below.','所选资料超过 48 MB，请使用下方本机资料文件夹导入。'));await api('attach',{id:current.id,files:await encodeFiles(batch)});await open(current.id);}));
  if(!current.native){const path=field(imports,'material-folder','Or paste the existing single-site folder path','或粘贴已下载的本站资料文件夹路径');imports.append(button('Import this folder and analyze','导入此文件夹并解析',async()=>{await save();await api('sources/folder',{id:current.id,revision:current.revision,path:path.value});await open(current.id);}));imports.append(el('small',tr('Supported source files only, up to 100 files / 100 MB. Original files are unchanged; native HEC-RAS models are not imported here.','只导入支持的资料格式，最多 100 份／100 MB。原件不变，此处不会导入 HEC-RAS 模型。')),button('Download optional parameter CSV template','下载可选参数 CSV 模板',downloadParameterTemplate));}
  if(!current.native){const record=details(card,'Import another public USGS catalog record','导入其他公开 USGS 资料记录');const url=field(record,'catalog-url','ScienceBase catalog item URL','ScienceBase 公开目录页面网址');record.append(el('p',tr('Use an item page from the search results or a known source. Downloads are bounded to supported document files; check site/event/group applicability. Archives or browser verification remain explicit handoffs.','可使用查询结果或已知资料的目录页面。下载受大小和格式限制，仍须核对地点、工况及涵孔组；压缩包及浏览器验证会明确提示手动接续。')),button('Download available documents and analyze','下载可用文档并解析',async()=>{await save();await api('catalog-import',{id:current.id,revision:current.revision,url:url.value});await open(current.id);}));if(current.catalog_result)table(record,[tr('File','文件'),tr('Status','状态'),tr('Detail','详情')],current.catalog_result.files.map(r=>[r.name,sourceStatus(r.status),r.error||r.reason||'']));}
  if(a){

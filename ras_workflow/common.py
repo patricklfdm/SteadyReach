@@ -66,6 +66,7 @@ def intact(entries):
 def code_identity():
     files=sorted((ROOT/'ras_workflow').glob('*.py'))+[ROOT/'workflow.py']
     files+=sorted(p for p in (ROOT/'ras_workflow/templates').glob('*') if p.is_file())
+    files.extend(ROOT/'examples/siletz_or'/name for name in ('prepare.py','discharge.py','protocol.json'))
     return [item(p, 'workflow_code_or_template') for p in files]
 
 def identifier(s):

@@ -46,7 +46,7 @@ def page_action(key,mode,**info):
     worker=Thread(target=server.serve_forever,daemon=True)
     worker.start()
     try:
-        return browser_action(dict(url=server.url,project=key,mode=mode,**info))
+        return browser_action(dict(url=info.pop('url_override',server.url),project=key,mode=mode,**info))
     finally:
         server.shutdown()
         server.server_close()
@@ -60,7 +60,8 @@ def solve(key):
     model = core.model(key)
     need(model.get('summary') and intact([model['summary']]), f'Missing current solver output: {key}')
     summary = read(ROOT / model['summary']['path'])
-    hyd = summary['hydraulics']
+    hyd = summary.get('hydraulics')
+    need(hyd and hyd.get('raw_hdf'),f"Native calculation incomplete for {key}: {model.get('errors')}")
     from ras_workflow.qa import verified_profiles
     water=verified_profiles(hyd)['Q100']
     need(len(water)>=4 and all(v is not None for v in water.values()), 'Missing native section profiles')

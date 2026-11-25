@@ -175,8 +175,15 @@ def replay(packet,reference,hashes,destination,p2=False):
             time.sleep(1)
         raise TimeoutError('The local job is still active. Inspect its saved task before retrying.')
     try:
+        archive=packet/'Packages/Complete/Evidence/Imagery'
+        rasters=[]
+        for name in ('Aerial.tif','acquisition.json'):
+            path=archive/name
+            if path.is_file() and hashes.get(path.relative_to(packet).as_posix())==sha(path):
+                rasters.append(dict(name=name,content=base64.b64encode(path.read_bytes()).decode()))
         created=api('create',dict(route='survey',title='Siletz River · local release regression',
-                    production_scope={'purpose':'review','flow_paths':'single'},survey_files=data,gis=True))
+                    production_scope={'purpose':'review','flow_paths':'single'},survey_files=data,gis=True,
+                    local_rasters=rasters if len(rasters)==2 else None))
         key=created['id'];progress.update(project_id=key,preparation=created)
         save(destination/'fresh_job.json',progress)
         wait(key)

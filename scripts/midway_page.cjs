@@ -91,9 +91,11 @@ async function main() {
     await evaluate("document.querySelector('#accept-site').value='yes';document.querySelector('#accept-site').dispatchEvent(new Event('input',{bubbles:true}))");
     await until("document.querySelector('#accept-agreement').value==='yes'");
     const selector='[data-project-id="'+project+'"]';
-    await until('!!document.querySelector('+JSON.stringify(selector)+')');
-    await evaluate('document.querySelector('+JSON.stringify(selector)+').closest("details").open=true');
-    await click(selector+' button');
+    if(!mode.startsWith('home-')){
+      await until('!!document.querySelector('+JSON.stringify(selector)+')');
+      await evaluate('document.querySelector('+JSON.stringify(selector)+').closest("details").open=true');
+      await click(selector+' button');
+    }
     async function buttonByName(label, root='document') {
       const b='Array.from('+root+'.querySelectorAll("button")).find(b=>b.textContent.trim()==='+JSON.stringify(label)+' && !b.disabled)';
       await until('!busy && !!('+b+')');
@@ -113,6 +115,67 @@ async function main() {
       await send('DOM.setFileInputFiles',{nodeId,files});
       await buttonByName('Save and extract selected files');
       await until('!busy && current?.acquisition?.documents?.some(d=>d.source.original_name==='+JSON.stringify(path.basename(files.at(-1)))+') && !!document.getElementById("attachments")',1400);
+    }
+    async function selectFiles(selector,files){
+      await until('!busy && !!document.querySelector('+JSON.stringify(selector)+')');
+      await evaluate('(()=>{for(let p=document.querySelector('+JSON.stringify(selector)+');p;p=p.parentElement)if(p.tagName==="DETAILS")p.open=true;})()');
+      const {root}=await send('DOM.getDocument');
+      const {nodeId}=await send('DOM.querySelector',{nodeId:root.nodeId,selector});
+      await send('DOM.setFileInputFiles',{nodeId,files});
+    }
+    if(mode==='home-survey'||mode==='home-coordinates'||mode==='home-native'){
+      await fieldValue('title',input.title);
+      if(mode==='home-survey'){
+        await fieldValue('route','survey');await fieldValue('project-purpose','review');
+        if(input.rasters)await selectFiles('#survey-aerial',input.rasters);
+        await selectFiles('#survey-directory',[input.folder]);
+        await until('document.querySelector("#survey-files").nextElementSibling.textContent.includes("survey.json")');
+        await buttonByName('Inspect survey sources and event criteria');
+        if(input.protocol){
+          await buttonByName('Use these event conditions');
+          await until('document.querySelector("#accept-rs").value==="44056"');
+        }else{
+          await until('document.body.textContent.includes("Set project-specific limits")');
+        }
+      }else if(mode==='home-coordinates'){
+        await fieldValue('model-type','culvert');
+        for(const [id,value] of Object.entries(input.fields))await fieldValue(id,value);
+        await selectFiles('#local-rasters',input.rasters);
+      }else{
+        await fieldValue('route','native');
+        await selectFiles('#native-files',input.files);
+        await evaluate('document.querySelector("#new-gis").checked=false');
+      }
+      await buttonByName('Prepare project');
+      if(!await evaluate('!!current?.id'))throw Error('Project preparation did not open the draft: '+await evaluate('document.body.innerText.slice(0,1200)'));
+      await until('current?.id && current.status!=="PROCESSING"',1400);
+      console.log(await evaluate('current.id'));return;
+    }
+    if(mode==='portal-request'){
+      const folder=path.join(profile,'site-originals');fs.mkdirSync(folder);
+      for(const file of input.files)fs.copyFileSync(file,path.join(folder,path.basename(file)));
+      await selectFiles('#site-source-directory',[folder]);
+      await buttonByName('Save and extract selected files');
+      await until('document.querySelectorAll("#first-crossing a[href]").length>=6');
+      await send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:profile});
+      await buttonByName('Download portal survey request');
+      const request=path.join(profile,'portal-request.txt');
+      for(let i=0;i<60&&!fs.existsSync(request);i++)await delay(100);
+      if(!fs.readFileSync(request,'utf8').includes('horizontal CRS'))throw Error('Incomplete field return request');
+      await until('!current?.summary && !!document.querySelector("#first-crossing")');
+      console.log('Originals retained; request for both portals, flow direction and datum available.');return;
+    }
+    if(mode==='transfer-current'){
+      await click('#result-tab-delivery');
+      await buttonByName('Verify packages and create recipient guide');
+      await until('document.querySelector("#transfer-status code")?.textContent.includes("Handoff_")');
+      console.log(await evaluate('document.querySelector("#transfer-status code").textContent'));return;
+    }
+    if(mode==='river-revision'){
+      await click('#result-tab-review');
+      await buttonByName('Create editable revision');
+      await until('current?.parent_revision?.project_id==='+JSON.stringify(project));
+      console.log(await evaluate('current.id'));return;
     }
     if(mode==='edition-outcomes'){
       await until('document.querySelector("[data-review=endpoints]")?.textContent==='+JSON.stringify(input.caption));
@@ -175,20 +238,29 @@ async function main() {
     if(mode==='edition-transfer'){
       await until('current?.comparison?.status==="COMPARISON_NOT_ACCEPTANCE"');
       await until('document.querySelector(".result-assessment")?.textContent.includes("Midway_Channel_Bridge_Hydraulic_Analysis.docx")');
+      await fieldValue('edition-choice-note','Retain original road width pending a field survey.');
       await buttonByName('Keep previous calculation');
       await buttonByName('Open selected baseline');
       await until('current?.id==='+JSON.stringify(input.parent));
+      await click('#result-tab-delivery');
+      await buttonByName('Verify packages and create recipient guide');
+      await until('document.querySelector("#transfer-status code")?.textContent.includes("Handoff_")');
+      const original=await evaluate('document.querySelector("#transfer-status code").textContent');
+      const note=fs.readFileSync(path.join(original,'Start_EN.html'),'utf8');
+      if(!note.includes('Retain original road width pending a field survey.')||!note.includes('Original calculation'))throw Error('Baseline transfer reason missing');
       await buttonByName('← Projects');
       await until('!!document.querySelector('+JSON.stringify(selector)+')');
       await click(selector+' button');
       await buttonByName('Resume review of this edition');
+      await fieldValue('edition-choice-note','Use the nominal width in the supplemental memo for conditional screening.');
       await buttonByName('Use this revision');
       await buttonByName('Prepare handoff for the selected use');
       await until('document.querySelector("#transfer-status code")?.textContent.includes("Handoff_")');
       console.log(await evaluate('document.querySelector("#transfer-status code").textContent'));return;
     }
-    if(mode==='prepare-crossing'){
-      await upload(input.files);
+    if(mode==='prepare-crossing'||mode==='repair-layout'){
+      if(mode==='prepare-crossing'){
+      if(!input.resume)await upload(input.files);
       await until('document.querySelectorAll("#first-crossing a[href]").length>=6');
       const originals=await evaluate('Promise.all(Array.from(document.querySelectorAll("#first-crossing details:first-of-type a")).map(async a=>{const r=await fetch(a.href);return {name:a.textContent,ok:r.ok,bytes:(await r.arrayBuffer()).byteLength};}))');
       if(!input.files.every(f=>originals.some(r=>r.name===path.basename(f)&&r.ok&&r.bytes===fs.statSync(f).size)))throw Error('One or more original file links failed');
@@ -206,9 +278,27 @@ async function main() {
         await until('current.map_picks?.'+side+'?.length===1 && !mapDirty');
       }
       await buttonByName('Save opening picks and preview automatic layout');
-      await fieldValue('auto-reach-length',input.length);
-      await fieldValue('auto-width-limit',input.maximum);
+      if(input.length)await fieldValue('auto-reach-length',input.length);
+      if(input.maximum)await fieldValue('auto-width-limit',input.maximum);
       await buttonByName('Propose anchors and sections');
+      }else{
+        await buttonByName('Preview reach anchors and sections');
+      }
+      if(input.exterior){
+        await buttonByName('Locate this pair on the DEM');
+        await buttonByName('Mark exterior channels on the map');
+        await until('!!document.querySelector("#crossing-map svg.interactive-map")');
+        for(const [side,points] of Object.entries(input.exterior)){
+          await buttonByName('Pick '+side+' reach');
+          for(const [x,y] of points){
+            await fieldValue('crossing-x',x);await fieldValue('crossing-y',y);
+            await buttonByName('Add coordinate to the selected map tool');
+          }
+        }
+        await buttonByName('Save opening picks and preview automatic layout');
+        await buttonByName('Propose anchors and sections');
+        await until('!document.querySelector("#conflict-pair")');
+      }
       const approval='Array.from(document.querySelectorAll("#dem-layout label.check")).find(l=>l.textContent.includes("I checked direction"))?.querySelector("input")';
       await until('!!('+approval+')');
       await evaluate('('+approval+').click()');
@@ -232,12 +322,13 @@ async function main() {
       await until('!busy && !document.querySelector("#adopt-road-supplement") && document.getElementById("input-g.structure.road.width_ft")?.value==="26"');
       console.log(await evaluate('current.id'));return;
     }
-    if(mode==='solve'){
+    if(mode==='solve'||mode==='survey-solve'){
       const review="Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()==='Review calculation inputs →' && !b.disabled)";
       await until('!!('+review+')');
       await evaluate('('+review+').click()');
       await until("!!document.querySelector('#confirm-parameters') && document.querySelector('#confirm-run').disabled");
-      await until("document.body.textContent.includes('Delivery conditions for this run') && document.body.textContent.includes('Source required')");
+      await until("document.body.textContent.includes('Delivery conditions for this run')");
+      if(mode==='solve')await until("document.body.textContent.includes('Source required')");
       await click('#confirm-parameters');
       await until("document.querySelector('#confirm-run')?.disabled===false");
       await click('#confirm-run');

@@ -48,12 +48,16 @@ def choose(key, body):
             if original.get('summary') != parent['summary'] or core.deletion_record(original['id']).exists():
                 raise ValueError('Restore the matching baseline edition first. / 请先恢复匹配的基准版本。')
             selected = {'project_id': original['id'], 'summary': parent['summary']}
-    if prior.get('choice') == choice and prior.get('selected') == selected:
+    reason=body.get('reason',prior.get('reason','') if prior.get('choice')==choice else '')
+    if not isinstance(reason,str) or len(reason)>500:
+        raise ValueError('Use up to 500 characters for the selection note.')
+    reason=reason.strip()
+    if prior.get('choice') == choice and prior.get('selected') == selected and prior.get('reason','')==reason:
         return prior
     history=list(prior.get('history',[]))
     if prior.get('token') and not history:
         history.append({k:prior.get(k) for k in ('choice','token','selected','utc')})
-    record = dict(choice=choice, summary=summary, selected=selected, token=unique_id(),utc=utc())
+    record = dict(choice=choice, summary=summary, selected=selected, reason=reason,token=unique_id(),utc=utc())
     record['history']=history+[{k:record[k] for k in ('choice','token','selected','utc')}]
     save(core.folder(key) / 'review' / 'iteration_choice.json', record)
     return record

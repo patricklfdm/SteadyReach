@@ -28,6 +28,32 @@ METRIC_LABELS = {
 }
 
 
+def investigation(review, overbanks):
+    """Describe a specific comparison and its stopping condition from paired native evidence."""
+    result=[]
+    for r in review['endpoints'].get('rows',[]):
+        if r['state'] not in ('still_wet','new_wet'):
+            continue
+        rs,side=r['station'],r['side']
+        values=f"{r['previous_depth_ft']:.3f} → {r['current_depth_ft']:.3f} ft"
+        result.append(dict(profile=r['profile'],station=rs,side=side,
+            en=f"{r['profile']} · RS {rs} {side} end. Did the edit contain the flow? Endpoint depths {values}, each at its own cutline end. Check the continuous floodplain path on terrain and imagery. If unresolved, request a surveyed bank-to-high-ground section on this side before extending again.",
+            zh=f"{r['profile']} · RS {rs} {'左' if side=='left' else '右'}端。修改后断面是否包住水流？两版各自端点的水深为 {values}。请在地形与航片核对连续过流路径。仍有疑义时，先补测该侧从河岸到高地的横断面，再决定是否延伸。"))
+    shares=[(abs(change),r,i) for r in (overbanks or {}).get('rows',[])
+            for i,change in enumerate(r['delta_points']) if change]
+    if shares:
+        _,r,i=max(shares,key=lambda v:v[0])
+        side=['left','right'][i]
+        facts=f"{r['previous_percent'][i]:.2f}% → {r['current_percent'][i]:.2f}%"
+        delta=review.get('warning_delta')
+        note_en=f" Native warning count fell by {-delta}." if delta is not None and delta<0 else ''
+        note_zh=f"原生警告减少 {-delta} 条。" if note_en else ''
+        result.append(dict(profile='Q100',station=r['station'],side=side,
+            en=f"Q100 · RS {r['station']} {side} overbank share {facts}."+note_en+" Verify the flow path between adjacent sections and check bank locations against field evidence before selecting an edition.",
+            zh=f"Q100 · RS {r['station']} {'左' if i==0 else '右'}滩流量占比 {facts}。"+note_zh+"选版前请检查相邻断面间的过流连通性，并对照现场资料复核岸站。"))
+    return result
+
+
 def metric_rows(rows):
     return [dict(r,en=METRIC_LABELS[r['metric']][0],zh=METRIC_LABELS[r['metric']][1])
             for r in rows if r['metric'] in METRIC_LABELS]

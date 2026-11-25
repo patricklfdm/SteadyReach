@@ -58,3 +58,13 @@ In a dedicated local checkout with the supported native tools, supply the privat
 ```
 
 Open `status/release_checks/<run>/release.json`. Check `release_gate`, both software test results, `fresh_benchmark.p2.field` for the fresh interior residual and `midway.json` for the selected inputs, calculated runs and detached transfer. A reproduced calculation may still exceed the observed-stage investigation threshold. `engineering_approval` records the independent review status.
+
+## Required local release gate (P3)
+
+Use the `release.json` written by the command below. Require `release_gate = P3`, `status = SOFTWARE_CHECKS_PASSED`, `p3.status = PASSED`, `midway.status = PASSED` and the linked receipts. P2 and component commands remain available for development checks. Track human and cross-machine qualification separately. The Midway source-folder journey also requires the hashed `aerial_source` receipt for the imagery used to interpret the channel.
+
+Run `python scripts/release_check.py --p3 --packet "<frozen review folder>" --midway-fixture "<private fixture.json>" --transfer-survey "<independent survey folder>"` from the checkout with local HEC-RAS, QGIS, PDF conversion and Chromium configured. Each invocation creates isolated project IDs. Keep original survey files outside the public repository. The transfer survey uses a different site with documented geometry and discharge. The checks read the frozen East Fork holdout, retain the P2 lifecycle and exercise new browser entries for incomplete Midway materials, the Siletz event and the transfer site. Inspect `p3/journeys.json` and both detached reading guides. Software elapsed times exclude engineer effort. Human and second-machine acceptance are tracked separately.
+
+For a repeatable offline export, add `--transfer-imagery "<folder containing Aerial.tif and acquisition.json>"`. The Siletz run uses the hashed NAIP originals in the frozen review folder.
+
+For deeply nested input snapshots, `Complete/Evidence/input_paths.json` maps the original relative path to the shorter copy under `Complete/Evidence/InputFiles` with its byte length and SHA-256. If a Windows browser cannot read a long path, copy the whole handoff folder near the drive root and check that copy.

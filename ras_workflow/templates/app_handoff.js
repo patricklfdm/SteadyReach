@@ -2,11 +2,18 @@ async function createTransferFolder(output){
  const id=current.id,revision=current.revision;
  output.textContent=tr('Copying and verifying both packages…','正在复制并校验两种交付包…');
  try{
-  const info=await api('handoff-export',{id,revision,summary_hash:current.summary.sha256});
+  const selected=JSON.parse(sessionStorage.getItem('selected-baseline/'+current.summary.sha256)||'null');
+  const info=await api('handoff-export',{id,revision,summary_hash:current.summary.sha256,selected_from:selected});
   output.replaceChildren(el('p',tr('English and Chinese opening guides saved','已保存中英文打开说明')+' · L'+info.level+' · '+info.run_id,'status'),
    el('p',tr('Transfer this entire folder. Open Start_EN.html or Start_zh-CN.html. Both verified packages are inside.','整体转交此目录。双击 Start_zh-CN.html 或 Start_EN.html，两种已校验的交付包均在目录内。')),el('code',info.folder),
    button('Open transfer folder','打开可转交目录',()=>api('open-folder',{id,path:info.folder})));
- }catch(error){output.textContent=error.message;throw error;}
+ }catch(error){
+  output.textContent=error.message;
+  if(sessionStorage.getItem('selected-baseline/'+current.summary.sha256))output.append(button('Review this edition directly','直接复核当前版本',async()=>{
+   sessionStorage.removeItem('selected-baseline/'+current.summary.sha256);await open(current.id);
+  }));
+  throw error;
+ }
 }
 function renderRecipientHandoff(parent){
  const output=el('div');output.id='transfer-status';output.setAttribute('aria-live','polite');

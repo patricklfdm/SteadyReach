@@ -59,6 +59,12 @@ def run(args):
                    holdout_rmse_m=data['east_fork']['holdout_rmse_m'],native_warnings=matching[0]['warnings'],
                    siletz_field_screen=field_screen(packet,matching[0],hashes),east_fork_field_screen=east)
             write_field_notes(root,result['field_packet']['siletz_field_screen'],east)
+            if getattr(args,'p3',False):
+                result['release_gate']='P3'
+                from p3_release import run as journeys
+                fixture=Path(args.midway_fixture or os.environ['STEADYREACH_MIDWAY_FIXTURE']).resolve()
+                journeys(packet,fixture,args.transfer_survey.resolve(),root/'p3',args.transfer_imagery)
+                result['p3']=dict(status='PASSED',receipt='p3/journeys.json',sha256=sha(root/'p3/journeys.json'))
             if args.fresh_benchmark:
                 from release_benchmark import replay
                 result['fresh_benchmark']=replay(packet,matching[0],hashes,root,p2=args.p2)
@@ -79,6 +85,11 @@ def run(args):
             passed=False
     else:
         result['midway'] = dict(status='NOT_RUN',reason='Fix preceding release checks first.')
+    if getattr(args,'p3',False) and 'p3' not in result:
+        result['release_gate']='P3'
+        evidence=root/'p3/journeys.json'
+        result['p3']=dict(status='FAILED' if evidence.exists() else 'NOT_RUN',error=result.get('error'),
+                          receipt='p3/journeys.json' if evidence.exists() else None)
     result['status']='SOFTWARE_CHECKS_PASSED' if passed else 'NEEDS_ATTENTION'
     save(root/'release.json',result);print(root/'release.json');return 0 if passed else 1
 
@@ -90,7 +101,13 @@ if __name__=='__main__':
     p.add_argument('--p2',action='store_true',help='Require the measured river replay, independent river revision and Midway recipient checks')
     p.add_argument('--fresh-benchmark',action='store_true',help='Create an isolated project and repeat the native solve and mapped exports from the verified packet')
     p.add_argument('--midway-fixture',type=Path,help='Private Midway originals, terrain and operator choices for the mandatory fresh lifecycle replay')
+    p.add_argument('--p3',action='store_true',help='Require P2 plus fresh browser journeys and observed recipient decisions')
+    p.add_argument('--transfer-survey',type=Path,help='Separate complete surveyed site reserved for the transfer test')
+    p.add_argument('--transfer-imagery',type=Path,help='Optional dated NAIP Aerial.tif and acquisition.json for the transfer site')
     args=p.parse_args()
+    if args.p3:
+        if not args.transfer_survey:p.error('--p3 requires --transfer-survey')
+        args.p2=True
     if args.p2:
         if not args.packet or not (args.midway_fixture or os.environ.get('STEADYREACH_MIDWAY_FIXTURE')):
             p.error('--p2 requires --packet and --midway-fixture (or STEADYREACH_MIDWAY_FIXTURE)')

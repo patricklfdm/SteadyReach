@@ -173,6 +173,8 @@ def compare(m,summary):
     review=interpret(diagnostics,profiles,old_water.keys()==new_water.keys(),THRESHOLDS['sensitivity_hw_ft'])
     from .revision_endpoints import summary as endpoint_summary
     review['endpoints']=endpoint_summary(previous,current,locations,old_water,new_water)
+    from .revision_review import investigation
+    review['investigation']=investigation(review,overbanks)
     review['metrics']=metric_rows(rows)
     diagnostic_sources=[ref for s,d in ((old,diagnostics['previous']),(summary,diagnostics['current']))
                         if d['status']=='VERIFIED' for ref in (s['hydraulics'].get('diagnostics'),s.get('native_supplement')) if ref]

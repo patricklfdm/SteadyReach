@@ -58,3 +58,13 @@
 ```
 
 查看 `status/release_checks/<运行号>/release.json` 中的 `release_gate` 和两组测试状态。`fresh_benchmark.p2.field` 给出本次实算相对真实内点观测的偏差；同目录的 `midway.json` 记录采用的输入、各次计算和脱离项目后的目录校验。复算一致的项目仍可能超出实测调查门槛，独立签审状态另见 `engineering_approval`。
+
+## 当前版本发版必测（P3）
+
+以本节命令生成的 `release.json` 为准。记录须同时包含 `release_gate = P3`、`status = SOFTWARE_CHECKS_PASSED`、`p3.status = PASSED`、`midway.status = PASSED` 及对应回执。P2 与单项命令可用于开发排错；真人试用和跨机器验收单独记录。Midway 原件入口还需要 `aerial_source` 的 SHA-256，以核对实际用于判读的航片。
+
+在已配置 HEC-RAS、QGIS、PDF 转换器和 Chromium 的仓库中运行 `python scripts/release_check.py --p3 --packet "<冻结复核目录>" --midway-fixture "<私有 fixture.json>" --transfer-survey "<另一地点的测量资料目录>"`。每次运行新建隔离项目。转移测试使用有实际几何、流量和原件的其他地点，私有资料保留在本机。检查覆盖冻结的 East Fork 留出事件、P2 完整链路，以及从首页开始的 Midway 缺资料、Siletz 实测对比和另一地点交接。从 `p3/journeys.json` 核查运行编号、交接目录和分步耗时。所记录时间是软件操作耗时，真人和第二台机器的验收另行安排。
+
+要在离线条件下稳定复核另一地点的地图，增加 `--transfer-imagery "<同时含 Aerial.tif 和 acquisition.json 的目录>"`。Siletz 使用冻结复核资料中已校验的 NAIP 原件。
+
+完整包把层级过深的输入快照存到 `Complete/Evidence/InputFiles`，在 `Complete/Evidence/input_paths.json` 记录原相对路径、包内位置、字节数和 SHA-256。若收件人在 Windows 上遇到长路径读取失败，可将整个交接目录复制到盘符根目录附近后重新校验。

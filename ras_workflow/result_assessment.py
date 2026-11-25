@@ -393,7 +393,7 @@ def assess(model, path, summary, diagnostics, studies, guidance):
             comparison=compare(dict(parent_revision=origin),summary)
         except EVIDENCE_ERRORS:
             comparison=None
-    result['purpose_decision']=evaluate(summary,river.get('events',[]),comparison)
+    result['purpose_decision']=evaluate(summary,reviewed_events,comparison)
     result['evidence_hash'] = digest({k:v for k,v in result.items() if k!='assessed_utc'})
     return result
 

@@ -140,7 +140,11 @@ def collect(summary_path, comparisons=()):
         revision=compare_revision(dict(parent_revision=s['configuration']['revision_origin']),s)
         sources+=revision.get('sources',[])
     from .purpose_acceptance import evaluate
-    purpose_decision=evaluate(s,river_checks.get('events',[]),revision)
+    reviewed_events=list(river_checks.get('events',[]))
+    if feedback and feedback['mode']=='event':
+        from .field_results import verified_observations
+        reviewed_events.extend(verified_observations(feedback))
+    purpose_decision=evaluate(s,reviewed_events,revision)
     return dict(purpose_decision=purpose_decision, studies=studies, field_feedback=feedback, river_checks=river_checks, revision_comparison=revision,schema_version='readable_report_data_1.0',created_utc=utc(),summary=s,sections=rows,
         geometry=geometry,map_geometry=map_geometry,geometry_source=geometry_source,raster_source=raster_source,diagnostics=diagnostics,
         language_review=language_review,native_supplement=supplement,comparisons=compared,reference_comparisons=references,native_inputs=native_inputs,native_input_error=native_input_error,

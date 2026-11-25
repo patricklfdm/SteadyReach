@@ -69,12 +69,21 @@ def create():
                 if self.headers.get('Content-Type')!='application/json' or not 0<length<=70_000_000:raise ValueError('Invalid JSON request size')
                 body=json.loads(self.rfile.read(length).decode('utf-8'))
                 if not isinstance(body,dict):raise ValueError('JSON object required')
-                if route=='create':
+                if route=='survey-preview':
+                    from .survey_import import parse
+                    from .survey_events import suggestion
+                    manifest,files=parse(body.get('survey_files'))
+                    result=dict(title=manifest.get('title'),profiles=[p['id'] for p in manifest['scenario']['profiles']],
+                                files=list(files),criteria=suggestion(manifest,files))
+                elif route=='create':
                     m=core.create(body)
                     if body.get('native_path') or body.get('files'):core.native_inputs(m['id'],body)
                     from .feasibility import OUTSIDE
-                    result = (dict(id=m['id'],status=m['status']) if m.get('production_scope',{}).get('flow_paths') in OUTSIDE
-                              else core.launch(m['id'],'prepare'))
+                    try:
+                        result = (dict(id=m['id'],status=m['status']) if m.get('production_scope',{}).get('flow_paths') in OUTSIDE
+                                  else core.launch(m['id'],'prepare'))
+                    except core.ActiveProjectJob:
+                        result=dict(id=m['id'],status=m['status'],preparation_waiting=True)
                 else:
                     key=body['id']
                     if route in ('delete-project','restore-project'):result=core.set_deleted(key,body,deleted=route=='delete-project')
