@@ -248,6 +248,126 @@ function showAcquisitionGaps(parent,acquisition){
  box.append(list);parent.append(box);return true;
 }
 
+function sourceFileHref(source){return 'file/'+source.path.split('/').map(encodeURIComponent).join('/');}
+function renderCrossingIntake(parent,fields){
+ const panel=el('section',undefined,'card');panel.id='first-crossing';parent.append(panel);
+ panel.append(el('h3',tr('Start with the crossing','从涵洞位置开始')));
+ const originals=current.attachments||[];
+ const add=button(originals.length?'Review or add source files':'Add site files',originals.length?'复核或补充原始资料':'添加现场资料',()=>openModelTool('site-file-import'));
+ panel.append(add);
+ if(originals.length){
+  const files=details(panel,'Open the originals ('+originals.length+')','查看原件（'+originals.length+'）');
+  for(const f of originals){const a=el('a',f.original_name||f.path.split('/').at(-1));a.href=sourceFileHref(f);a.target='_blank';a.rel='noopener';files.append(a,el('br'));}
+ }
+ const essentials=fields.filter(f=>/\.(flow_cfs|overbank_n|channel_n|shape|span_ft|rise_ft|count|length_ft|us_invert_ft|ds_invert_ft)$/.test(f.key)||f.key==='g.structure.road.width_ft');
+ const buckets=[
+  [tr('Available inputs and source candidates','已有输入和资料候选'),f=>!f.missing&&!['assumed','inferred','terrain_derived'].includes(f.evidence_class)||f.missing&&f.parameter_candidates?.some(c=>c.source)],
+  [tr('Conditional values to review','待核对的条件性数值'),f=>!f.missing&&['assumed','inferred','terrain_derived'].includes(f.evidence_class)],
+  [tr('Still to establish','待补依据的参数'),f=>f.missing&&!f.parameter_candidates?.some(c=>c.source)]];
+ for(const [title,test] of buckets){
+  const list=essentials.filter(test),group=details(panel,title+' ('+list.length+')',title+'（'+list.length+'）');
+  for(const f of list){const c=f.parameter_candidates?.find(v=>v.source);
+   const row=el('p');row.append(button(f.label.en,f.label.zh,()=>revealParameter(f.key)),document.createTextNode(' '+(f.missing?(c?tr('Candidate ','候选 ')+format(c.value,f.kind):'—'):format(f.value,f.kind))+' '+(f.unit||'')+' · '+(f.missing&&c?originName(c.evidence_class):originName(f.evidence_class))));
+   if(c?.source){const a=el('a',c.source.original_name||tr('Original','原件'));a.href=sourceFileHref(c.source);a.target='_blank';a.rel='noopener';row.append(' ',a);}
+   if(f.missing&&/\.([ud]s_invert_ft|length_ft)$/.test(f.key))row.append(el('small',tr('Check survey or as-built dimensions. A map-based screening estimate can become available after geometry review.','优先核对测量或竣工资料。采用几何后可查看是否具备依据提出初筛估计。')));
+   group.append(row);}
+ }
+ panel.append(el('p',tr('Use the pin and photos to identify the inlet and outlet of each opening group on the DEM. A site pin alone does not establish flow direction. Get buried elevations from a survey or carry them as explicit screening assumptions.','结合定位点和照片，在 DEM 上辨认各组进口与出口。单个定位点不能确定流向。埋藏涵底需查测量资料，用于初筛的估计须保留假设标记。')));
+ panel.append(button('Locate inlet and outlet on the DEM','在 DEM 上定位进出口',()=>openModelTool('crossing-map')));
+ panel.append(el('p',tr('Preview the proposed reach anchors and sections. Check the arrow, opening positions and bank profiles, then adopt the geometry to fill dependent inputs and review the assumptions together.','程序会提出上下游锚点和断面。预览箭头、洞口和岸站剖面，采用后会补齐关联参数，运算前可集中核对假设。')),
+  button('Preview reach anchors and sections','预览河段锚点与断面',()=>openModelTool('dem-layout'),'primary'));
+}
+
+function renderReturnedInverts(parent,fields){
+ const rows=fields.map(f=>{
+  const candidates=f.parameter_candidates||[],choices=candidates.filter(c=>c.returned_invert);
+  if(!choices.length)return null;
+  const first=choices[0];
+  const differs=candidates.some(c=>c.source && !c.returned_invert && c.value!==first.value);
+  const savedConflict=!f.missing && ['reported','measured','surveyed'].includes(f.evidence_class) && f.value!==first.value;
+  return {f,choices,review:choices.length!==1 || differs || savedConflict};
+ }).filter(Boolean);
+ if(!rows.length)return;
+ const card=el('section',undefined,'card');card.id='returned-inverts';parent.append(card);
+ card.append(el('h3',tr('Matched survey return','已匹配的补测回传')),el('p',tr('Check group, end, datum and source before adopting returned values.','采用前核对孔组、进出口、基准、数值及资料来源。')));
+ for(const {f,choices,review} of rows){
+  const grid=el('div');card.append(grid);grid.append(el('strong',tr(f.label.en,f.label.zh)+' · '+tr('Saved','原值')+' '+(f.value??'—')+' ft'));
+  for(const c of choices){
+   const source=el('a',c.source.original_name);source.href=sourceFileHref(c.source);source.target='_blank';source.rel='noopener';
+   grid.append(el('p',c.value+' ft · '+c.datum+' · '+originName(c.evidence_class)+' · '+c.basis),source);
+  }
+  if(review)grid.append(el('p',tr('Compare the returned records and existing sources for this elevation.','此高程有多个回传记录或与已有资料不同，请逐项核对。'),'warning'),button('Review alternatives','逐项核对候选',()=>revealParameter(f.key)));
+ }
+ if(rows.every(r=>!r.review)){
+  const choices=rows.map(({f,choices:[c]})=>({field:f.key,candidate:c.candidate}));
+  card.append(button('Adopt displayed survey returns','采用已核对的回传值',async()=>{
+   await save();await api('candidate',{id:current.id,revision:current.revision,selections:choices});await open(current.id);notify(tr('Survey values saved in this revision. Check dependent inputs before computing.','回传值已存入本修订版，请在重算前核对关联输入。'));
+  }));
+ }
+}
+function renderRoadSupplement(parent,fields){
+ renderReturnedInverts(parent,fields);
+ const road=fields.find(f=>f.key==='g.structure.road.width_ft');if(!road)return;
+ const inherited=current.parent_revision.inherited_sources;
+ const options=(road.parameter_candidates||[]).filter(c=>c.source&&inherited&&!inherited.includes(c.source.sha256)&&c.value!==road.value);
+ const card=el('section',undefined,'card');card.id='road-supplement';parent.append(card);
+ card.append(el('h3',tr('Update this revision from additional material','用补充资料更新本修订版')),
+  button('Add a drawing or site memo','导入图纸或现场说明',()=>openModelTool('site-file-import')));
+ if(!inherited){card.append(el('p',tr('The baseline source list is unavailable. Review the road width and source individually.','无法核实基准版的资料清单，请在路宽参数处逐项核对来源。')),
+  button('Open width input','打开路宽参数',()=>revealParameter(road.key)));return;}
+ if(!options.length){card.append(el('p',tr('A new document with a different road width will appear here for comparison. Other parameters can be updated from the input list.','补充资料中不同于现值的路宽会在此列出。其他参数可从参数清单核对修改。')));return;}
+ const out=el('div');out.setAttribute('aria-live','polite');
+ const select=field(card,'supplement-source','Road-width source','路宽依据','', 'select',[['','Choose the source','请选择依据'],...options.map(c=>{const t=c.value+' ft · '+(c.source.original_name||c.source.path);return [c.candidate,t,t];})],()=>out.replaceChildren());
+ card.append(button('Compare width and road profiles','比较路宽和道路剖面',async()=>{
+  if(!select.value)throw Error(tr('Choose a document first.','请先选择资料。'));
+  await save();const candidate=select.value,body={id:current.id,revision:current.revision,candidate};
+  const v=await api('material-revision-preview',body);out.replaceChildren();
+  const source=el('a',v.selected.source.original_name||v.selected.source.path);source.href=sourceFileHref(v.selected.source);source.target='_blank';source.rel='noopener';
+  out.append(source,el('blockquote',v.selected.basis),el('p',v.before+' ft ('+originName(v.previous_class)+') → '+v.selected.value+' ft ('+originName(v.selected.evidence_class)+')'),
+   el('p',tr('Check whether the stated width is the effective overflow width. Review the road offset and both crest profiles below.','请判断资料宽度能否作为有效越流宽度，并核对道路位置和上下游两条堰顶剖面。')));
+  const fmt=value=>{
+   if(!Array.isArray(value))return String(value??'—');
+   if(!value.length)return '—';
+   return value.length+tr(' samples, range ',' 个采样点，范围 ')+Math.min(...value).toFixed(2)+' – '+Math.max(...value).toFixed(2);
+  };
+  const matrix=details(out,'Compare all affected inputs ('+v.changes.length+')','逐项对照关联输入（'+v.changes.length+'）',true);
+  const reasons={independent:tr('Keep and review the independently entered value','保留独立填报值，需单独复核'),competing:tr('Compare competing candidates','需比较多个候选'),needs_evidence:tr('Check the supporting inputs','需补齐推导依据')};
+  table(matrix,[tr('Input','输入'),tr('Saved','已保存'),tr('Proposed','建议')],v.changes.map(r=>[tr(r.label.en,r.label.zh)+(r.unit?' ('+r.unit+')':''),fmt(r.before),r.automatic?(JSON.stringify(r.after)===JSON.stringify(r.before)?tr('Same value, recalculated','重算后数值相同'):fmt(r.after)):reasons[r.reason]]));
+  drawRoadChange(out,v.changes);
+  const sampled=v.changes.filter(r=>Array.isArray(r.before)||Array.isArray(r.after));
+  if(sampled.length){
+   const raw=details(out,'Inspect individual profile samples','查看剖面逐点原值与建议值');
+   raw.append(el('p',tr('Rows follow each profile’s sampling order. Compare the station arrays when the crest locations change.','按各版剖面的采样顺序列出。堰顶位置改变时，请对照两版的站距数组。')));
+   for(const r of sampled){const before=r.before||[],after=r.after||[];
+    const group=details(raw,r.label.en,r.label.zh);
+    table(group,[tr('Sample','采样点'),tr('Saved','原值'),tr('Proposed','建议值')],Array.from({length:Math.max(before.length,after.length)},(_,i)=>[i+1,before[i]??'—',after[i]??'—']));
+   }
+  }
+  if(!v.ready){out.append(el('p',tr('Some values have independent evidence or multiple interpretations. Open the width input, select the source and review the individual dependencies.','部分参数有独立依据或存在多种解释，请从路宽字段采用资料并逐项复核关联参数。'),'warning'),button('Open width input','打开路宽参数',()=>revealParameter(road.key)));return;}
+  const apply=button('Adopt width and linked inputs in this revision','仅在本修订版采用路宽及关联参数',async()=>{
+   await save();await api('material-revision-apply',{...body,token:v.token,confirmed:true});
+   await open(body.id);notify(tr('Saved the road revision. Review calculation inputs before running.','道路修订已保存，请进入参数核对后再计算。'));
+  },'primary');apply.id='adopt-road-supplement';out.append(apply);
+ }));card.append(out);
+}
+
+function drawRoadChange(parent,rows){
+ const values=Object.fromEntries(rows.map(r=>[r.key.split('.').at(-1),r]));
+ for(const [prefix,en,zh] of [['','Upstream crest','上游堰顶'],['downstream_','Downstream crest','下游堰顶']]){
+  const x=values[prefix+'station_ft'],z=values[prefix+'elevation_ft'];
+  if(!x||!z)continue;
+  const series=['before','after'].filter(k=>Array.isArray(x[k])&&x[k].length>1&&x[k].length===z[k]?.length);
+  if(!series.length)continue;
+  const xs=series.flatMap(k=>x[k]),zs=series.flatMap(k=>z[k]);
+  const minX=Math.min(...xs),maxX=Math.max(...xs),minZ=Math.min(...zs),maxZ=Math.max(...zs);
+  const chart=document.createElementNS('http://www.w3.org/2000/svg','svg');chart.setAttribute('viewBox','0 0 700 230');chart.classList.add('chart');chart.setAttribute('aria-label',tr(en,zh));
+  parent.append(el('h4',tr(en,zh)),chart);profileGrid(chart,[minX,maxX],minZ,Math.max(minZ+1,maxZ),[40,670,30,190]);
+  for(const k of series){const pts=x[k].map((v,i)=>[40+630*(v-minX)/Math.max(0.001,maxX-minX),190-160*(z[k][i]-minZ)/Math.max(1,maxZ-minZ)].join(',')).join(' ');
+   svgEl(chart,'polyline',{points:pts,fill:'none',stroke:k==='before'?'#565e64':'#00767d','stroke-width':2,'stroke-dasharray':k==='before'?'6 4':'none'});}
+  parent.append(el('small',tr('Dashed grey = saved. Teal = proposed. Horizontal distance and elevation in feet.','灰色虚线为原值，蓝绿色为建议值；横距和高程单位均为英尺。')));
+ }
+}
+
 function renderSources(parent){
  const a=current.acquisition,card=el('section',undefined,'card source-hub');parent.append(card);
  card.append(el('h2',tr('Find, import and inspect source material','查找、导入与核查资料')),el('p',tr('Local search and extraction retain the original files and identify parameter candidates. Automatic draft preparation fills supported values and labels estimates for the final review. Conflicting sources remain available for your choice.','在本机查询和提取资料，保留原件并识别参数候选。自动准备草稿会填入有依据的数值，并标注估计项供最终核对；来源冲突集中保留供选择。')));
@@ -264,7 +384,7 @@ function renderSources(parent){
   const visual=a.documents.filter(d=>d.visual_only);
   if(visual.length){const visualPanel=details(card,'Photos for visual inspection ('+visual.length+')','需目视核对的照片（'+visual.length+'）');
    visualPanel.append(el('p',tr('Text recognition found no legible labels. Open the originals to check visible features such as the number of openings. Use dimensions or elevations only where their scale and datum are documented.','文字识别未找到可读标注。打开原图可核对孔数等外观特征。采用尺寸或高程时需另核对比例和基准。')));
-   for(const doc of visual){const a=el('a',doc.source.original_name,'link');a.href='file/'+doc.source.path;a.target='_blank';a.rel='noopener';visualPanel.append(a);}
+   for(const doc of visual){const a=el('a',doc.source.original_name,'link');a.href=sourceFileHref(doc.source);a.target='_blank';a.rel='noopener';visualPanel.append(a);}
   }
   if(a.auto_filled?.length)card.append(el('p',tr('Filled missing source-reported values: ','已填入空白资料值：')+a.auto_filled.join(', '),'status'));
   showAcquisitionGaps(card,a);
@@ -278,9 +398,9 @@ function renderSources(parent){
   const partial=a.documents.filter(doc=>doc.coverage?.status==='PARTIAL'||(doc.warnings||[]).some(w=>typeof w==='string'&&/Only the first|OCR failed/.test(w)));
   if(partial.length)card.append(el('p',partial.length+tr(' documents need page review. Expand Original documents and extracted text for page coverage and OCR warnings.',' 份资料需要原文核查。展开“原件与提取文本”，查看已读页数及 OCR 提示。'),'warning'));
   const docs=details(card,'Original documents and extracted text','原件与提取文本',false);
-  for(const doc of a.documents){const f=doc.source,box=details(docs,f.original_name||f.path.split('/').at(-1),f.original_name||f.path.split('/').at(-1));const link=el('a',tr('Open original ↗','查看原件 ↗'));link.href='file/'+f.path;link.target='_blank';box.append(link,el('p',(doc.method||'')+' · '+sourceStatus(doc.status)));if(doc.coverage)box.append(el('p',doc.coverage.inspected_pages+' / '+doc.coverage.total_pages+tr(' pages inspected; OCR attempts ',' 页已尝试解析；OCR 尝试 ')+doc.coverage.ocr_pages));if(doc.error)box.append(el('p',doc.error,'warning'));for(const w of doc.warnings||[])box.append(el('p',typeof w==='string'?w:JSON.stringify(w),'warning'));if(doc.text)box.append(el('pre',doc.text));}
+  for(const doc of a.documents){const f=doc.source,box=details(docs,f.original_name||f.path.split('/').at(-1),f.original_name||f.path.split('/').at(-1));const link=el('a',tr('Open original ↗','查看原件 ↗'));link.href=sourceFileHref(f);link.target='_blank';box.append(link,el('p',(doc.method||'')+' · '+sourceStatus(doc.status)));if(doc.coverage)box.append(el('p',doc.coverage.inspected_pages+' / '+doc.coverage.total_pages+tr(' pages inspected; OCR attempts ',' 页已尝试解析；OCR 尝试 ')+doc.coverage.ocr_pages));if(doc.error)box.append(el('p',doc.error,'warning'));for(const w of doc.warnings||[])box.append(el('p',typeof w==='string'?w:JSON.stringify(w),'warning'));if(doc.text)box.append(el('pre',doc.text));}
   for(const survey of a.surveys)renderSurvey(card,survey);
- }else if(current.attachments.length){const docs=details(card,'Saved source files','已保存的资料');for(const f of current.attachments){const p=el('p'),link=el('a',f.original_name||f.path.split('/').at(-1));link.href='file/'+f.path;link.target='_blank';p.append(link);docs.append(p);}}
+ }else if(current.attachments.length){const docs=details(card,'Saved source files','已保存的资料');for(const f of current.attachments){const p=el('p'),link=el('a',f.original_name||f.path.split('/').at(-1));link.href=sourceFileHref(f);link.target='_blank';p.append(link);docs.append(p);}}
 }
 function renderSurvey(parent,s){
  const key=s.source.sha256,box=details(parent,'Survey: '+s.source.original_name+' · '+s.points.length+' points','测量：'+s.source.original_name+' · '+s.points.length+' 个点',false),context=s.context||{};

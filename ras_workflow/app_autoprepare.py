@@ -173,7 +173,7 @@ def execute(key):
     # With only endpoints the physical channel has not been identified through bends.
     # Build that preview after parameter refresh so it reopens with a current signature.
     river_picks=m.get('map_picks', {}).get('river', [])
-    preview_route = not g['cross_sections'] and g.get('model_type') == 'river' and (
+    preview_route = not g['cross_sections'] and (g.get('model_type') != 'river' or
         len(river_picks)==2 or (not river_picks and m.get('public_reach')))
     progress(m, 'Preparing DEM geometry / 准备 DEM 几何')
     try:

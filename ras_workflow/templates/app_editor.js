@@ -308,12 +308,6 @@ function renderManual(screen){
  const intake=current.intake;if(!intake){screen.append(button('Prepare terrain and inputs','准备地形与输入',async()=>{await api('prepare',{id:current.id});await open(current.id);}));return;}
  screen.append(el('h2',tr('Build from site materials','从现场资料建立模型')),el('p',tr('Import site materials and check the crossing on the DEM, then prepare an automatic draft. Review the highlighted uncertainties and remaining inputs together before confirming the calculation.','导入现场资料并在 DEM 上核对设施位置，然后自动准备草稿。集中核对标出的不确定项与剩余输入，再确认运算。')));
  const groups=modelPreparationGroups(screen,intake);
- if(!intake.section_count){
-  const related=!!current.attachments?.length;
-  const next=el('div',undefined,'actions');screen.insertBefore(next,groups.sources.parentElement);
-  if(!related)next.append(button('Add site files','添加现场资料',()=>openModelTool('site-file-import')));
-  next.append(button('Go to automatic draft preparation','前往自动准备草稿',()=>openModelTool('model-automation')));
- }
  renderSources(groups.sources);renderAutoGeometry(groups.geometry);renderAutomation(groups.inputs);renderParameterNavigator(groups.inputs,intake.fields);
  const guide=details(groups.sources,'What materials are useful?','准备哪些资料？',false);
  table(guide,[tr('Input','输入'),tr('Preferred material / what automation can do','优先资料／可自动处理的部分')],[
@@ -342,7 +336,7 @@ function renderManual(screen){
 function renderMapEditor(parent){
  parent.id='crossing-map';
  anchors={upstream:[],downstream:[],inlet:[],outlet:[],road:[],...(current.map_picks||{})};anchorMode=null;
- const intro=el('p',tr('Pick each exterior reach upstream → downstream (at least two points each). Inlet/outlet picks are optional group centers. Pick the road crest left → right looking downstream. Map points are saved automatically.','上下游外部河段各按流向点选至少两点。进出口为可选的涵孔组中心；路面高点线面向下游从左到右。点位会自动保存。'));parent.append(intro);
+ const intro=el('p',tr('For an automatic layout, mark the center of the inlet and outlet for each group, then preview reach anchors and sections. To draw reaches manually, add at least two points on each side in flow order. Mark the road crest from left to right looking downstream. Map points save automatically.','使用自动布置时，先点选各组进口与出口中心，再预览河段锚点和断面。若手绘河段，请在各侧按流向至少点两点。路面高点线面向下游从左到右点选。点位自动保存。'));parent.append(intro);
  const actions=el('div',undefined,'actions'),canvas=el('div'),status=el('p','', 'status');parent.append(actions,status,canvas);let pointsTimer=null,pointsPromise=null,pointVersion=0;
  const params=el('div',undefined,'grid');parent.append(params);
  const width=field(params,'xs-width','Section width (ft)','断面宽度（ft）',current.sampling_parameters?.section_width_ft??200,'number');
@@ -353,6 +347,10 @@ function renderMapEditor(parent){
  if(groupPicks['0'])Object.assign(anchors,groupPicks['0']);
  field(params,'map-opening-group','Opening group for inlet / outlet picks','进出口点选所属涵孔组',0,'select',(current.automation?.groups||[{index:0}]).map(g=>[g.index,'Group '+(g.index+1),'组 '+(g.index+1)]),v=>task(async()=>{await savePoints();groupIndex=Number(v);const saved=groupPicks[String(groupIndex)]||{};anchors.inlet=saved.inlet||[];anchors.outlet=saved.outlet||[];draw();notify(tr('Pick inlet/outlet centers for group ','请点选此组进出口中心：')+(groupIndex+1));}));
  parent.append(el('small',tr('200/40 ft are editable sampling proposals, not site dimensions. Blank wall spacing stays unknown.','200/40 ft 仅为可改的采样建议，不是本站尺寸；空白墙厚保持未知。')));
+ if(!current.intake?.section_count)parent.append(button('Save opening picks and preview automatic layout','保存洞口点位并前往自动布置',async()=>{
+  if(mapDirty)await savePoints();else await save();
+  await openModelTool('dem-layout');
+ }));
  const modes=[];
  async function savePoints(){
   clearTimeout(pointsTimer);

@@ -39,6 +39,13 @@ function terrainMap(canvas,options){
   for(const row of highlighted)drawPreview(row,true);
   const lines=options.riverLines ?? data.river_lines ?? [];
   for(const line of lines)svgEl(group,'polyline',{points:line.map(xy).map(p=>p.join(',')).join(' '),fill:'none',stroke:'#005aab','stroke-width':3,'pointer-events':'none'});
+  if(options.openingAxis){
+   const [a,b]=options.openingAxis.map(xy),angle=Math.atan2(b[1]-a[1],b[0]-a[0]),color='#75257c';
+   svgEl(group,'line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:color,'stroke-width':3});
+   svgEl(group,'circle',{cx:a[0],cy:a[1],r:4,fill:'white',stroke:color,'stroke-width':2});
+   const tip=[b,...[-.52,.52].map(t=>[b[0]-9*Math.cos(angle+t),b[1]-9*Math.sin(angle+t)])];
+   svgEl(group,'polygon',{points:tip.map(p=>p.join(',')).join(' '),fill:color});
+  }
   const anchors=options.getAnchors();
   for(const[key,color]of [['river','#007b65'],['upstream','#0055cb'],['downstream','#c64a00'],['inlet','#9800a4'],['outlet','#114f00'],['road','#990000']]){if(key!=='river'||!lines.length)svgEl(group,'polyline',{points:(anchors[key]||[]).map(xy).map(p=>p.join(',')).join(' '),fill:'none',stroke:color,'stroke-width':3});(anchors[key]||[]).forEach((p,i)=>{const[x,y]=xy(p);svgEl(group,'circle',{cx:x,cy:y,r:5,fill:color});svgEl(group,'text',{x:x+7,y:y-7,fill:color}).textContent=key[0].toUpperCase()+(i+1);});}
   for(const opening of data.opening_items||[]){const points=opening.xy.map(xy);svgEl(group,'polyline',{points:points.map(p=>p.join(',')).join(' '),fill:'none',stroke:'#007e86','stroke-width':3,'stroke-dasharray':'4 3','pointer-events':'none'});svgEl(group,'text',{x:points[0][0]+5,y:points[0][1]+15,fill:'#005e66','font-size':12,'pointer-events':'none'}).textContent='G'+(opening.group+1)+' / '+(opening.barrel+1);}

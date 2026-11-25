@@ -23,6 +23,23 @@ class PurposeAcceptance(unittest.TestCase):
             with self.subTest(row=row),self.assertRaises(ValueError):
                 criteria(row)
 
+    def test_each_open_condition_routes_to_its_own_evidence(self):
+        rules=dict(dry_ends=True,site_geometry=True,min_freeboard_ft=1,event='flood',
+                   basis='Owner brief',max_residual_ft=.2)
+        profile=dict(profile_id='Q100',flow_cfs=457,qa=dict(wet_edges=['900','800']),metrics={})
+        summary=dict(configuration=dict(production_scope=dict(purpose='comparison',criteria=rules)),
+                     hydraulics=dict(run_id='test',model_type='culvert',profiles=[profile]))
+        rows=evaluate(summary)['rows']
+        actions={r['action']['tool']:r['action'] for r in rows if r['state']!='met'}
+        self.assertEqual(set(actions),{'atlas','native','comparison','invert-request','observations'})
+        self.assertEqual(actions['atlas'],dict(tool='atlas',profile='Q100',stations=['900','800']))
+        self.assertTrue(all('action' not in r for r in rows if r['state']=='met'))
+        summary['hydraulics']['model_type']='river'
+        profile['qa']['wet_edges']=[]
+        tools={r['action']['tool'] for r in evaluate(summary)['rows'] if 'action' in r}
+        self.assertIn('field-feedback',tools)
+        self.assertNotIn('atlas',tools)
+
     def test_comparison_requires_shared_verified_centers_for_selected_profile(self):
         def check(rows):
             return self.result({},'comparison',comparison={'status':'COMPARISON_NOT_ACCEPTANCE','profiles':rows})

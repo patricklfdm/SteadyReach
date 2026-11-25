@@ -13,12 +13,18 @@ function atlasSectionPlot(parent,row){
  parent.append(el('p',tr('Brown: native ground · Blue: WSE · Orange dashed: EGL · Purple dotted: critical WSE, when available · Olive: model banks. Blue bars below the axis show geometric wet intervals.','棕色：原生地面 · 蓝色：水位 · 橙色虚线：能量线 · 紫色点线：临界水位（若有）· 橄榄色：模型岸站。轴下蓝条表示几何湿区。'),'muted'));
 }
 
-function atlasMap(parent,row,lookup,crs){
+function atlasMap(parent,row,lookup,crs,imagery){
  const group=[row,...row.neighbors.map(n=>lookup.get(n.section_id)).filter(Boolean)].filter(r=>r.map);
  if(!row.map){parent.append(el('p',tr('Projected section correspondence is unavailable; the native profile remains available above.','投影断面位置对应不可用；仍可查看上方原生剖面。'),'warning'));return;}
  const points=group.flatMap(r=>r.map.cutline_xy),xs=points.map(p=>p[0]),ys=points.map(p=>p[1]),lx=Math.min(...xs),ly=Math.min(...ys),hx=Math.max(...xs),hy=Math.max(...ys),scale=Math.min(320/Math.max(1,hx-lx),265/Math.max(1,hy-ly)),cx=(lx+hx)/2,cy=(ly+hy)/2,px=v=>215+(v-cx)*scale,py=v=>165-(v-cy)*scale;
  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 700 330');svg.classList.add('repair-profile');svg.setAttribute('aria-label',tr('Bound section locations and wet intervals','封存断面位置与几何湿区'));parent.append(svg);
- for(const [index,other]of group.entries()){const m=other.map,active=other.section_id===row.section_id,color=active?'#a4428c':'#9b9b9b';svgEl(svg,'polyline',{points:m.cutline_xy.map(p=>px(p[0])+','+py(p[1])).join(' '),fill:'none',stroke:color,'stroke-width':active?3:1});
+ if(imagery?.status==='READY'){
+  const [west,south,east,north]=imagery.bounds;
+  const frame=svgEl(svg,'svg',{x:0,y:0,width:410,height:330,overflow:'hidden'});
+  svgEl(frame,'image',{href:imagery.uri,x:px(west),y:py(north),width:(east-west)*scale,height:(north-south)*scale,preserveAspectRatio:'none'});
+  parent.append(el('small',tr('Basemap from this edition’s verified delivery imagery. Compare the wet edges with channels, roads and disconnected low ground.','底图取自本版已校验的交付航片。对照湿端、沟槽、道路及隔离低地判断连通性。')));
+ }else parent.append(el('small',tr('Verified aerial imagery unavailable; inspect site mapping before deciding connectivity.','缺少本版可核验的航片，请补查现场地图后判断连通性。')));
+ for(const [index,other]of group.entries()){const m=other.map,active=other.section_id===row.section_id,color=active?'#f680cf':'#92929c';svgEl(svg,'polyline',{points:m.cutline_xy.map(p=>px(p[0])+','+py(p[1])).join(' '),fill:'none',stroke:color,'stroke-width':active?3:1});
   for(const segment of m.wet_segments_xy||[])svgEl(svg,'polyline',{points:segment.map(p=>px(p[0])+','+py(p[1])).join(' '),fill:'none',stroke:'#007da5','stroke-width':active?4:2,opacity:active?1:.5});
   for(const p of m.banks_xy||[])svgEl(svg,'circle',{cx:px(p[0]),cy:py(p[1]),r:active?4:2,fill:'#b79d11',stroke:'#333'});
   const a=m.cutline_xy[0],labelY=70+index*75;svgEl(svg,'polyline',{points:px(a[0])+','+py(a[1])+' 425,'+labelY+' 445,'+labelY,fill:'none',stroke:color,'stroke-width':1,'stroke-dasharray':'3,3'});
@@ -37,7 +43,7 @@ function renderResultAtlas(parent){
  });
  async function load(){
   if(loading||loaded)return;loading=true;output.setAttribute('aria-busy','true');output.replaceChildren(el('p',tr('Reading verified native sections, water levels and warning locations…','正在读取已核验原生断面、水位及警告位置…'),'status'));
-  try{const data=await api('qa-atlas',{id,summary_hash:hash});if(!output.isConnected||current?.id!==id||current.summary?.sha256!==hash)return;loaded=true;render(data);}
+  try{const data=await api('qa-atlas',{id,summary_hash:hash,imagery:true});if(!output.isConnected||current?.id!==id||current.summary?.sha256!==hash)return;loaded=true;render(data);}
   catch(error){if(output.isConnected&&current?.id===id){output.replaceChildren(el('p',tr('Section review is unavailable: ','断面复核暂不可用：')+error.message,'warning'),button('Retry section review','重试读取断面',load));}}
   finally{loading=false;output.removeAttribute('aria-busy');}
  }
@@ -66,11 +72,18 @@ function renderResultAtlas(parent){
      for(const issue of row.issues){panel.append(el('p',issue.code+' · '+issue.severity,'warning'));panel.append(el('p',issue.evidence?.native_message||issue.recommended_action));}
      atlasSectionPlot(panel,row);
      if(row.wet_intervals_ft===null)panel.append(el('p',tr('WSE unavailable; no wet-interval inference was made.','水位不可用，未推算湿区。'),'warning'));else table(panel,[tr('Geometric wet interval','几何湿区'),tr('From ft','起点 ft'),tr('To ft','终点 ft'),tr('Width ft','宽度 ft')],row.wet_intervals_ft.map(([a,b],i)=>[i+1,atlasNumber(a),atlasNumber(b),atlasNumber(b-a)]));
-     atlasMap(panel,row,lookup,data.horizontal_crs);
+     atlasMap(panel,row,lookup,data.horizontal_crs,data.imagery);
      table(panel,[tr('Neighbor','邻近断面'),'RS','WSE ft','EGL ft','V ft/s','Fr',tr('Channel distance ft','主槽间距 ft')],row.neighbors.map(n=>[tr(n.relation,n.relation==='upstream'?'上游':'下游'),n.rs,atlasNumber(n.wse_ft),atlasNumber(n.egl_ft),atlasNumber(n.velocity_fts),atlasNumber(n.froude),atlasNumber(n.channel_length_between_ft)]));
      for(const n of row.neighbors)panel.append(button('Open '+n.relation+' RS '+n.rs,'打开'+(n.relation==='upstream'?'上游':'下游')+' RS '+n.rs,()=>navigate(lookup.get(n.section_id))));
      const codes=new Set(row.issues.map(v=>v.code));const tools=[];
-     if((row.left_excess_ft||0)>0||(row.right_excess_ft||0)>0)tools.push(['coverage','Review section coverage','核对断面覆盖']);
+     if((row.left_excess_ft||0)>0||(row.right_excess_ft||0)>0){
+      if(!current.native_review)panel.append(button('Revise this wet section','在修订版调整此湿端断面',async()=>{
+       const child=await api('revision',{id:current.id,revision:current.revision,confirmed:true});
+       await open(child.id);await openModelTool('section-repair');sectionRepairController.selectStation(row.rs);
+       notify(tr('Review the extent and preview a DEM adjustment in this revision.','已定位至独立修订版断面，请核对范围并预览 DEM 调整。')+' RS '+row.rs);
+      }));
+      if(!current.native_review&&current.model_type==='river')tools.push(['coverage','Review section coverage','核对断面覆盖']);
+     }
      if([...codes].some(v=>/ENERGY|CONVEYANCE|VELOCITY|CRITICAL|MINIMUM_ERROR/.test(v)))tools.push(['spacing','Review spacing / energy solution','核对间距／能量解']);
      if(row.wet_intervals_ft?.length>1||codes.has('NATIVE_DIVIDED_FLOW'))tools.push(['revision','Review banks and actual flow paths','核对岸站与真实过流路径']);
      for(const [key,en,zh]of tools)panel.append(button(en,zh,()=>openGuidanceTool(key)));

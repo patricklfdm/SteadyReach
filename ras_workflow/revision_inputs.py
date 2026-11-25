@@ -122,6 +122,43 @@ def hydraulic_inputs(config, geometry, scenario):
     return values
 
 
+def reviewed_sources(config, refs):
+    """Locate this project's confirmed inputs through the frozen approval receipt."""
+    manifest=read(ROOT/refs[0]['path'])
+    approvals=[r for r in manifest.get('input_snapshots',[]) if Path(r['path']).name==config.get('configuration_approval')]
+    if len(approvals)!=1 or not intact(approvals):
+        return None
+    sources=read(ROOT/approvals[0]['path']).get('sources',[])
+    reviews={r['sha256']:r for r in sources if Path(r['path']).name=='parameters.json'
+             and ('projects/'+str(config.get('project_id'))+'/reviews/') in r['path']}
+    if len(reviews)!=1 or not intact(reviews.values()):
+        return None
+    review=read(ROOT/next(iter(reviews.values()))['path'])
+    if review.get('project_id')!=config.get('project_id'):return None
+    materials={s['sha256']:s.get('original_name') or Path(s['path']).name for s in sources if s.get('role')=='source_material'}
+    fields={}
+    for key,answer in review['inputs']['answers'].items():
+        source=(answer.get('candidate_record') or {}).get('source') or {}
+        sha=source.get('sha256')
+        value=answer.get('value')
+        fields[key]=dict(source=materials.get(sha),sha256=sha if sha in materials else None,
+                         value=value if isinstance(value,(float,int,str)) else None,evidence_class=answer.get('evidence_class'))
+    return materials,fields
+
+
+def source_changes(old_config, old_refs, new_config, new_refs):
+    try:
+        a,b=reviewed_sources(old_config,old_refs),reviewed_sources(new_config,new_refs)
+        if a is None or b is None:return None
+        return dict(added=[b[0][k] for k in sorted(b[0].keys()-a[0].keys())],
+                    removed=[a[0][k] for k in sorted(a[0].keys()-b[0].keys())],
+                    fields=[dict(field=k,previous=a[1].get(k),current=b[1].get(k))
+                            for k in sorted(a[1].keys()|b[1].keys()) if a[1].get(k)!=b[1].get(k)
+                            and (a[1].get(k,{}).get('source') or b[1].get(k,{}).get('source'))])
+    except (OSError,ValueError,KeyError,IndexError,TypeError):
+        return None
+
+
 def collect(old, new):
     from .report_context import changes
     try:
@@ -131,6 +168,7 @@ def collect(old, new):
                        hydraulic_inputs(nc,ng,new['hydraulics']['scenario_id']))
         geometry=geometry_changes(og,ng)
         return dict(status='VERIFIED',input_changes=scalar,geometry=geometry,sources=os+ns,
+                    source_changes=source_changes(oc,os,nc,ns),
                     interpretation='MULTIPLE_INPUT_CHANGES' if scalar and (geometry['changed_sections'] or geometry['added_stations'] or geometry['removed_stations']) else 'REVISION_COMPARISON_ONLY')
     except (ValueError,KeyError,OSError,TypeError,StopIteration,CRSError) as error:
         return dict(status='UNAVAILABLE',error=str(error),input_changes=[],sources=[])

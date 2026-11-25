@@ -1,6 +1,7 @@
 """Portable, bilingual reading notes for a specific verified delivery pair."""
 from html import escape
 from pathlib import Path
+import shutil
 from tempfile import TemporaryDirectory
 from urllib.parse import quote
 
@@ -16,7 +17,7 @@ def page(language, model, assessment, folders, receipt, pair):
     def link(path, label):
         return '<a href="'+escape(quote(path, safe='/.-_'))+'">'+escape(label)+'</a>'
     def package_link(kind, name, label):
-        return link('../'+folders[kind].name+'/'+name,label)
+        return link(folders[kind].name+'/'+name,label)
     heading=escape(model['title'])
     result=['<!doctype html><html lang="'+t('en','zh-CN')+'"><meta charset="utf-8">',
             '<meta name="viewport" content="width=device-width, initial-scale=1"><title>'+heading+'</title>',
@@ -27,6 +28,9 @@ def page(language, model, assessment, folders, receipt, pair):
             '<p>'+escape(assessment['use_guide']['deferred'][language])+'</p>']
     decision=assessment.get('purpose_decision')
     if decision:
+        if decision.get('state')!='CONDITIONS_MET':
+            result.append('<p><strong>'+t('Diagnostic handoff. Project delivery conditions remain open.',
+                                          '本版供诊断复核，项目约定的交付条件仍有未满足项。')+'</strong></p>')
         result.append('<h2>'+escape(decision[language])+'</h2>')
         result.extend('<p>'+escape(row[language])+'</p>' for row in decision['rows'])
         result.append('<p>'+escape(decision['note_'+language])+'</p>')
@@ -40,9 +44,14 @@ def page(language, model, assessment, folders, receipt, pair):
         links.append(('complete','Graph/Exhibit_'+t('EN','CN')+'.pdf',t('Map exhibit (PDF)','地图展示图（PDF）')))
     for kind in ('minimal','complete'):
         rows=read(ROOT/receipt[kind]['manifest']['path'])['files']
-        prj=next((r['path'] for r in rows if r['path'].startswith('HEC_RAS/') and r['path'].lower().endswith('.prj')),None)
-        if prj:
-            links.append((kind,prj,folders[kind].name+' · HEC-RAS'))
+        members={r['path'] for r in rows}
+        plans={Path(name).with_suffix('').as_posix().lower() for name in members
+               if name.startswith('HEC_RAS/') and len(Path(name).suffix)==4
+               and Path(name).suffix.lower().startswith('.p') and Path(name).suffix[2:].isdigit()}
+        projects=[name for name in members if name.lower().endswith('.prj') and name[:-4].lower() in plans]
+        if len(projects)!=1:
+            raise ValueError('Expected one HEC-RAS project with a matching plan / 请核查交付包内的工程与方案文件')
+        links.append((kind,projects[0],folders[kind].name+' · HEC-RAS'))
     if pair['mapped']:
         links.append(('complete','GIS_Project.qgz',t('QGIS map and layouts','QGIS 地图与布局')))
     for kind,name,label in links:
@@ -66,9 +75,24 @@ def page(language, model, assessment, folders, receipt, pair):
     for kind,folder in folders.items():
         result.append('<p>'+package_link(kind,'PACKAGE_MANIFEST.json',folder.name+' · '+t('file manifest','文件清单'))+
                       ' · SHA-256 <code>'+escape(receipt[kind]['manifest']['sha256'])+'</code></p>')
-    result.append('<p>'+t('When copying this delivery, keep this reading folder beside Complete and Minimal. Open the model and GIS files in their desktop applications.',
-                          '转交时，请将本说明文件夹与 Complete、Minimal 并列复制。模型及 GIS 文件可用相应的桌面软件打开。')+'</p></main></html>')
+    result.append('<p>'+t('Transfer this entire folder. Its Complete and Minimal subfolders contain the selected edition. Open the model and GIS files in their desktop applications.',
+                          '请整体转交本目录。Complete 和 Minimal 子目录均属于所选版本，模型及 GIS 文件可用相应的桌面软件打开。')+'</p></main></html>')
     return '\n'.join(result)
+
+
+def verify_transfer(destination, pages, receipt, pair):
+    expected=set(pages)|{'Complete','Minimal'}
+    if (destination.resolve()!=destination or {p.name for p in destination.iterdir()}!=expected
+            or any((destination/n).resolve()!=destination/n or (destination/n).read_bytes()!=v.encode('utf-8')
+                   for n,v in pages.items())):
+        raise ValueError('Transfer folder contents changed / 转交目录内容已改变')
+    for name in ('Complete','Minimal'):
+        folder=destination/name
+        if folder.resolve()!=folder or item(folder/'PACKAGE_MANIFEST.json')['sha256']!=receipt[name.lower()]['manifest']['sha256']:
+            raise ValueError('Transfer manifest mismatch / 转交清单不匹配: '+name)
+        site_delivery.verify(folder)
+    if check(destination/'Complete',destination/'Minimal')!=pair:
+        raise ValueError('Transferred results differ from the selected edition / 转交结果与所选版本不同')
 
 
 def export(key, body):
@@ -108,15 +132,25 @@ def export(key, body):
         if (latest['revision']!=model['revision'] or latest.get('exports_need_refresh') or latest.get('summary')!=model['summary']
                 or handoff.bound_package(latest)!=receipt):
             raise ValueError('The project changed during verification. Reopen results.')
-        if not destination.exists():
+        if destination.exists():
+            verify_transfer(destination,pages,receipt,pair)
+        else:
+            size=sum(r['size_bytes'] for kind in folders for r in read(ROOT/receipt[kind]['manifest']['path'])['files'])
+            if shutil.disk_usage(base).free<size:
+                raise ValueError('Free space needed for the portable copy / 空间不足以生成可转交副本')
             with TemporaryDirectory(dir=base) as temporary:
-                stage=Path(temporary)/'pages'
+                stage=Path(temporary)/'transfer'
                 stage.mkdir()
                 for name,html in pages.items():
                     (stage/name).write_bytes(html.encode('utf-8'))
+                for kind,folder in folders.items():
+                    shutil.copytree(folder,stage/kind.capitalize())
+                verify_transfer(stage,pages,receipt,pair)
+                from .iteration_choice import latest as latest_choice
+                current=app_core.model(key)
+                if (current.get('summary')!=model['summary'] or handoff.bound_package(current)!=receipt
+                        or current.get('exports_need_refresh') or (latest_choice(current) or {})!=decision):
+                    raise ValueError('Selected edition changed during export / 导出期间所选版本已变化')
                 stage.rename(destination)
-        if (destination.is_symlink() or destination.resolve()!=destination or set(p.name for p in destination.iterdir())!=set(pages)
-                or any((destination/n).is_symlink() or (destination/n).read_bytes()!=v.encode('utf-8') for n,v in pages.items())):
-            raise ValueError('The exported reading folder was modified. Restore it or move it aside before exporting again.')
         return dict(folder=rel(destination),files=[item(destination/n) for n in pages],level=assessment['level'],run_id=pair['run_id'],
                     edition=tag,summary=receipt['summary'],packages={k:receipt[k]['manifest'] for k in folders})

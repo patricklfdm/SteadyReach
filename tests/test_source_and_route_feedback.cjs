@@ -41,4 +41,19 @@ const editor=fs.readFileSync(path.join(templates,'app_editor.js'),'utf8');
 vm.runInContext(editor.slice(editor.indexOf('function riverBendIndex('),editor.indexOf('function renderRiverMap(')),context);
 assert.equal(context.riverBendIndex([[0,0],[10,0]],[5,3]),1);
 assert.equal(context.riverBendIndex([[0,0],[10,0],[10,10]],[9,6]),2);
-console.log('PASS current FIS rows, scoped summary, invalidation, ordered river bends');
+const returned={returned_invert:true,candidate:'return',value:3,basis:'field log',datum:'NAVD88',source:src,evidence_class:'reported'};
+function returnActions(existing, evidence_class, other=[]){
+ const actions=[];
+ Object.assign(context,{button:en=>{actions.push(en);return makeElement('button',en)},sourceFileHref:()=>'/source'});
+ context.renderReturnedInverts(makeElement('main'),[{label:{en:'Inlet',zh:'进口'},value:existing,evidence_class,
+   key:'g.structure.groups.0.us_invert_ft',parameter_candidates:[returned,...other]}]);
+ return actions;
+}
+assert.ok(returnActions(4,'assumed').includes('Adopt displayed survey returns'));
+assert.ok(returnActions(3,'reported').includes('Adopt displayed survey returns'));
+for(const actions of [returnActions(4,'reported'),returnActions(4,'assumed',[{source:src,value:5}]),
+                      returnActions(3,'assumed',[{...returned,candidate:'duplicate'}])]){
+ assert.ok(actions.includes('Review alternatives'));
+ assert.ok(!actions.includes('Adopt displayed survey returns'));
+}
+console.log('PASS current FIS rows, ordered river bends, and survey return conflicts');

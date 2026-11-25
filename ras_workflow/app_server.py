@@ -6,7 +6,7 @@ import secrets
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
-from urllib.parse import urlsplit,unquote
+from urllib.parse import urlsplit,unquote,quote
 from .common import ROOT,read,save,rel,safe_path,utc,lock
 from . import app_core as core
 
@@ -23,9 +23,11 @@ def create():
             url=urlsplit(self.path);prefix='/'+token+'/'
             if not url.path.startswith(prefix) or url.query:raise ValueError('Invalid session')
             return unquote(url.path[len(prefix):])
-        def send(self,code,value,mime='application/json; charset=utf-8'):
+        def send(self,code,value,mime='application/json; charset=utf-8',download=None):
             raw=value if isinstance(value,bytes) else json.dumps(value,ensure_ascii=False,allow_nan=False).encode()
             self.send_response(code)
+            if download:
+                self.send_header('Content-Disposition',"attachment; filename*=UTF-8''"+quote(download,safe=''))
             if code>=400:
                 # Rejected requests may have an unread body; never reuse that stream.
                 self.close_connection=True;self.send_header('Connection','close')
@@ -42,7 +44,13 @@ def create():
                     return self.send(200,core.view(route.split('/',1)[1]))
                 if route.startswith('file/'):
                     path=safe_path(ROOT,route[5:])
-                    if not path.is_relative_to(ROOT/'projects') or path.suffix.lower() not in ('.pdf','.docx','.json','.txt','.csv','.png','.jpg','.jpeg'):raise ValueError('Unsupported artifact')
+                    if not path.is_relative_to(ROOT/'projects'):raise ValueError('Unsupported artifact')
+                    if path.suffix.lower() in ('.kmz','.kml','.xml','.tif','.tiff'):
+                        project=path.relative_to(ROOT/'projects').parts[0]
+                        source=next((s for s in core.model(project).get('attachments',[]) if s['path']==rel(path)),None)
+                        if not source:raise ValueError('Unknown source attachment')
+                        return self.send(200,path.read_bytes(),'application/octet-stream',download=path.name)
+                    if path.suffix.lower() not in ('.pdf','.docx','.json','.txt','.csv','.png','.jpg','.jpeg'):raise ValueError('Unsupported artifact')
                     return self.send(200,path.read_bytes(),mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
                 assets={'app_warning_study.js':('app_warning_study.js','application/javascript; charset=utf-8'),'app_field_feedback.js':('app_field_feedback.js','application/javascript; charset=utf-8'),'app_floodplain.js':('app_floodplain.js','application/javascript; charset=utf-8'),'app_observations.js':('app_observations.js','application/javascript; charset=utf-8'),'observation-template.csv':('observation-template.csv','text/csv; charset=utf-8'),'app_river_checks.js':('app_river_checks.js','application/javascript; charset=utf-8'),'app_check_batch.js':('app_check_batch.js','application/javascript; charset=utf-8'),'app_spacing_review.js':('app_spacing_review.js','application/javascript; charset=utf-8'),'app_atlas.js':('app_atlas.js','application/javascript; charset=utf-8'),'app_guidance.js':('app_guidance.js','application/javascript; charset=utf-8'),'app_sensitivity.js':('app_sensitivity.js','application/javascript; charset=utf-8'),'app_geometry_auto.js':('app_geometry_auto.js','application/javascript; charset=utf-8'),'app_results.js':('app_results.js','application/javascript; charset=utf-8'),'app_automation.js':('app_automation.js','application/javascript; charset=utf-8'),'app_map.js':('app_map.js','application/javascript; charset=utf-8'),'app_section_repair.js':('app_section_repair.js','application/javascript; charset=utf-8'),'':('app.html','text/html; charset=utf-8'),'app.js':('app.js','application/javascript; charset=utf-8'),'app_editor.js':('app_editor.js','application/javascript; charset=utf-8'),'app_sources.js':('app_sources.js','application/javascript; charset=utf-8'),'app.css':('app.css','text/css; charset=utf-8')}
                 assets['app_practice.js']=('app_practice.js','application/javascript; charset=utf-8')
@@ -110,6 +118,9 @@ def create():
                             result=extent_review.current(extent_review.model_for(key,body))
                         else:
                             result=(extent_review.choices if route=='extent-options' else extent_review.analyze)(key,body)
+                    elif route=='invert-request':
+                        from .invert_request import issue
+                        result=issue(key,body)
                     elif route=='qa-atlas':
                         from .result_atlas import collect
                         result=collect(key,body)
@@ -129,6 +140,9 @@ def create():
                     elif route=='native':result=core.native_inputs(key,body)
                     elif route=='use-native-values':result=core.use_native_values(key,body)
                     elif route=='candidate':result=core.use_candidate(key,body)
+                    elif route in ('material-revision-preview', 'material-revision-apply'):
+                        from .app_material_revision import perform
+                        result=perform(key,body,apply=route=='material-revision-apply')
                     elif route=='resolve-dependencies':
                         from .app_dependency_review import resolve
                         result=resolve(key,body)

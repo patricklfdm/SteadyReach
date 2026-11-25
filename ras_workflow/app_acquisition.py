@@ -149,12 +149,20 @@ def analyze(key,network=False,reuse_failed=False):
                 rows=extract.csv_rows(path)
                 if rows and {'field','value'}<=set(rows[0]):
                     params,errors=extract.parameter_rows(rows,allowed);doc.update(method='Explicit parameter table',warnings=errors)
+                    from .invert_request import match as match_invert_return
                     for v in params:
+                        try:
+                            match_invert_return(rows[v['row']-2],m,g)
+                        except ValueError as error:
+                            doc['warnings'].append(dict(row=v['row'],error=str(error)))
+                            continue
                         field=v['field'];basis=v['basis']+f'; CSV row {v["row"]}; source units explicitly matched.'
                         if 'invert' in field or 'elevation_ft' in field:
                             if not v.get('datum') or v['datum']!=g.get('vertical_datum'):
                                 doc['warnings'].append(dict(row=v['row'],error='Elevation datum missing or does not match the model; not proposed'));continue
-                        candidate(field,v['value'],basis,entry,v['evidence_class'],datum=v.get('datum'))
+                        returned='request_summary' in rows[v['row']-2]
+                        candidate(field,v['value'],basis,entry,v['evidence_class'],datum=v.get('datum'),
+                                  **({'returned_invert':True,'requires_applicability_review':True} if returned else {}))
                 elif rows and {'LAT','LONG','MODEL_ID','PK1AEP'}<=set(rows[0]):
                     found=extract.site_rows(rows,c.get('location'));matches+=found;doc.update(method='USGS site inventory',matches=found)
                     if len(found)==1:

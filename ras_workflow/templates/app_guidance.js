@@ -68,13 +68,54 @@ function showFieldSearch(box,a){
  panel.parentElement.addEventListener('toggle',()=>{if(panel.parentElement.open&&!result.hasChildNodes())void load();});
  if(panel.parentElement.open)void load();
 }
+async function openInvertRequest(panel){
+ const id=current.id,revision=current.revision,summary_hash=current.summary.sha256;
+ const v=await api('invert-request',{id,summary_hash});
+ if(!panel.isConnected||current.id!==id)return;
+ panel.replaceChildren(el('p',tr('Fill the measured inside-bottom elevations, datum and source. Keep the group and edition identifiers. Attach the survey record with the returned CSV.','填写实测内底高程、高程基准和来源，保留孔组与版本标识，导回时附上测量原件。')));
+ table(panel,[tr('Group','孔组'),tr('End','位置'),tr('Prior (ft)','原值（ft）'),tr('Model datum','模型高程基准')],v.rows.map(r=>[r.opening_group,r.end==='inlet'?tr('Inlet','进口'):tr('Outlet','出口'),r.prior_ft??'—',r.datum||'—']));
+ panel.append(button('Download invert survey worksheet','下载涵底补测表',()=>{
+  const url=URL.createObjectURL(new Blob(['\ufeff'+v.csv],{type:'text/csv;charset=utf-8'})),a=el('a');a.href=url;a.download='invert_'+v.run+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  notify(tr('Worksheet exported. You can pause this review until records arrive.','补测表已导出，可暂停复核等待回传。'));
+ }),button('Pause until survey returns','暂停并等待补测',async()=>{
+  await api('iteration-choice',{id,revision,summary_hash,previous:current.iteration_choice?.token||null,choice:'wait'});
+  await open(id);notify(tr('Waiting for survey records.','已保存等待补测状态。'));
+ }),button('Import returned survey in a new revision','新建修订版并导回补测表',async()=>{
+  const child=await api('revision',{id,revision,confirmed:true});await open(child.id);await openModelTool('site-file-import');
+  notify(tr('Choose the returned worksheet and its survey source, then save and extract.','请选择回传表和测量原件，然后保存并解析。'));
+ }));
+}
+
+function purposeAction(parent,row){
+ const a=row.action;if(!a)return;
+ const tool=a.tool==='revision'&&current.native_review?'native':a.tool;
+ if(tool==='invert-request'&&!current.native_review){
+  const out=el('div');out.setAttribute('aria-live','polite');
+  parent.append(button('Request inlet and outlet elevations','索取各组进出口涵底高程',()=>openInvertRequest(out)),out);return;
+ }
+ const labels={atlas:['Inspect computed section','查看计算断面'],revision:['Revise inputs and conditions','修订输入和用途条件'],native:['Check this run’s native output','核对此次原生输出'],observations:['Check observed event','检查实测事件'],comparison:['Compare editions','比较两版'], 'field-feedback':['Request surveyed channel geometry','索取河槽测量资料']};
+ let target=tool==='invert-request'?'native':tool;
+ if(target==='comparison'&&!current.comparison)target=current.native_review?'native':'revision';
+ if(target==='field-feedback'&&current.native_review)target='native';
+ const stations=a.stations||[];
+ const station=stations.length?field(parent,'qa-wet-'+a.profile,'Wet cross section','过水端点断面',String(stations[0]),'select',stations.map(s=>[String(s),'RS '+s,'RS '+s])):null;
+ parent.append(button(...(labels[target]||labels.revision),()=>{
+  openGuidanceTool(target);
+  if(station)document.getElementById('qa-tool-atlas').dispatchEvent(new CustomEvent('steadyreach-inspect-section',{detail:{profile:a.profile,rs:station.value}}));
+ }));
+}
+
 function showResultAssessment(overview,a,box=overview){
  const label=s=>tr(s.en,s.zh),ordered=a.next_actions||a.findings,primary=ordered[0];
  overview.append(el('h2',tr('Delivery assessment','结果交付评估')+' · L'+a.level+' · '+label(a.title)));
  if(a.purpose_decision){
   const d=a.purpose_decision, panel=el('section',undefined,'card');overview.append(panel);
   panel.append(el('h3',label(d)),el('p',tr(d.note_en,d.note_zh)));
-  for(const row of d.rows)panel.append(el('p',label(row),row.state==='met'?'muted':'warning'));
+  for(const row of d.rows){panel.append(el('p',label(row),row.state==='met'?'muted':'warning'));purposeAction(panel,row);}
+  if(current.model_type!=='river')for(const p of current.results?.metrics||[]){
+   if(!Number.isFinite(p.metrics?.roadway_flow_software_cfs))panel.append(el('p',p.profile_id+' · '+tr('Native roadway discharge is unknown.','原生路面越流量未知。'),'warning'),
+    button('Inspect native roadway discharge','核对原生路面流量',()=>openGuidanceTool('native')));
+  }
  }
  if(a.use_guide){
   const panel=el('section',undefined,'card');overview.append(panel);

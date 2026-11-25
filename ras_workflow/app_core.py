@@ -537,6 +537,12 @@ def view(key,detail=True):
             if not task_alive(task):result.update(status='INTERRUPTED',errors=['The worker stopped; saved inputs and outputs remain. Retry the task. / 后台进程已停止。输入与已有结果已保留，可重试。'])
             else:result['status']='PROCESSING'
     if not detail:return result
+    parent=result.get('parent_revision') or {}
+    if (parent.get('project_id') and 'inherited_sources' not in parent
+            and not m.get('active_project') and not m.get('native_review') and m.get('model_type')!='river'):
+        parent_file=folder(parent['project_id'])/'app.json'
+        if parent_file.is_file():
+            parent['inherited_sources']=[r['sha256'] for r in read(parent_file).get('attachments',[])]
     if m.get('public_reach') and intact([m['public_reach']]):
         result['reach_proposal']=read(ROOT/m['public_reach']['path'])
     if m.get('active_check_batch'):

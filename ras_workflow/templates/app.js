@@ -314,6 +314,10 @@ function render(){const m=current;rememberView({project:m.id,page:'model'});shel
  }
  if(m.results&&m.status!=='ABANDONED'){renderResults(screen);return;}
  renderTaskRecovery(screen,m);if(m.calculation_recovery&&m.calculation_recovery.mode!=='REVIEW_INPUTS'&&!m.results?.run_id)return;if(m.feedback_spec&&(m.job?.status==='FAILED'||!m.results)){screen.append(button('Resume confirmed field check','继续已确认的现场情景',async()=>{await api('field/resume',{id:m.id,confirmed:true});await open(m.id);}));if(!m.results)return;}if(m.summary){screen.append(el('p',tr('L0 · The saved calculation evidence is unavailable. Restore the matching summary before reviewing results.','L0 · 保存的计算证据不可用。请恢复对应的汇总文件后再复核结果。'),'warning'));}if(m.feasibility?.state==='outside'){renderFeasibility(screen,m.feasibility,true);return;}
+ if(m.intake&&!m.native&&m.model_type!=='river'){
+  if(m.parent_revision)renderRoadSupplement(screen,m.intake.fields);
+  else if(!m.intake.section_count)renderCrossingIntake(screen,m.intake.fields);
+ }
  const preparation=preparationActions(m);
  const ready=m.missing.length===0&&(m.native||m.intake?.section_count)&&!preparation.length;
  const reviewInputs=()=>button('Review calculation inputs →','核对运算输入 →',()=>showFinalReview(), 'primary');

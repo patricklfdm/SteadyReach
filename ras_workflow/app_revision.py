@@ -80,7 +80,8 @@ def create_draft(parent,body,preparation_task=None):
     origin=source['summary'] if source else parent['summary']
     m.update(id=key2,title=c['title'],project=rel(folder/'initial.json'),session=session['session'],revision=0,
              status='INPUTS_READY',phase='EDIT_REVISION',errors=[],created_utc=utc(),
-             parent_revision=dict(project_id=parent['id'],summary=origin,app=item(core.folder(parent['id'])/'app.json'),created_utc=utc()))
+             parent_revision=dict(project_id=parent['id'],summary=origin,app=item(core.folder(parent['id'])/'app.json'),
+                                  inherited_sources=[r['sha256'] for r in parent.get('attachments', [])],created_utc=utc()))
     if source:
         m['parent_revision'].update(geometry=source['geometry_source'],study=source['analysis'],case_id=source['case_id'])
         m['terrain']=source['terrain']

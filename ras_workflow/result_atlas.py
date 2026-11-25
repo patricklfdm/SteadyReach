@@ -146,6 +146,14 @@ def collect(key, body):
     except (ValueError,KeyError,OSError,TypeError) as error:
         errors.append('Projected section correspondence unavailable: '+str(error))
     result=assemble(native_rows(hyd),diagnostics,geometry)
+    if body.get('imagery') is True and geometry and any(r.get('map') for r in result['sections']):
+        from .handoff import bound_package
+        from .section_context import backdrop, extent
+        try:
+            receipt=bound_package(m)
+            result['imagery']=backdrop(dict(m,latest_delivery=receipt or {}),extent({'current':result['sections']}),geometry['horizontal_crs'])
+        except (ValueError,OSError,KeyError,TypeError) as error:
+            result['imagery']=dict(status='IMAGERY_UNAVAILABLE',error=str(error))
     if diagnostics:sources+=diagnostics.get('sources',[])
     result.update(status='OBSERVATIONS_NOT_ACCEPTANCE',run_id=hyd['run_id'],sources=sources,source_errors=errors,
         horizontal_crs=(geometry or {}).get('horizontal_crs'),unit=hyd['unit'],

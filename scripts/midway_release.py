@@ -1,14 +1,15 @@
-"""Replay the coordinate-based Midway case from private source material in two fresh projects."""
-import base64
+"""Replay the Midway baseline, supplemental geometry, wet-end revision and portable handoff."""
+import csv
 import shutil
+from html.parser import HTMLParser
+from tempfile import TemporaryDirectory
+from urllib.parse import unquote, urlsplit
 import sys
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from ras_workflow import app_core as core, app_parameters as parameters, app_revision
-from ras_workflow import app_autoprepare, app_geometry, iteration_choice, recipient_handoff
+from ras_workflow import app_core as core, app_parameters as parameters, iteration_choice, recipient_handoff
 from ras_workflow.common import intact, item, read, save, sha
 from ras_workflow.delivery_pair import check
 
@@ -26,37 +27,26 @@ def checked_file(folder, entry):
     return path
 
 
-def wait_for(job, timeout=1200):
-    path = ROOT / job['task']
-    until = time.monotonic() + timeout
-    while time.monotonic() < until:
-        record = read(path)
-        if record['status'] != 'RUNNING':
-            need(record['status'] == 'FINISHED', f"Inspect {path}: {record}")
-            return
-        time.sleep(1)
-    raise TimeoutError(f'Worker still running; inspect {path}')
+# Run browser steps on the same checkout and server used by local engineers.
 
 
-def attach(key, paths):
-    files = [dict(name=p.name, content=base64.b64encode(p.read_bytes()).decode('ascii')) for p in paths]
-    wait_for(core.attach(key, files))
+def browser_action(payload):
+    import json
+    import subprocess
+    browser=subprocess.run(['node',str(ROOT/'scripts/midway_page.cjs')],cwd=ROOT,
+        input=json.dumps(payload),text=True,encoding='utf-8',capture_output=True,timeout=700)
+    need(browser.returncode==0,'Browser acceptance failed: '+browser.stderr)
+    return browser.stdout.strip()
 
 
 def page_action(key,mode,**info):
     from ras_workflow.app_server import create
     from threading import Thread
-    import json
-    import subprocess
     server=create()
     worker=Thread(target=server.serve_forever,daemon=True)
     worker.start()
     try:
-        browser=subprocess.run(['node',str(ROOT/'scripts/midway_page.cjs')],cwd=ROOT,
-            input=json.dumps(dict(url=server.url,project=key,mode=mode,**info)),
-            text=True,encoding='utf-8',capture_output=True,timeout=700)
-        need(browser.returncode==0,'Browser acceptance failed: '+browser.stderr)
-        return browser.stdout.strip()
+        return browser_action(dict(url=server.url,project=key,mode=mode,**info))
     finally:
         server.shutdown()
         server.server_close()
@@ -80,10 +70,96 @@ def solve(key):
     profile = next(p for p in hyd['profiles'] if p['profile_id'] == 'Q100')
     need(profile['flow_cfs'] == 457 and len(profile['culvert_groups']) == 1 and
          profile['culvert_groups'][0]['barrel_count'] == 3, 'Midway profile or opening mismatch')
+    delivery_dir=(ROOT/model['summary']['path']).parent/'delivery'
+    delivery=read(delivery_dir/'delivery.json')
+    need(delivery.get('mapped') and delivery['status']=='READY_FOR_REVIEW',
+         f"Mapped delivery incomplete for {key}: {delivery.get('error',delivery['status'])}")
+    packages=check(delivery_dir/'Complete',delivery_dir/'Minimal')
+    need(packages['native_hdf_sha256']==hyd['raw_hdf']['sha256'],'Delivery used another native result')
     return dict(project=key, summary=model['summary'], run_id=hyd['run_id'], hdf=hyd['raw_hdf'],
+                delivery=item(delivery_dir/'delivery.json'), package_check=packages,
                 confirmation=model['run_confirmation'], road_width_ft=road_width, sections=len(water),
+                wet_stations=profile['qa']['wet_edges'],
+                widths_ft={str(float(xs['rs'])):xs['station_ft'][-1]-xs['station_ft'][0]
+                           for xs in geometry['cross_sections']},
                 headwater_ft=profile['metrics']['headwater_wse_ft'],
                 tailwater_ft=profile['metrics']['tailwater_wse_ft'])
+
+
+def verify_detached(folder, expected, baseline):
+    class Links(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            if tag=='a':
+                link=dict(attrs)['href']
+                url=urlsplit(link)
+                member=(self.base/unquote(url.path)).resolve()
+                need(not url.scheme and not url.netloc and member.is_relative_to(self.base) and member.is_file(),
+                     'Recipient link is missing or points outside the transfer: '+link)
+    with TemporaryDirectory() as tmp:
+        copy=Path(tmp)/'Recipient'
+        shutil.copytree(folder,copy)
+        for name in ('Start_EN.html','Start_zh-CN.html'):
+            links=Links()
+            links.base=copy
+            links.feed((copy/name).read_text('utf-8'))
+        for name in ('Complete','Minimal'):
+            root=copy/name
+            manifest=root/'PACKAGE_MANIFEST.json'
+            need(sha(manifest)==sha(folder/name/manifest.name),'Detached manifest changed: '+name)
+            from ras_workflow.delivery_pair import verified_member
+            for entry in read(manifest)['files']:
+                verified_member(root,entry['path'],entry['sha256'])
+        pair=check(copy/'Complete',copy/'Minimal')
+        pair['offline_browser']=browser_action(dict(mode='recipient-copy',url=(copy/'Start_EN.html').as_uri(),
+                                                   run_id=expected['run_id']))
+        need(pair['native_hdf_sha256']==expected['hdf']['sha256'],'Detached transfer belongs to a different calculation')
+        # Verify that missing, mixed or edited files are detected in the disposable recipient copy.
+        pdf=copy/'Complete/Reports/Report_EN.pdf'
+        fingerprint=sha(pdf)
+        length=pdf.stat().st_size
+        pdf.rename(pdf.with_suffix('.saved'))
+        try:
+            baseline_pdf=(ROOT/baseline['delivery']['path']).parent/'Complete/Reports/Report_EN.pdf'
+            need(sha(baseline_pdf)!=fingerprint,'Expected two distinct PDF editions')
+            for case in ('missing','mixed','changed'):
+                if case=='mixed':shutil.copyfile(baseline_pdf,pdf)
+                if case=='changed':pdf.write_bytes(b'altered recipient test')
+                try:check(copy/'Complete',copy/'Minimal')
+                except (OSError,ValueError) as error:
+                    need('Report_EN.pdf' in str(error),'Expected a file-specific recovery message')
+                    continue
+                raise ValueError(f'{case} transfer member was accepted')
+        finally:
+            pdf.with_suffix('.saved').replace(pdf)
+        need(pdf.stat().st_size==length and sha(pdf)==fingerprint,'Detached verification did not restore its copy')
+    return pair
+
+
+def rehearse_return(key, second, directory):
+    directory.mkdir()
+    worksheet=Path(page_action(key,'condition-review',download=str(directory),run_id=second['run_id']))
+    with worksheet.open(encoding='utf-8-sig',newline='') as handle:
+        reader=csv.DictReader(handle)
+        fields=reader.fieldnames
+        rows=list(reader)
+    need(len(rows)==2 and all(not r['value'] and r['datum']=='NAVD88' for r in rows),'Expected two blank invert requests with datum')
+    for row in rows:
+        row.update(value=row['prior_ft'],source='Isolated software replay of the existing estimate. No field survey.',
+                   evidence_class='assumed')
+    returned=directory/'assumed_return.csv'
+    with returned.open('w',encoding='utf-8-sig',newline='') as handle:
+        writer=csv.DictWriter(handle,fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+    child=page_action(key,'survey-return',files=[str(returned)])
+    model=core.model(child)
+    answers=parameters.objects(model)[2]['answers']
+    for row in rows:
+        saved=answers[row['field']]
+        need(saved['evidence_class']=='assumed' and saved['candidate_record']['source']['sha256']==sha(returned),
+             'Return must remain linked to its source and keep its assumption class')
+    need(not model.get('summary') and model['parent_revision']['summary']==second['summary'],'Survey return must remain an independent draft')
+    return dict(draft=child,worksheet=item(worksheet),returned=item(returned),values_measured=False)
 
 
 def replay(fixture, evidence):
@@ -111,57 +187,64 @@ def replay(fixture, evidence):
         shutil.copyfile(path, folder/path.name)
     config = read(ROOT/m['project'])
     config['terrain'] = dict(mode='local',raster=dem.name,provenance=metadata.name,vertical_unit='m',vertical_datum='NAVD88')
-    config['delivery']['imagery'] = dict(raster=aerial.name,source='USGS NAIP, archived site imagery; pinned source raster')
+    imagery_label='USGS NAIP, archived site imagery; pinned source raster'
+    if spec.get('aerial_source'):
+        receipt=checked_file(base,spec['aerial_source'])
+        record=read(receipt)
+        need(record['raster']['sha256']==sha(aerial),'Imagery differs from its acquisition receipt')
+        imagery_label=record['source']
+        shutil.copyfile(receipt,folder/receipt.name)
+        config['delivery'].setdefault('additional_sources',[]).append(receipt.name)
+    config['delivery']['imagery'] = dict(raster=aerial.name,source=imagery_label)
     save(ROOT/m['project'],config)
     core.prepare(key)
-    attach(key, originals)
-    picks = spec['picks']
-    app_geometry.perform(key,'picks',dict(picks=picks,group_index=0,wall_gap_ft=spec['spacing'],parameters=spec['sampling']))
-    app_geometry.perform(key,'generate',dict(parameters=spec['sampling'],
-                         external_reaches=[dict(id=k,anchors_xy=picks[k]) for k in ('upstream','downstream')]))
-    # These dimensions and roughnesses are the commissioning inputs. The first
-    # effective crest width is an explicit trial assumption pending the road memo.
     fields = {'g.structure.groups.0.shape':'box','g.structure.groups.0.count':3,
               'g.structure.groups.0.span_ft':8.,'g.structure.groups.0.rise_ft':6.,
               'g.structure.road.width_ft':25.}
-    core.update(key,dict(revision=core.model(key)['revision'],values=fields,
-                         classes={k:'assumed' if k.endswith('width_ft') else 'reported' for k in fields}))
-    app_autoprepare.execute(key)
+    first_page = page_action(key,'prepare-crossing',files=[str(p) for p in originals],dimensions=fields,
+                             openings={k:spec['picks'][k][0] for k in ('inlet','outlet')},
+                             gap=spec['spacing'],length=150,maximum=160)
+    session=ROOT/core.model(key)['session']
+    proposals=list((session.parent/'automatic_geometry').glob('*/proposal.json'))
+    need(len(proposals)==1,'Expected one fresh layout preview')
+    layout=read(proposals[0])['layouts'][0]
+    need(layout['seed']['basis']=='SAVED_MAP_MOUTHS' and len(layout['anchors'])==2 and
+         all(len(r['anchors_xy'])>=2 for r in layout['anchors']), 'Expected exterior anchors generated by the DEM')
     first = solve(key)
     print('First native solve', first['run_id'], flush=True)
-    revised = app_revision.create(key,dict(revision=core.model(key)['revision'],confirmed=True))['id']
-    attach(revised,[supplement,brief])
-    model = core.model(revised)
-    road = next(r for r in parameters.rows(model) if r['key']=='g.structure.road.width_ft')
-    matches = [c for c in road['parameter_candidates'] if c['value']==26 and
-               (c.get('source') or {}).get('sha256')==sha(supplement)]
-    need(bool(matches), 'The supplemental road memo must yield a source-linked 26 ft width')
-    selection = matches[0]
-    parameters.choose(model,[dict(field=road['key'], candidate=selection['candidate'])])
-    # Follow the same dependency review as the page. Recompute only the six
-    # road-profile inputs whose footprint changed with the adopted width.
-    from ras_workflow.app_dependency_review import resolve
-    review=parameters.review(core.model(revised))
-    affected={e.get('field') for e in review['errors'] if e.get('code')=='DERIVED_INPUT_CHANGED'}
-    expected={'g.structure.road.'+name for name in ('distance_us_ft','profile_mode','station_ft','elevation_ft',
-                                                   'downstream_station_ft','downstream_elevation_ft')}
-    need(affected==expected,'Expected a review of the six revised road-profile dependencies')
-    selections=[]
-    for field in review['fields']:
-        if field['key'] in affected:
-            candidates=field['parameter_candidates']
-            need(len(candidates)==1,'Revised road-profile candidates need inspection')
-            selections.append(dict(field=field['key'],action='candidate',candidate=candidates[0]['candidate']))
-    resolve(revised,dict(revision=review['revision'],review_token=review['review_token'],selections=selections))
+    revised = page_action(key,'supplement',files=[str(supplement),str(brief)])
+    model=core.model(revised)
+    need(model['parent_revision']['project_id']==key,'Supplement must create a separate revision')
+    updated=parameters.objects(model)[2]['answers']
+    road=updated['g.structure.road.width_ft']
+    need(road['evidence_class']=='assumed' and road['candidate_record']['source']['sha256']==sha(supplement),
+         'The supplemental nominal width must retain the document hash and conditional interpretation')
+    from ras_workflow.app_material_revision import DEPENDENTS, ROAD
+    need(all(updated[ROAD+field].get('candidate_record',{}).get('automation_context') for field in DEPENDENTS),
+         'Expected six traceable road-profile derivations')
     second = solve(revised)
     need(first['road_width_ft']==25 and second['road_width_ft']==26,'Road width did not reach the compiled geometry')
     need(first['run_id'] != second['run_id'] and first['hdf']['path'] != second['hdf']['path']
-         and intact([first['summary'],first['hdf'],second['hdf']]), 'The two native result sets must remain independently intact')
+         and intact([first['summary'],first['hdf'],first['delivery'],second['hdf']]),
+         'The two native result sets and baseline delivery must remain independently intact')
     m = core.model(revised)
     body = dict(revision=m['revision'],summary_hash=m['summary']['sha256'])
-    choice = iteration_choice.choose(revised,dict(body,choice='current'))
-    handoff = recipient_handoff.export(revised,body)
-    path = (ROOT/handoff['folder']).parent
+    wet_key=page_action(revised,'wet-revision')
+    wet=solve(wet_key)
+    need(wet['run_id']!=second['run_id'] and intact([second['hdf'],second['summary']]),'Wet-end revision must have its own calculation')
+    changed=[rs for rs,width in second['widths_ft'].items()
+             if abs(wet['widths_ft'][rs]-width)>.01]
+    need(len(changed)==1 and changed[0] in {str(float(rs)) for rs in second['wet_stations']}
+         and wet['widths_ft'][changed[0]]>second['widths_ft'][changed[0]],'Widened section must match a computed wet end')
+    wet['adjusted_station']=changed[0]
+    survey_return=rehearse_return(revised,second,evidence.parent/'survey')
+    transfer=page_action(revised,'edition-transfer',parent=key)
+    choice=iteration_choice.latest(core.model(revised))
+    need([r['choice'] for r in choice['history']][-4:]==['wait','parent','review','current'],'Edition selection history incomplete')
+    handoff=recipient_handoff.export(revised,body)
+    need(handoff['folder']==transfer,'Browser transfer and verified selection disagree')
+    path=ROOT/transfer
+    detached=verify_detached(path,second,first)
     pair = check(path/'Complete',path/'Minimal')
     need(pair['mapped'] and pair['native_hdf_sha256']==second['hdf']['sha256'] and
          choice['selected']['summary']==second['summary'] and handoff['run_id']==second['run_id'],
@@ -173,8 +256,10 @@ def replay(fixture, evidence):
     from pypdf import PdfReader
     from ras_workflow.result_guidance import collect
     decision=collect(revised,dict(body,include_assessment=True))['assessment']['purpose_decision']
-    need(decision['state']=='REVISE' and any(r['state']=='missing' for r in decision['rows']),
-         'The Midway replay must retain wet-end and field-geometry limitations')
+    expected_state='REVISE' if any(r['state']=='exceeded' for r in decision['rows']) else 'NEED_EVIDENCE'
+    need(decision['state']==expected_state and
+         any(r['state']=='missing' for r in decision['rows']),
+         'Unmeasured site geometry must remain visible in the purpose decision')
     from html import escape
     for lang,code,entry in [('en','EN','Start_EN.html'),('zh','CN','Start_zh-CN.html')]:
         pages=PdfReader(path/'Complete'/'Reports'/('Report_'+code+'.pdf')).pages
@@ -189,5 +274,9 @@ def replay(fixture, evidence):
                 supplement_sha256=sha(supplement),brief_sha256=sha(brief),choice=choice,
                 handoff=handoff,pair=pair,engineering_approval='NOT_ASSESSED')
     result['browser']=page_action(revised,'handoff',decision=decision,run_id=second['run_id'])
+    result.update(wet_revision=wet,survey_return=survey_return,detached=detached,
+                  first_page=first_page, geometry_proposal=item(proposals[0]), seed=layout['seed']['basis'],
+                  generated_anchors={r['id']:len(r['anchors_xy']) for r in layout['anchors']},
+                  road_fields=list(DEPENDENTS), revised_width_class=road['evidence_class'])
     save(evidence,result)
     return result

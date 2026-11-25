@@ -117,8 +117,14 @@ function renderAutoGeometry(parent){
   if(v.reference_screen){const ref=v.reference_screen;detail.append(el('p',tr('Reference source: ','参考资料：')+(ref.source.original_name||ref.source.path)+' · '+ref.vertical_datum));table(detail,['RS',tr('Reference elevation (ft)','参考水位（ft）')],ref.points.map(p=>[p.rs,p.water_ft]));}
   if(v.seed&&!v.seed.direction_known)detail.append(el('p',tr('The arrow is inferred from surface elevations around the pin. Verify the facility, road gap and flow direction. If wrong, use the manual map tools; buried openings are not inferred.','箭头仅由坐标周围地表高程推测。请核对设施、道路间隔及上下游；不正确时使用手动地图工具，不推测埋藏涵孔。'),'warning'));
   const canvas=el('div');detail.append(canvas);const anchorsPreview=Object.fromEntries((v.anchors||[]).map(r=>[r.id,r.anchors_xy]));
+  if(isInitial&&v.seed?.direction_known&&v.geometry.model_type!=='river'){
+   if(v.seed.basis==='SAVED_MAP_MOUTHS'||v.seed.basis==='ASSOCIATED_SURVEY_MOUTHS'){
+    detail.append(el('p',tr('U → D follows the outer reaches. The arrow at the crossing points from inlet to outlet; with several groups it represents their mean direction. Check it against the site photos or drawing.','U → D 表示上下游外部河段。涵洞处箭头由进口指向出口；多组涵孔显示总体平均方向，请与现场照片或图纸核对。')));
+   }
+  }
   const riverLines=v.geometry.model_type==='river'?(v.geometry.flowlines||[]).map(line=>line.xy):undefined;
-  const map=terrainMap(canvas,{riverLines,getAnchors:()=>anchorsPreview,getMode:()=>null,onPoint:()=>{},detached:true,viewKey:project+'|auto-preview'});map.setPreview(rows);
+  const openingAxis=['SAVED_MAP_MOUTHS','ASSOCIATED_SURVEY_MOUTHS'].includes(v.seed?.basis)?[v.seed.us,v.seed.ds]:null;
+  const map=terrainMap(canvas,{riverLines,openingAxis,getAnchors:()=>anchorsPreview,getMode:()=>null,onPoint:()=>{},detached:true,viewKey:project+'|auto-preview'});map.setPreview(rows);
   const repairGuide=el('div');detail.insertBefore(repairGuide,canvas);
   showCrossingRepair(repairGuide,conflicts,rows,map,isInitial);
   detail.append(button('Fit proposed sections','显示提案断面范围',()=>{map.setPreview(rows);return map.fit('preview');}));

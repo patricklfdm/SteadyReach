@@ -66,7 +66,7 @@ def run(args):
     except (OSError,ValueError,KeyError) as exc:result['error']=str(exc);passed=False
     fixture = args.midway_fixture or os.environ.get('STEADYREACH_MIDWAY_FIXTURE')
     if not fixture:
-        result['midway'] = dict(status='REQUIRED',reason='Set --midway-fixture to the private source manifest for the two fresh native runs.')
+        result['midway'] = dict(status='REQUIRED',reason='Set --midway-fixture to the private source manifest to exercise all three native calculations and the detached handoff.')
         passed=False
     elif passed:
         try:

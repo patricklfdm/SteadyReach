@@ -40,8 +40,13 @@ def evaluate(summary, events=(), comparison=None):
     purpose = scope.get('purpose','screening')
     rules = scope.get('criteria')
     rows = []
-    def add(state,en,zh):
-        rows.append(dict(state=state,en=en,zh=zh))
+    tool='revision'
+    profile=None
+    def add(state,en,zh,stations=None):
+        row=dict(state=state,en=en,zh=zh)
+        if state!='met':
+            row['action']=dict(tool=tool,profile=profile,stations=list(stations or []))
+        rows.append(row)
     hyd = summary.get('hydraulics') or {}
     if rules is None:
         add('missing','Set acceptance conditions on an editable edition and confirm before running.',
@@ -53,22 +58,26 @@ def evaluate(summary, events=(), comparison=None):
             add('missing','Supply a verified calculation for the selected profile '+str(rules.get('profile',''))+'.',
                 '请补充所选工况的可追溯计算结果 '+str(rules.get('profile',''))+'。')
         for p in profiles:
-            name = p['profile_id']+' · '
+            profile=p['profile_id']
+            tool='revision'
+            name = profile+' · '
             if not finite(p.get('flow_cfs')) or p['flow_cfs']<=0:
                 add('missing',name+'Check the discharge.',name+'请核对工况流量。')
             else:
                 add('met',name+f"Modeled flow {p['flow_cfs']:g} cfs.",name+f"计算流量 {p['flow_cfs']:g} cfs。")
             if rules.get('dry_ends'):
                 wet = (p.get('qa') or {}).get('wet_edges')
+                tool='atlas'
                 if not isinstance(wet,list):
                     add('missing',name+'Obtain the cross-section end coverage check.',name+'请补各断面端点过水检查。')
                 elif wet:
                     stations=', '.join(map(str,wet))
                     add('exceeded',name+'Check floodplain connectivity and extend wetted ends at RS '+stations,
-                        name+'请核对漫滩连通性并延伸湿端，RS '+stations)
+                        name+'请核对漫滩连通性并延伸湿端，RS '+stations,wet)
                 else:
                     add('met',name+'All section ends clear the computed water.',name+'各断面端点均高于计算水位。')
             if 'min_freeboard_ft' in rules:
+                tool='native'
                 value=(p.get('metrics') or {}).get('road_freeboard_ft')
                 limit=rules['min_freeboard_ft']
                 unit=hyd.get('unit')
@@ -80,7 +89,9 @@ def evaluate(summary, events=(), comparison=None):
                 else:
                     add('met' if value>=limit else 'exceeded',name+f'Road margin {value:.3f} ft; required ≥ {limit:g} ft.',
                         name+f'道路余高 {value:.3f} ft，要求 ≥ {limit:g} ft。')
+        profile=None
         if purpose=='comparison':
+            tool='comparison'
             comparable={p['profile'] for p in (comparison or {}).get('profiles',[]) if p.get('verified_center_count',0)>0}
             valid = (comparison or {}).get('status')=='COMPARISON_NOT_ACCEPTANCE' and bool(profiles) and all(
                 p['profile_id'] in comparable for p in profiles)
@@ -88,6 +99,7 @@ def evaluate(summary, events=(), comparison=None):
                 'Comparable baseline and revision available.' if valid else 'Supply a computed baseline and comparable revised profiles.',
                 '已有基准版及可比修订版。' if valid else '请补已计算基准版及可比的修订版工况。')
         if rules.get('site_geometry'):
+            tool='field-feedback' if hyd.get('model_type')=='river' else 'invert-request'
             evidence=summary.get('configuration',{}).get('acceptance_geometry',{})
             documented=evidence.get('documented') is True
             add('met' if documented else 'missing',
@@ -97,10 +109,12 @@ def evaluate(summary, events=(), comparison=None):
                 '已提供场地几何记录，请复核适用性。' if documented else
                 ('请补水下断面测量、测量清单、原件及高程基准。' if hyd.get('model_type')=='river' else
                  '请逐组补进出口内底高程、原件及模型高程基准。'))
+        tool='revision'
         if purpose=='review' and 'max_residual_ft' not in rules and not rules.get('site_geometry'):
             add('missing','Specify field geometry evidence or a held-out stage event and error limit for review.',
                 '请为工程复核指定场地几何资料要求，或约定独立实测水位事件及误差。')
         if 'max_residual_ft' in rules:
+            tool='observations'
             event,limit=rules['event'],rules['max_residual_ft']
             rs=rules.get('rs')
             selected=[r for r in events if r.get('event')==event and (not rs or same_rs(rs,(r.get('location') or {}).get('rs')))]

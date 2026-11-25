@@ -14,7 +14,11 @@ function renderIterationChoices(parent,assessment,primary){
  // Keep the decision visible even when the actions are collapsed.
  box.parentElement.before(status);
  const selected=el('div',undefined,'actions');box.append(selected);
+ const history=details(box,'Edition selection history','选版历史');
  function show(record){
+  history.replaceChildren();const entries=record?.history||(record?[record]:[]);
+  for(const entry of entries)history.append(el('p',(entry.utc||'')+' · '+(saved[entry.choice]||entry.choice)));
+  history.parentElement.hidden=!entries.length;
   status.textContent=record?saved[record.choice]||'':'';
   status.hidden=!record;selected.replaceChildren();
   if(['wait','parent','unavailable'].includes(record?.choice))selected.append(button('Resume review of this edition','继续复核本版',()=>saveChoice('review')));
@@ -38,6 +42,21 @@ function renderIterationChoices(parent,assessment,primary){
  show(model.iteration_choice);
  const comparable=comparison?.status==='COMPARISON_NOT_ACCEPTANCE'&&comparison.profiles?.length>0;
  if(comparable){
+  const evidence=comparison.input_context?.source_changes;
+  box.append(el('h3',tr('Evidence changes','依据变化')));
+  if(evidence){
+   for(const [names,en,zh] of [[evidence.added,'Added','补入'],[evidence.removed,'Removed','移除']])if(names.length)box.append(el('p',tr(en,zh)+' · '+names.join(', ')));
+   const evidenceValue=r=>r?[r.value,r.source,originName(r.evidence_class)].filter(x=>x!=null&&x!=='').join(' · '):'—';
+   if(evidence.fields.length)table(box,[tr('Input','输入'),tr('Baseline value and basis','基准值与依据'),tr('Revision value and basis','修订值与依据')],evidence.fields.map(f=>[f.field,evidenceValue(f.previous),evidenceValue(f.current)]));
+   if(!evidence.fields.length&&!evidence.added.length&&!evidence.removed.length)box.append(el('p',tr('The confirmed source records match.','两版确认输入的来源记录一致。')));
+  }else box.append(el('p',tr('Source comparison unavailable for this edition. Inspect both input registers.','本版缺少可核验的来源对照，请查看两版输入清单。')));
+  const metrics=(comparison.rows||[]).filter(r=>['headwater_wse_ft','tailwater_wse_ft','roadway_flow_software_cfs'].includes(r.metric));
+  if(metrics.length){
+   const names={headwater_wse_ft:tr('Headwater (ft)','涵前水位（ft）'),tailwater_wse_ft:tr('Tailwater (ft)','涵后水位（ft）'),roadway_flow_software_cfs:tr('Road flow (cfs)','路面越流（cfs）')};
+   table(box,[tr('Profile','工况'),tr('Result','结果'),tr('Baseline','基准'),tr('Revision','修订'),tr('Matched change','可比差值')],metrics.map(r=>[r.profile,names[r.metric],r.previous??'—',r.current??'—',r.change??'—']));
+  }
+  const openConditions=(assessment.purpose_decision?.rows||[]).filter(r=>r.state!=='met');
+  if(openConditions.length){box.append(el('h3',tr('Remaining limits on this edition','本版尚存限制')));for(const c of openConditions)box.append(el('p',tr(c.en,c.zh),'warning'));}
   const old=comparison.diagnostics?.previous,now=comparison.diagnostics?.current;
   const warnings=[old?.severity?.WARNING,now?.severity?.WARNING],wet=[old?.wet_ends?.length,now?.wet_ends?.length];
   if(warnings.every(Number.isFinite)&&wet.every(Number.isFinite))box.append(el('p',tr('Native warnings','原生警告')+' '+warnings.join(' → ')+' · '+tr('Wet ends','过水端点')+' '+wet.join(' → ')));
@@ -51,10 +70,17 @@ function renderIterationChoices(parent,assessment,primary){
  choices.append(button('Wait for field records','等待补充资料',()=>saveChoice('wait')));
  if(primary)box.append(el('p',tr('Evidence to address first: ','优先核对的依据：')+tr(primary.reason.en,primary.reason.zh)));
  if(model.model_type==='river'&&!model.native_review)box.append(button('Prepare a field data request','准备现场索资清单',()=>openGuidanceTool('field-feedback')));
- if(assessment.level>=2)box.append(button('Hand off this edition with its limitations','按本版用途交接',()=>{
-  if(model.iteration_choice?.choice==='parent')throw Error(tr('Open the selected baseline to hand off its files, or explicitly select this revision.','请打开选用的基准版交接其文件，或明确选择当前修订版。'));
+ if(model.delivery?.complete&&model.delivery?.minimal&&!model.exports_need_refresh)box.append(button('Prepare handoff for the selected use','按所选用途准备交接',async()=>{
+  if(model.iteration_choice?.choice==='parent'){
+   const target=model.iteration_choice.selected;await open(target.project_id);
+   if(current?.summary?.sha256!==target.summary.sha256){await open(model.id);throw Error(tr('Baseline changed. Check the edition again.','基准版已变化，请重新核对所选版本。'));}
+   openGuidanceTool('recipient');await createTransferFolder(document.getElementById('transfer-status'));return;
+  }
+  if(model.parent_revision&&!comparable)throw Error(tr('Verify a comparable baseline before selecting this revision.','请先核对可比基准，再选用此修订版交接。'));
   if(model.iteration_choice?.choice==='wait')throw Error(tr('Resume this review when field records are ready.','现场资料就绪后，请先点击“继续复核本版”。'));
+  if(model.iteration_choice?.choice!=='current'&&(comparable||!model.parent_revision))await saveChoice('current');
   openGuidanceTool('recipient');
+  await createTransferFolder(document.getElementById('transfer-status'));
  }));
  box.append(el('small',tr('Your choice is saved with this result. Its assessment level and hydraulic checks stay in effect.','选择保存在本次结果下，交接仍受本版评估等级和水力检查限制。')));
 }
@@ -261,6 +287,11 @@ function renderResultTools(parent,delivery){
  const deliveryAnchor=el('div');guidanceTarget(deliveryAnchor,'delivery');box.append(deliveryAnchor);
  if(current.model_type==='river')box.append(el('p',tr('The workflow exports the full native warning table for the river reach. There are no culvert group tables.','工作流导出整个河段的原生警告表，纯河道没有涵孔组表。')));
  else box.append(el('p',tr('After a new calculation, SteadyReach automatically exports every computed culvert group/profile and the full native warning table, then cross-checks them before reporting. Hydraulic interpretation still needs review.','新计算结束后，SteadyReach 自动导出各工况、各孔组明细及完整原生警告表，交叉核验后纳入报告。水力含义仍需工程判断。')));
+ if(current.model_type!=='river'){
+  box.append(el('p',tr('Read the culvert output and Q Weir for the same plan and profile. A blank roadway entry stays unknown.','请核查同一计划、同一工况的涵洞原生输出与 Q Weir 栏；空白的道路越流量保留为未知。')+' · '+current.results.run_id));
+  const q=x=>Number.isFinite(x)?x:tr('Unknown','未知');
+  table(box,[tr('Profile','工况'),'Q (cfs)',tr('Culverts (cfs)','涵洞（cfs）'),'Q Weir (cfs)'],current.results.metrics.map(p=>[p.profile_id,q(p.flow_cfs),q(p.metrics?.culvert_total_flow_cfs),q(p.metrics?.roadway_flow_software_cfs)]));
+ }
  const automatic=current.automatic_native_outputs;
  const exported=['COMPLETE','COMPLETE_WITH_DIFFERENCES'].includes(automatic?.status);
  if(exported)box.append(el('p',tr('Automatic export complete: ','自动导出完成：')+(current.model_type==='river'?'':automatic.group_tables+tr(' group tables; ',' 份孔组表；'))+automatic.warning_messages+tr(' native messages.',' 条原生信息。'),'status'));

@@ -46,6 +46,8 @@ class IterationChoices(TestCase):
             recipient_handoff.export('revision', self.body)
         resumed = iteration_choice.choose('revision', {**self.body, 'choice':'review', 'previous':paused['token']})
         self.assertIsNone(resumed['selected'])
+        self.assertEqual([r['token'] for r in resumed['history']], [paused['token'],resumed['token']])
+        self.assertEqual(iteration_choice.latest(app_core.model('revision'))['history'],resumed['history'])
         self.assertIsNone(iteration_choice.latest({**self.models['revision'], 'summary':self.models['baseline']['summary']}))
 
     def test_choose_only_a_comparable_pair_and_handoff_the_selected_run(self):

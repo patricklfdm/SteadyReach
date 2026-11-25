@@ -1,7 +1,7 @@
 """An engineer's working choice for one computed edition, separate from hydraulic QA."""
 from . import app_core as core
 from .app_revision import compare
-from .common import ROOT, intact, read, save, unique_id
+from .common import ROOT, intact, read, save, unique_id, utc
 
 
 def latest(model):
@@ -50,6 +50,10 @@ def choose(key, body):
             selected = {'project_id': original['id'], 'summary': parent['summary']}
     if prior.get('choice') == choice and prior.get('selected') == selected:
         return prior
-    record = dict(choice=choice, summary=summary, selected=selected, token=unique_id())
+    history=list(prior.get('history',[]))
+    if prior.get('token') and not history:
+        history.append({k:prior.get(k) for k in ('choice','token','selected','utc')})
+    record = dict(choice=choice, summary=summary, selected=selected, token=unique_id(),utc=utc())
+    record['history']=history+[{k:record[k] for k in ('choice','token','selected','utc')}]
     save(core.folder(key) / 'review' / 'iteration_choice.json', record)
     return record
