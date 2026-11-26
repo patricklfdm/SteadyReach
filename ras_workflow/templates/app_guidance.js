@@ -184,7 +184,13 @@ function showResultAssessment(overview,a,box=overview){
  overview.append(el('h2',tr('Delivery assessment','结果交付评估')+' · L'+a.level+' · '+label(a.title)));
  if(a.purpose_decision){
   const d=a.purpose_decision, panel=el('section',undefined,'card');overview.append(panel);
-  panel.append(el('h3',label(d)),el('p',tr(d.note_en,d.note_zh)));
+  if(a.edition_brief){
+    const brief=el('section');brief.id='edition-brief';panel.append(brief);
+    brief.append(el('h3',tr('About this run','本次计算说明')),el('code',a.edition_brief.run_id));
+    const list=el('dl');brief.append(list);
+    for(const item of a.edition_brief.rows){list.append(el('dt',label(item.heading)),el('dd',label(item)));}
+    panel.append(el('p',tr(d.note_en,d.note_zh)));
+  }else{panel.append(el('h3',label(d)),el('p',tr(d.note_en,d.note_zh)));}
   const orderedPriorities=priorityRows(a,current.comparison), priorities=orderedPriorities.slice(0,3);
   if(priorities.length){
    const first=el('section');first.id='result-priorities';panel.append(first);

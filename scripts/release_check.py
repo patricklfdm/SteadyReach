@@ -18,6 +18,14 @@ def run(args):
     root=REPO/'status/release_checks'/unique_id();root.mkdir(parents=True)
     if getattr(args,'p10',False):
         from pilot_metrics import sample_storage,storage_summary,write_summary
+        from ras_workflow.storage_capacity import pilot
+        capacity=pilot(REPO,args.p5_archive_dir)
+        save(root/'capacity.json',capacity)
+        print(f"Capacity estimate: {capacity['status']} · {root/'capacity.json'}",flush=True)
+        if capacity['status']=='LOW_SPACE':
+            save(root/'release.json',dict(status='LOW_SPACE',capacity=capacity,started_jobs=0))
+            print(f"Workspace short by {capacity['workspace_short_bytes']:,} bytes; archive drive short by {capacity['archive_short_bytes']:,} bytes.",flush=True)
+            return 3
         with sample_storage(REPO,root):
             status=run_checks(args,root)
         state=read(root/'release.json')

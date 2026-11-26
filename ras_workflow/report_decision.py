@@ -12,6 +12,14 @@ def sensitivity_peak(data):
 def add(document,data,cn):
     s=data['summary'];h=s['hydraulics']
     tr=lambda en,zh:zh if cn else en
+    brief=data.get('edition_brief')
+    if brief:
+        language='zh' if cn else 'en'
+        document.add_paragraph(tr('Solver run','求解运行')+' · '+str(brief['run_id']))
+        for row in brief['rows']:
+            line=document.add_paragraph()
+            line.add_run(row['heading'][language]+'  ').bold=True
+            line.add_run(row[language])
     document.add_heading(tr('Scope and decision','用途与复核决定'),2)
     review=(data.get('revision_comparison') or {}).get('review') or {}
     steps=[r for r in [review.get('field_regression'),*data.get('review_steps',[])] if r]

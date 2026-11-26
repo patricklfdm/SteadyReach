@@ -44,6 +44,7 @@ function renderEditionStorage(parent,edition,refresh){
   const p=await api('storage-preview',{id:edition.id});area.replaceChildren();
   area.append(el('p',p.title+' · '+p.id));
   table(area,[tr('Logical','逻辑占用'),tr('Exclusive','独占'),tr('Shared','共享'),tr('Releasable','可释放')],[[p.logical_bytes,p.exclusive_bytes,p.shared_bytes,p.reclaimable_bytes].map(size)]);
+  table(area,[tr('Archive upper estimate','归档空间上限估计'),tr('Restore allowance','版本恢复预留'),tr('Workspace free','工作盘当前可用')],[[p.archive_upper_bytes,p.restore_reserve_bytes,p.workspace_free_bytes].map(size)]);
   const categories={inputs:tr('Inputs and project records','原件与项目记录'),delivery:tr('Published packages','已发布交付包'),dependency:tr('Linked data','引用数据'),calculation:tr('Calculation','计算'),export:tr('Temporary exports','临时导出'),study:tr('Studies','复核试算'),preview:tr('Previews','预览'),review:tr('Reviews','复核'),cache:tr('Cache','缓存')};
   categories.reports=tr('Published reports','已发布报告');categories.terrain=tr('Terrain rasters','地形栅格');
   table(area,[tr('Contents','内容'),tr('Files','文件数'),tr('Size','大小'),tr('Shared','共享'),tr('Eligible before protection','保护策略生效前的候选量')],Object.entries(p.groups).map(([k,v])=>[categories[k]||k,v.files,size(v.bytes),size(v.shared_bytes||0),size(v.candidate_bytes||0)]));
@@ -55,6 +56,22 @@ function renderEditionStorage(parent,edition,refresh){
   if(p.candidate_files)candidates.append(el('pre',p.candidates.join('\n')));
   area.append(el('p',tr('Choose an existing local folder outside the checkout. The archive uses space on that drive. Published packages, original inputs and shared terrain stay online during cleanup.','选择工作目录外已有的本机目录。归档会占用所选磁盘空间。清理时已发布双包、原始输入和共享地形继续可用。')));
   const dir=field(area,'archive-dir-'+edition.id,'Archive folder','归档目录',p.default_directory);
+  const batch=details(area,'Estimate space for similar runs','预估同类批次所需空间');
+  batch.append(el('p',tr('Budget one retained copy and one archive per edition, one temporary working copy for serial processing, and room to restore one edition. Larger terrain and concurrent jobs need a separate estimate.','按每版一份工作文件和一份归档、串行处理一份临时副本及恢复一个版本估算。更大地形或并发任务需另行估算。')));
+  const count=field(batch,'capacity-count-'+edition.id,'Number of similar editions','同类版本数',1,'number');
+  count.min=1;count.max=10000;count.step=1;
+  const output=el('div');output.id='capacity-estimate-'+edition.id;output.setAttribute('aria-live','polite');
+  batch.append(button('Estimate peak space','预估空间峰值',async()=>{
+    output.replaceChildren();
+    const path=dir.value,editions=Number(count.value);
+    const r=await api('storage-capacity',{id:edition.id,token:p.token,directory:path,editions});
+    if(path!==dir.value||editions!==Number(count.value))return;
+    output.dataset.state=r.status;
+    output.append(el('p',r.status==='READY'?tr('Estimated space is available.','当前空间满足估算。'):tr('More space is required.','当前可用空间不足。')));
+    table(output,[tr('Workspace peak','工作盘峰值'),tr('Archive allowance','归档用量'),tr('Restore reserve','恢复预留'),tr('Workspace shortage','工作盘缺口'),tr('Archive drive shortage','归档盘缺口')],[[r.workspace_needed_bytes,r.archive_bytes,r.restore_reserve_bytes,r.workspace_short_bytes,r.archive_short_bytes].map(size)]);
+  }),output);
+  const clear=()=>{output.replaceChildren();delete output.dataset.state;};
+  count.oninput=clear;dir.oninput=clear;
   area.append(button('Create verified archive','创建并校验归档',async()=>{await api('storage-archive',{id:edition.id,confirmed:true,token:p.token,directory:dir.value});await inspect();}));
   if(p.archive)area.append(el('p',tr('Archive','归档')+' · '+size(p.archive_bytes)+' · '+p.archive));
   if(p.matches_archive&&p.reclaimable_bytes>0){

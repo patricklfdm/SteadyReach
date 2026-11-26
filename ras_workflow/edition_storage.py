@@ -45,6 +45,9 @@ def available(path,required):
 
 def preview(root,key):
     p=inspect(root,key);r=state(root,key)
+    p['archive_upper_bytes']=archive_bound(p)
+    p['restore_reserve_bytes']=sum(p['files'][n][0]+4096 for n in p['reclaim'])
+    p['workspace_free_bytes']=shutil.disk_usage(root).free
     p.pop('files')
     candidates=p.pop('reclaim')
     p.update(candidate_files=len(candidates),candidates=candidates,pinned=r['pinned'],archive=r.get('archive'),
@@ -55,13 +58,17 @@ def preview(root,key):
     return p
 
 
-def destination(root,directory):
+def archive_base(root,directory):
     if not isinstance(directory,str) or not directory.strip():raise ValueError('Choose an existing local archive folder')
     base=Path(directory)
     if (not base.is_absolute() or str(base).startswith('\\\\') or not base.is_dir() or base.resolve()!=base
             or base.is_relative_to(root)):
         raise ValueError('Choose a local folder outside this checkout / 选择工作目录以外的本机目录')
-    folder=base/'SteadyReach_Archives'
+    return base
+
+
+def destination(root,directory):
+    folder=archive_base(root,directory)/'SteadyReach_Archives'
     if folder.is_relative_to(root) or folder.resolve()!=folder:raise ValueError('Choose a separate archive folder')
     folder.mkdir(exist_ok=True)
     return folder
@@ -87,10 +94,14 @@ def archive_manifest(archive,key):
     return record
 
 
-def write_archive(root,p,folder):
-    # The upper bound also covers ZIP records, incompressible data and the filename table.
+def archive_bound(p):
+    # Include ZIP records, incompressible data and the filename table.
     overhead=sum(2048+8*len(k.encode()) for k in p['files'])
-    available(folder,p['logical_bytes']+p['logical_bytes']//100+overhead)
+    return p['logical_bytes']+p['logical_bytes']//100+overhead
+
+
+def write_archive(root,p,folder):
+    available(folder,archive_bound(p))
     target=folder/(p['id']+'_'+unique_id()+'.zip')
     temp=target.with_suffix('.partial')
     members={};seen=set()
@@ -164,6 +175,19 @@ def materialize(root,r,manifest,archive):
 def perform(root,key,action,body):
     root=Path(root).resolve();path=record_path(root,key)
     if action=='preview':return preview(root,key)
+    if action=='capacity':
+        from .storage_capacity import estimate
+        count=body.get('editions')
+        if type(count) is not int or not 1<=count<=10000:
+            raise ValueError('Enter 1..10000 editions / 请输入 1 至 10000 个版本')
+        base=archive_base(root,body.get('directory'))
+        p=preview(root,key)
+        if p['token']!=body.get('token') or p['phase']!='ONLINE':
+            raise ValueError('Storage changed. Preview again / 存储已改变，请重新预览')
+        # Retain each completed edition. Allow one additional edition for serial temporary work.
+        return dict(editions=count,reference_bytes=p['logical_bytes'],**estimate(root,base,
+                    work_bytes=(count+1)*p['logical_bytes'],archive_bytes=count*p['archive_upper_bytes'],
+                    restore_bytes=p['restore_reserve_bytes']))
     with ExitStack() as locks:
         for name in ('app/launch.lock','app/execution.lock','workflow_solver.lock'):
             locks.enter_context(lock(root/'status'/name))

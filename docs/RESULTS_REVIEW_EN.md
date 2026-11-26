@@ -2,6 +2,12 @@
 
 **English** | [简体中文](RESULTS_REVIEW_CN.md) | [User guide](USER_GUIDE_EN.md)
 
+## Read the edition brief
+
+Open **About this run** on the results page. Match the solver run ID, then check the edition use, modeled flows and field coverage, key limitation and who should obtain the missing information. A stage comparison at RS 500 applies to that station and event discharge. Other locations and flows need their own evidence. Boundary controls, background gages and readings used in calibration are excluded from held-out stage comparisons.
+
+New English and Chinese reports open with the same four items. After formal issue, a recipient can open `Start_EN.txt` in the detached client folder, match the run ID and open `Complete/Reports/Report_EN.pdf`. The model is under `Minimal/HEC_RAS`. Historical reports retain their original layout. To obtain the new front page, export again from the matching result.
+
 ### From a result to the next decision
 
 1. Open **Summary → What should I review first?** The first three actions lead to the affected sections, observed event or edition comparison. Expand **Other review actions** for the remaining recommendations and **All project acceptance conditions** for the project criteria. The opening report section also identifies locations that warrant action and explains why.

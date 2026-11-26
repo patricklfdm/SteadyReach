@@ -28,6 +28,8 @@ def page(language, model, assessment, folders, receipt, pair, review, selection=
             '<p>L'+str(assessment['level'])+' · '+escape(assessment['title'][language])+'</p>',
             '<p>'+escape(assessment['use_guide']['allowed'][language])+'</p>',
             '<p>'+escape(assessment['use_guide']['deferred'][language])+'</p>']
+    for row in (assessment.get('edition_brief') or {}).get('rows',[]):
+        result.append('<p><strong>'+escape(row['heading'][language])+'</strong> · '+escape(row[language])+'</p>')
     selection=selection or {}
     result.append('<h2>'+t('Edition selected for transfer','本次交接选用版本')+'</h2><p>'+
                   escape(t('Revision','修订版') if model.get('parent_revision') else t('Original calculation','首次计算版'))+' · '+escape(pair['run_id'])+'</p>')

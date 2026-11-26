@@ -2,6 +2,12 @@
 
 [简体中文](PRODUCTION_ROADMAP_CN.md)
 
+## P12–P15 workstation decisions
+
+P12 flood-stage accuracy remains open. The closest measured-outlet scenario on the original Floyd geometry still underpredicted the 2024 check by 1.527 ft. Turkey underpredicted the 2016 check by 2.522 ft with 129 sections. P13 uses observed residuals, boundary response and floodplain flow changes to guide revisions.
+
+P14 follows a Dexter event from field inputs through two native runs and a detached client delivery. The results page, first page of both reports and recipient notes identify the same run, field coverage and follow-up. P15 checks file ownership, eligible cleanup, archive and restore times at 1, 24 and 171 editions, an interrupted restore and a low-space batch stop. The scale test uses one real computed edition and additional catalog fixtures. Human usability, professional sign-off and cross-machine qualification remain pending. [Reproduction](LOCAL_RELEASE_EN.md) · [Capacity planning](OPERATIONS_EN.md)
+
 ## P11 original measurement tables
 
 On the acceptance workstation the automated browser selected outlet row 413 from the original Washington field table. The first calculation used the outlet. A separate revision returned eight independent interior observations. All nine native water levels in both runs reproduced the P10 baseline. The largest measured difference remained +0.429 ft at RS 400. Both mapped delivery pairs passed verification. Fourteen Soquel off-site gage visits remained context. Midway retained both missing invert surveys; a single-end rehearsal reopened only the inlet. The regression suites passed 532 Python and 44 page tests. Independent engineering approval, first-user and second-machine acceptance remain pending. [User instructions](HYDRAULIC_INTAKE_EN.md) · [Reproduce the gate](LOCAL_RELEASE_EN.md)

@@ -2,6 +2,19 @@
 
 [简体中文](LOCAL_RELEASE_CN.md) · [Production priorities and acceptance criteria](PRODUCTION_ROADMAP_EN.md)
 
+## P14 client handoff and P15 storage
+
+Use an isolated workstation checkout with the P4 Dexter survey, later field return, georeferenced imagery and the configured native tools. For the storage comparison provide another local checkout of commit `8781730`. The driver verifies the old implementation's fingerprints. Substitute the paths to your files and replace `<batch>` with the P14 directory printed at completion.
+
+```powershell
+.\.venv\Scripts\python.exe scripts/p14_release.py --survey D:\Dexter\survey --observation D:\Dexter\event_return.csv --imagery D:\Dexter\imagery
+.\.venv\Scripts\python.exe scripts/p15_release.py --journey status/p14/<batch>/journey/release.json --reference-root D:\SteadyReach_8781730
+```
+
+P14 operates the public project pages, verifies both reports on page one and checks both native results in a detached customer directory. P15 operates the storage estimate, compares full ownership and candidate lists, records the physical volume change during retirement and verifies restored member hashes. The mid-restore fault and one-byte-short batch boundary are controlled test conditions. Receipts are under `status/p14` and `status/p15`. Test copies and native packages stay local.
+
+**Workstation result, 2026-11-26.** At Dexter the revised run was +0.246 ft above the October 2015 observation at RS 500 and 1,540 cfs. Survey uncertainty remains outstanding. Both languages in the detached customer folder matched the selected native run. In the storage scale test, three-sweep median inventories at 1, 24 and 171 editions took 0.073, 0.111 and 0.345 s, compared with 0.147, 0.185 and 0.405 s on the reference implementation. At 171 editions archive plus retirement took 3.180 s (formerly 3.470 s). Restore took 0.622 s (formerly 0.612 s). Timing is workload-specific. The cleanup step freed 15.82 MiB on the test volume. With the new archive retained on the same drive, free space fell by 20.61 MiB overall. After a forced interruption one member had been restored and the remaining 126 were restored on retry. All member hashes matched. The one-byte-short full-pilot rehearsal started zero jobs.
+
 ## P11 original measurement intake
 
 Configure HEC-RAS 7.0.1, QGIS and the report converter in a fresh isolated checkout on the acceptance workstation. Supply the completed P10 workspace, the workspace containing the original Soquel edition, and a frozen USGS site 11160000 field-measurements GeoJSON. Save the original response from the [USGS 2024 visits endpoint](https://api.waterdata.usgs.gov/ogcapi/v0/collections/field-measurements/items?f=json&monitoring_location_id=USGS-11160000&datetime=2024-01-01%2F2024-12-31&limit=1000). Replace the three paths in this example.

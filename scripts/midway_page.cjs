@@ -72,6 +72,10 @@ async function main() {
         if(kind===(t.type==='file'||t.type==='checkbox'||t.tagName==='SELECT'?'change':'input'))window.__p4.entries.push(t.id);
       },true);`});
     await send('Page.navigate',{url});
+    if(mode==='p14-client-note'){
+      await until('document.readyState==="complete" && document.body.innerText.includes('+JSON.stringify(run_id)+')');
+      console.log(await evaluate('document.body.innerText'));return;
+    }
     if(mode==='p8-offline-reply'){
       await until('!!document.querySelector("#request") && document.readyState==="complete"');
       await send('Page.setDownloadBehavior',{behavior:'allow',downloadPath:input.directory});
@@ -328,6 +332,27 @@ async function main() {
       await buttonByName('Confirm return and open revision');
       await until('current?.parent_revision?.project_id==='+JSON.stringify(project));
       console.log(await evaluate('current.id'));return;
+    }
+    if(mode==='p15-capacity'){
+      await click('#result-tab-delivery');
+      await buttonByName('Inspect edition storage');
+      const field='capacity-count-'+project,output='#capacity-estimate-'+project;
+      const states=[];
+      for(const [quantity,state] of [[1,'READY'],[10000,'LOW_SPACE']]){
+        await fieldValue(field,String(quantity));
+        await buttonByName('Estimate peak space');
+        await until('document.querySelector('+JSON.stringify(output)+')?.dataset.state==='+JSON.stringify(state));
+        states.push(await evaluate('document.querySelector('+JSON.stringify(output)+').innerText'));
+      }
+      console.log(JSON.stringify(states));return;
+    }
+    if(mode==='p14-read'){
+      await until('document.querySelectorAll("#edition-brief dd").length===4');
+      const lines=()=>evaluate('Array.from(document.querySelectorAll("#edition-brief dd"),e=>e.innerText)');
+      const en=await lines();
+      await buttonByName('简体中文');
+      await until('document.querySelector("#edition-brief")?.textContent.includes("下一步由谁补什么")');
+      console.log(JSON.stringify({en,zh:await lines()}));return;
     }
     if(mode==='priority-read'){
       await until('!!document.querySelector("#result-priorities")');

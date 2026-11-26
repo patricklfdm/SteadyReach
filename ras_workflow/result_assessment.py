@@ -6,7 +6,7 @@ from .result_guidance import BALANCE, NATIVE_GAPS, WET, text
 from .revision_inputs import station_key
 from .river_review import response
 
-RULE_VERSION = 8
+RULE_VERSION = 9
 LEVELS = [
     text('Evidence insufficient', '计算证据不足'),
     text('Internal diagnosis', '可供内部诊断'),
@@ -396,6 +396,8 @@ def assess(model, path, summary, diagnostics, studies, guidance):
         except EVIDENCE_ERRORS:
             comparison=None
     result['purpose_decision']=evaluate(summary,reviewed_events,comparison)
+    from .edition_brief import build as edition_brief
+    result['edition_brief']=edition_brief(summary,result['purpose_decision'],reviewed_events)
     from .review_decisions import site_steps
     result['review_steps']=site_steps(scope,reviewed_events,studies) if is_river else []
     result['evidence_hash'] = digest({k:v for k,v in result.items() if k!='assessed_utc'})

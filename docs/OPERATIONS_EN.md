@@ -2,6 +2,12 @@
 
 [简体中文](OPERATIONS_CN.md) · [Local release checks](LOCAL_RELEASE_EN.md)
 
+## Estimate disk space before a batch
+
+On a completed edition, open **Storage and recovery by edition → Inspect edition storage**. Enter the archive directory, expand **Estimate space for similar runs**, enter the number of comparable editions and select **Estimate peak space**. The result shows the working-volume peak, archive allowance, restore reserve and shortage on each drive. The estimate allows one retained copy per edition, one temporary copy for serial work and one restore. For larger terrain, choose a larger representative edition.
+
+Before starting the fixed 26-job P10 acceptance run, the launcher writes `capacity.json`. It budgets the measured 7,147,333,505-byte working peak, 66,153,326 bytes of archives and 18,061,750 bytes to restore one edition. On a shared volume all three are added. If space is insufficient, `release.json` records `LOW_SPACE` and zero started jobs. Free space or choose another archive drive, then retry. An interrupted restore can resume from the same registered archive.
+
 Use this procedure to administer a single Windows workstation. The normal project entry point remains `start_workflow.cmd`. Close applications using the two project installations before switching versions. Keep project data, the release distribution and the migration backup in separate directories.
 
 ## Install from the offline bundle

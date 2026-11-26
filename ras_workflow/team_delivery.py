@@ -106,6 +106,14 @@ def export(key,edition,token,review_head):
     guides={
         'Start_EN.txt':f"SteadyReach | {edition['run']}\nOpen Complete/Reports/Report_EN.pdf to read the project use and limitations. Open the HEC-RAS project in Minimal/HEC_RAS. CLIENT.json lists every technical file by package and SHA-256.\n",
         'Start_zh-CN.txt':f"SteadyReach | {edition['run']}\n打开 Complete/Reports/Report_CN.pdf 查看项目用途与限制。可从 Minimal/HEC_RAS 打开模型。CLIENT.json 列出两个包的文件及 SHA-256。\n"}
+    report=roots['Complete']/'Reports/report_data.json'
+    if report.is_file():
+        brief=read(report).get('edition_brief')
+        if brief:
+            if brief['run_id']!=edition['run']:
+                raise ValueError('Report belongs to a different native run')
+            for name,language in [('Start_EN.txt','en'),('Start_zh-CN.txt','zh')]:
+                guides[name]+='\n'+'\n'.join(row['heading'][language]+' · '+row[language] for row in brief['rows'])+'\n'
     def verify(dest):
         if {p.name for p in dest.iterdir()}!={'Client','Internal'}:raise ValueError('Issue folder changed')
         client=dest/'Client'

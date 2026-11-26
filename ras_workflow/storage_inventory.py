@@ -1,4 +1,5 @@
 """A conservative file-ownership inventory for one local edition."""
+from functools import lru_cache
 import json
 import os
 import re
@@ -20,12 +21,12 @@ RUNTIME_LOCKS={'apply.lock','browser_draft.lock','browser.lock','confirm.lock','
                'pdf_recovery.lock','project.lock','queue.lock','recipient_handoff.lock','session.lock','study.lock'}
 
 
-def regular_tree(folder,locks=None):
+def regular_tree(folder,locks=None,metadata_only=False):
     """Return regular files; links, including junctions, cannot enter a cleanup."""
     result={}
-    stack=[folder]
+    stack=[(folder,False)]
     while stack:
-        directory=stack.pop()
+        directory,ignored=stack.pop()
         if directory.is_symlink() or directory.is_junction():
             raise ValueError('Linked storage directory: '+str(directory))
         with os.scandir(directory) as entries:
@@ -33,12 +34,23 @@ def regular_tree(folder,locks=None):
                 s=e.stat(follow_symlinks=False)
                 if getattr(s,'st_file_attributes',0)&1024 or e.is_symlink():
                     raise ValueError('Linked storage member: '+e.path)
-                path=Path(e.path)
-                if e.is_dir(follow_symlinks=False):stack.append(path)
-                elif path.name in RUNTIME_LOCKS:
-                    if locks is not None:locks.add(path)
-                else:result[path]=s
+                if e.is_dir(follow_symlinks=False):
+                    skip=metadata_only and (ignored or e.name in SKIP_METADATA or e.name.startswith('Handoff_'))
+                    stack.append((Path(e.path),skip))
+                elif e.name in RUNTIME_LOCKS:
+                    if locks is not None:locks.add(Path(e.path))
+                elif not metadata_only or (not ignored and e.name.lower().endswith('.json')):
+                    result[Path(e.path)]=s
     return result
+
+
+def _path_values(data):
+    return tuple(json.loads(b'"'+raw+b'"').replace('\\','/') for raw in set(PATH_VALUE.findall(data)))
+
+
+# Key on actual bytes, so an externally edited JSON with the same size and mtime
+# is re-parsed. Cap retained input at 8 MiB; large documents bypass the cache.
+_cached_paths=lru_cache(maxsize=256)(_path_values)
 
 
 def references(root,folder,files):
@@ -55,8 +67,8 @@ def references(root,folder,files):
         parts=path.parts[depth:]
         if any(p in SKIP_METADATA or p.startswith('Handoff_') for p in parts):
             continue
-        for raw in set(PATH_VALUE.findall(path.read_bytes())):
-            value=json.loads(b'"'+raw+b'"').replace('\\','/')
+        data=path.read_bytes()
+        for value in (_cached_paths(data) if len(data)<=32768 else _path_values(data)):
             base=path.parent if value.startswith('../') else root
             if (base,value) in known:continue
             known.add((base,value))
@@ -94,16 +106,15 @@ def inspect(root,key):
                 or (row.get('sha256') and sha(source)!=row['sha256'])):
             missing.add(row['path'])
         elif not source.is_relative_to(folder):refs.add(source)
-    users=defaultdict(set);dependents=set()
+    referenced=set();dependents=set()
     for app in sorted((root/'projects').glob('*/app.json')):
         other=app.parent
         if other==folder:continue
         meta=read(app)
-        paths=references(root,other,regular_tree(other))
+        paths=references(root,other,regular_tree(other,metadata_only=True))
         if (meta.get('parent_revision') or {}).get('project_id')==key or any(p.is_relative_to(folder) for p in paths):
             dependents.add(other.name)
-        for ref in paths:
-            users[ref].add(other.name)
+        referenced.update(paths)
     # Cold children still need their parents even when a study's metadata is offline.
     for record in (root/'status/edition_storage').glob('*/state.json'):
         state=read(record)
@@ -125,8 +136,14 @@ def inspect(root,key):
     counts=defaultdict(lambda: Counter(files=0,bytes=0))
     reclaim=[];logical=exclusive=shared=0
     entries={}
+    directory_use={}
     def used_by_others(path):
-        return any(p in users for p in (path,*path.parents) if p.is_relative_to(root))
+        if path in referenced:
+            return True
+        parent=path.parent
+        if parent not in directory_use:
+            directory_use[parent]=any(p in referenced for p in (parent,*parent.parents))
+        return directory_use[parent]
     for path,s in sorted({**local,**external}.items()):
         name=path.relative_to(root).as_posix()
         own=path in local

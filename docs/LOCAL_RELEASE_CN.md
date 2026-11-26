@@ -2,6 +2,19 @@
 
 [English](LOCAL_RELEASE_EN.md) · [生产化开发顺序与验收标准](PRODUCTION_ROADMAP_CN.md)
 
+## P14 客户交接及 P15 存储复验
+
+使用独立检出、P4 的 Dexter 测量原件、后到的水位资料、带空间参考的航片，以及已配置的本机原生软件。存储对照另需一份提交 `8781730` 的本地旧版检出，脚本会核对旧实现的文件指纹。请替换数据路径，第二条命令中的 `<batch>` 换成第一条命令完成时输出的批次目录名。
+
+```powershell
+.\.venv\Scripts\python.exe scripts/p14_release.py --survey D:\Dexter\survey --observation D:\Dexter\event_return.csv --imagery D:\Dexter\imagery
+.\.venv\Scripts\python.exe scripts/p15_release.py --journey status/p14/<batch>/journey/release.json --reference-root D:\SteadyReach_8781730
+```
+
+P14 通过项目页面完成操作，核对两份报告首页以及单独客户目录中两包的原生结果。P15 操作存储预估页面，对照完整文件归属和可清理清单，记录实体清理时的卷空间增量，并逐文件校验恢复结果。恢复中途空间不足和批次预算差一字节属于受控故障演练。回执分别在 `status/p14` 和 `status/p15`，算例副本及原生交付包留在本机。
+
+**2026 年 11 月 26 日本机实测。** Dexter 修订版在 2015 年 10 月事件、1,540 cfs、RS 500 的水位高估 0.246 ft，仍需补水位测量精度。独立客户目录的两种语言均对应所选原生运行。1、24、171 版规模测试中，各盘点三次的中位数分别由 0.147、0.185、0.405 秒降至 0.073、0.111、0.345 秒。171 版时，归档加清理由 3.470 秒降至 3.180 秒，恢复由 0.612 秒变为 0.622 秒。耗时取决于本次负载。清理步骤释放 15.82 MiB，但新建归档保存在同盘，合计可用空间减少 20.61 MiB。模拟恢复中途磁盘已满后，已恢复的 1 个文件保留，重试补齐其余 126 个，所有文件指纹一致。完整试点预算差 1 字节时启动任务数为 0。
+
 ## P11 原始测量表验收
 
 在新的同机隔离检出中，先按安装指南配置 HEC-RAS 7.0.1、QGIS 和报告转换器。准备原 P10 验收工作区、保留 Soquel 原版的工作区，以及冻结的 USGS 11160000 现场测验 GeoJSON。可从[USGS 2024 年测验接口](https://api.waterdata.usgs.gov/ogcapi/v0/collections/field-measurements/items?f=json&monitoring_location_id=USGS-11160000&datetime=2024-01-01%2F2024-12-31&limit=1000)取得并保存原始响应。运行下方命令时替换三个输入路径。
