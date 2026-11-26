@@ -23,7 +23,11 @@ The P4 baseline runs a native 1D steady-flow calculation on Windows, supports in
 
 **P8 passed same-workstation acceptance on November 25, 2026.** Two independent browser sessions returned an offline comment on Dexter RS 500, added the observation, recalculated the revision, reviewed it, issued it and recorded its withdrawal. The application rejected a wrong-edition comment and a stale import. The client Complete and Minimal packages had 36 and 20 members, both with the selected native HDF. Both full reports had 12 pages. The returned field original stayed in internal records. The run passed 513 Python checks and 44 page tests. [Team review guide](TEAM_REVIEW_EN.md)
 
-P9 covers controlled distribution and migration. P10 replays a frozen release. Two-dimensional hydraulics, unsteady flow, bridge design and multitenant cloud hosting have separate scopes. Human and cross-machine acceptance remain deferred until the project owner authorizes them.
+**P9 passed on the acceptance workstation.** Two offline upgrades migrated 436 and 757 files and rolled back to the earlier installations. A ten-job queue recovered from a native interruption, a QGIS timeout and a locked report. Both export retries kept the original hydraulic result. [Administrator guide](OPERATIONS_EN.md)
+
+**P10 qualified the signed build for a supervised pilot on the tested workstation.** The final gate passed 525 Python checks and 44 page tests. All 21 eligible jobs delivered two verified packages, and all five seeded blockers stopped as expected. The observed eight-point river comparison and the slower archive step are documented with their limits. Independent sign-off, timed first use and cross-machine qualification remain outstanding. [Pilot evidence and timing](PILOT_EN.md#measured-results-on-the-acceptance-workstation)
+
+Two-dimensional hydraulics, unsteady flow, bridge design and multitenant cloud hosting have separate scopes.
 
 The hydraulic approach draws on the USACE steady-flow calibration workshop. Release integrity and provenance draw on NIST SSDF. Test counts and performance targets above are proposed for SteadyReach. [USACE steady-flow calibration](https://www.hec.usace.army.mil/confluence/rasdocs/hgt/latest/tutorials/1d-steady-flow/calibration-of-a-steady-flow-hydraulics-model-workshop-solution) · [NIST SSDF](https://csrc.nist.gov/Projects/SSDF)
 
