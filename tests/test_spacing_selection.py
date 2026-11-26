@@ -19,7 +19,7 @@ class SelectionTests(unittest.TestCase):
     def test_project_without_bank_replacement_needs_no_optional_record(self):
         from ras_workflow.bank_reassessment import selection_sources
         self.assertEqual(selection_sources({}),[])
-        self.assertEqual(selection_sources({'provenance':[{'role':'terrain'}]}),[])
+        self.assertEqual(selection_sources({'provenance':['Published survey citation',{'role':'terrain'}]}),[])
 
     def test_empty_feasibility_preview_cannot_start_solver(self):
         from ras_workflow import app_study

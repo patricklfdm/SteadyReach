@@ -1,6 +1,42 @@
 """Retain report dependencies and reused imagery records inside Complete."""
-from pathlib import Path
-from .common import ROOT, read, save, sha, intact, safe_path
+import os
+from pathlib import Path, PureWindowsPath
+from xml.etree import ElementTree
+from .common import ROOT, digest, read, save, sha, intact, safe_path
+
+
+def dataset_links(path):
+    if path.suffix.lower()=='.vrt':
+        for node in ElementTree.parse(path).iter('SourceFilename'):
+            if node.get('relativeToVRT')!='1':raise ValueError('VRT requires a relative, sealed raster source')
+            yield node.text or ''
+    elif path.name.lower().endswith('.g01.hdf'):
+        import h5py
+        with h5py.File(path) as opened:
+            link=opened['Geometry'].attrs.get('Terrain Filename')
+        if link:yield link.decode() if isinstance(link,bytes) else link
+    elif path.suffix.lower()=='.hdf' and path.with_suffix('.vrt').is_file():
+        # HEC-RAS stores the terrain index and the GDAL raster mosaic side by side.
+        yield path.with_suffix('.vrt').name
+
+
+def dataset_members(source,sources,allowed):
+    """Keep relative terrain links usable. Native worker copies must match independently sealed bytes."""
+    pending=[source];members={}
+    while pending:
+        path=pending.pop()
+        if path in members:continue
+        entry=sources.get(path)
+        if entry is None and path.is_file():
+            entry=allowed.get((path.stat().st_size,sha(path)))
+        if entry is None:raise ValueError('Missing sealed terrain dependency: '+path.name)
+        members[path]=entry
+        for value in dataset_links(path):
+            name=value.strip().replace('\\','/')
+            raw=PureWindowsPath(name)
+            if not name or raw.drive or raw.root or ':' in name:raise ValueError('Terrain requires a relative, sealed source')
+            pending.append(safe_path(ROOT,path.parent/name))
+    return members
 
 
 def archive_report_sources(full, sources, limit):
@@ -24,13 +60,7 @@ def archive_report_sources(full, sources, limit):
             continue
         seen[entry['path']]=identity
         if not intact([entry]):raise ValueError('Report dependency changed: '+entry['path'])
-        destination=by_hash.get(entry['sha256'])
-        if destination is None:
-            total+=entry['size_bytes']
-            if total>limit:raise ValueError('Complete-package evidence budget exceeded')
-            destination='Evidence/ReportSources/'+entry['sha256']+'/'+source.name
-            copy_file(source,full/destination);by_hash[entry['sha256']]=destination
-        records.append(dict(source=entry,package_path=destination))
+        records.append(dict(source=entry))
         if source.name in follow:
             value=read(source)
             if source.name=='manifest.json' and 'native_before' in value:
@@ -38,6 +68,43 @@ def archive_report_sources(full, sources, limit):
                 value={k:value[k] for k in ('source_inputs','input_snapshots','native_before',
                     'native_after','outputs','execution') if k in value}
             queue.extend(entries(value))
+    def include(source,entry,destination):
+        nonlocal total
+        path=full/destination
+        if not path.exists():
+            total+=entry['size_bytes']
+            if total>limit:raise ValueError('Complete-package evidence budget exceeded')
+            copy_file(source,path)
+        if sha(path)!=entry['sha256']:raise ValueError('Packaged source differs: '+entry['path'])
+        by_hash.setdefault(entry['sha256'],destination)
+        return destination
+
+    sources_by_path={safe_path(ROOT,row['source']['path']):row['source'] for row in records}
+    dataset_paths={}
+    allowed={(e['size_bytes'],e['sha256']):e for e in sources_by_path.values()}
+    for source in sources_by_path:
+        if source.suffix.lower()!='.vrt' and not source.name.lower().endswith('.g01.hdf'):continue
+        members=dataset_members(source,sources_by_path,allowed)
+        existing=by_hash.get(sources_by_path[source]['sha256'])
+        if existing:
+            parent=(full/existing).parent
+            neighbors={p:(parent/os.path.relpath(p,source.parent)).resolve() for p in members}
+            if all(f.is_relative_to(full.resolve()) and f.is_file() and sha(f)==members[p]['sha256']
+                   for p,f in neighbors.items()):
+                dataset_paths[source]=existing
+                continue
+        parent=Path(os.path.commonpath([p.parent for p in members]))
+        layout={p.relative_to(parent).as_posix():e['sha256'] for p,e in members.items()}
+        group='Evidence/ReportSources/'+digest(layout)+'/'
+        for path,entry in members.items():
+            target=include(path,entry,group+path.relative_to(parent).as_posix())
+            if path==source or path.suffix.lower()=='.vrt':dataset_paths[path]=target
+    for row in records:
+        entry=row['source'];source=safe_path(ROOT,entry['path'])
+        target=dataset_paths.get(source) or by_hash.get(entry['sha256'])
+        if target is None:
+            target=include(source,entry,'Evidence/ReportSources/'+entry['sha256']+'/'+source.name)
+        row['package_path']=target
     result=dict(schema_version='delivery_report_sources_1.0',entries=records,
         scope='Historical workspace paths map to exact files inside this package; no new calculation.',
         hydraulic_qa='REVIEW_REQUIRED',engineering_acceptance='NOT_ASSESSED')

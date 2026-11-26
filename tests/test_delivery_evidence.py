@@ -37,6 +37,37 @@ class DeliveryEvidence(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'leaves workspace'):
             delivery_evidence.archive_report_sources(self.full,[entry],10000)
 
+    def test_raw_terrain_vrt_opens_next_to_its_bound_source(self):
+        vrt=self.source/'tiles/terrain.vrt';vrt.parent.mkdir()
+        tile=self.source/'data/bed.tif';tile.parent.mkdir();tile.write_bytes(b'raster identity')
+        vrt.write_text('<VRTDataset><SourceFilename relativeToVRT="1">../data/bed.tif</SourceFilename></VRTDataset>')
+        with self.assertRaisesRegex(ValueError,'Missing sealed terrain'):
+            delivery_evidence.archive_report_sources(self.full,[common.item(vrt)],10000)
+        result=delivery_evidence.archive_report_sources(self.full,[common.item(vrt),common.item(tile)],10000)
+        archived=self.full/result['entries'][0]['package_path']
+        self.assertEqual(common.sha(archived),common.sha(vrt))
+        self.assertEqual(common.sha(archived.parent/'../data/bed.tif'),common.sha(tile))
+        vrt.write_text('<VRTDataset><SourceFilename relativeToVRT="0">https://example.invalid/bed.tif</SourceFilename></VRTDataset>')
+        with self.assertRaisesRegex(ValueError,'relative, sealed'):
+            delivery_evidence.archive_report_sources(self.full,[common.item(vrt)],10000)
+
+    def test_worker_terrain_alias_must_match_a_sealed_original(self):
+        import h5py
+        from ras_workflow.delivery_spatial import check_references
+        model=self.source/'worker/project/Model.g01.hdf';model.parent.mkdir(parents=True)
+        with h5py.File(model,'w') as h:
+            h.create_group('Geometry').attrs['Terrain Filename']='../Terrain/Native.hdf'
+        original=self.source/'Native.hdf';original.write_bytes(b'terrain index')
+        alias=self.source/'worker/Terrain/Native.hdf';alias.parent.mkdir();alias.write_bytes(b'unbound')
+        entries=[common.item(model),common.item(original)]
+        with self.assertRaisesRegex(ValueError,'Missing sealed terrain'):
+            delivery_evidence.archive_report_sources(self.full,entries,10000)
+        alias.write_bytes(original.read_bytes())
+        archive=delivery_evidence.archive_report_sources(self.full,entries,10000)
+        geometry=self.full/archive['entries'][0]['package_path']
+        self.assertEqual(common.sha(geometry.parent/'../Terrain/Native.hdf'),common.sha(original))
+        self.assertTrue(check_references(self.full))
+
     def test_budget_stops_additional_copy(self):
         file=self.source/'data.txt';file.write_bytes(b'12345')
         with self.assertRaisesRegex(ValueError,'budget exceeded'):
