@@ -2,6 +2,10 @@
 
 [简体中文](LOCAL_RELEASE_CN.md) · [Production priorities and acceptance criteria](PRODUCTION_ROADMAP_EN.md)
 
+## P9 distribution, upgrade and queue recovery
+
+Start with the P8 inputs below. Replace `--p8` with `--p9 --p9-fixture <administrator-fixture.json>`. The local fixture identifies the signed release directory (`release`), independently pinned public key (`trusted_key`), base interpreter (`python`), two historic installation directories (`previous_installations`), and the installed `qgis`, `converter` and `runtime` paths. Keep signing keys and project data on the workstation. Inspect the migration and queue receipts under `p9/` and verify the two packages for every recovered calculation. A successful export retry must preserve the original hydraulic run and HDF. [Administrator instructions](OPERATIONS_EN.md)
+
 ## P8 team review and recipient scope
 
 Use the P7 command and its frozen inputs below, replacing `--p7` with `--p8`. Inspect `p8/release.json` alongside the overall release record. The test uses separate local browser sessions for a submission and an offline station comment. It follows the returned edition through a new solve, review, selected delivery and withdrawal. Trace the two recipient manifests, both native HDFs and both report languages to the same run. The retained source documents can be inspected in the internal project. [Team review guide](TEAM_REVIEW_EN.md)

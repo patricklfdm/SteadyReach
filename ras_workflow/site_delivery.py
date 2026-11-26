@@ -19,6 +19,7 @@ SCHEMA='site_delivery_1.0'
 def failure_kind(error):
     if getattr(error,'errno',None)==errno.ENOSPC or getattr(error,'winerror',None) in (39,112):
         return 'DISK_SPACE'
+    if getattr(error,'winerror',None) in (32,33):return 'OPEN_FILE'
     if isinstance(error,TimeoutError) or isinstance(getattr(error,'reason',None),TimeoutError):
         return 'TRANSFER_OR_TOOL_TIMEOUT'
     if isinstance(error,HTTPError):

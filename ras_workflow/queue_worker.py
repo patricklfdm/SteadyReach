@@ -12,6 +12,9 @@ def main():
     if not intact(request['identity']['evidence']['inputs']+request['identity']['evidence']['code']):
         raise ValueError('Queued inputs or code changed before worker start')
     if job.get('tools'):os.environ['HECRAS_WORKFLOW_TOOLS']=str(ROOT/job['tools'])
+    if request.get('export_from'):
+        from .queue_export import resume
+        return resume(request,request_path.parent)
     receipt=request_path.parent/'attempt_receipt.json'
     from .cli import execute
     code=execute(job['project'],job['scenario'],fresh=request['fresh'],timeout=job.get('solver_timeout_seconds',180),receipt_path=receipt)

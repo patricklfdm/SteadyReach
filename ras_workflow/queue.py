@@ -7,6 +7,8 @@ import os
 import subprocess
 import sys
 import traceback
+import time
+from . import queue_operations as ops
 from .common import ROOT, code_identity, digest, identifier, intact, item, lock, read, rel, safe_path, save, unique_id, utc
 from . import inputs, native, report_tools
 
@@ -75,7 +77,7 @@ def reusable(attempt,key,job):
     except (KeyError,ValueError,OSError):return False
 
 
-def supervise(request_path,timeout):
+def supervise(request_path,timeout,cancelled=lambda:False):
     import win32api,win32job
     folder=request_path.parent
     job=win32job.CreateJobObject(None,'Local\\HecQueue_'+unique_id())
@@ -91,7 +93,17 @@ def supervise(request_path,timeout):
                 win32job.AssignProcessToJobObject(job,proc._handle)
                 save(folder/'worker_started.json',dict(worker_pid=proc.pid,started_utc=utc(),owned_job=True))
                 proc.stdin.write(b'GO\n');proc.stdin.close()
-                code=proc.wait(timeout=timeout);status='EXITED'
+                deadline=time.monotonic()+timeout
+                while proc.poll() is None:
+                    if cancelled():
+                        status='CANCELLED';break
+                    remaining=deadline-time.monotonic()
+                    if remaining<=0:
+                        status='TIMEOUT';break
+                    try:proc.wait(timeout=min(.5,remaining))
+                    except subprocess.TimeoutExpired:continue
+                if proc.poll() is not None:
+                    code=proc.returncode;status='EXITED'
             except subprocess.TimeoutExpired:status='TIMEOUT'
             except BaseException:
                 # Before GO the worker cannot launch native or conversion processes.
@@ -112,12 +124,14 @@ def collect(folder,job):
     status='FAILED'
     if result['exit_code']==0 and receipt['calculation_status']=='COMPUTED' and not receipt['errors'] and receipt['report_status']=='GENERATED_PENDING_VISUAL_REVIEW':
         status='COMPLETED'
+    elif receipt.get('workflow_status')=='WAITING_FOR_DELIVERY_REVIEW' and receipt.get('calculation_status')=='COMPUTED':
+        status='NEEDS_EXPORT'
     elif result['exit_code']==2 and receipt['calculation_status']=='BLOCKED':status='BLOCKED'
     elif result['exit_code']==3 and receipt.get('workflow_status')=='WAITING_FOR_INPUT':status='WAITING_FOR_INPUT'
     elif result['exit_code']==4 and receipt.get('workflow_status')=='CANCELLED':status='CANCELLED'
     return dict(status=status,receipt=result['receipt'],summary=receipt['summary'],exit_code=result['exit_code'],
         calculation_status=receipt['calculation_status'],report_status=receipt['report_status'],
-        solver_reused=summary['solver_reused'],run_id=summary['hydraulics']['run_id'] if summary.get('hydraulics') else None,
+        solver_reused=receipt.get('solver_reused',summary['solver_reused']),stage_seconds=receipt.get('stage_seconds',{}),run_id=summary['hydraulics']['run_id'] if summary.get('hydraulics') else None,
         errors=receipt['errors'],blocking_items=summary['gate']['blocking_items'])
 
 
@@ -156,6 +170,11 @@ def run(queue_path,output,fresh=False):
                 except (ValueError,KeyError,OSError):
                     previous.update(status='INTERRUPTED',error='Previous parent exited without a verifiable terminal receipt')
                 previous['finished_utc']=utc();event(output,state,'RECOVERY',job['id'],previous)
+            if ops.is_cancelled(output,job['id']):
+                if not attempts or attempts[-1].get('status')!='CANCELLED':
+                    attempts.append(dict(id=unique_id(),status='CANCELLED',operator_cancelled=True,finished_utc=utc()))
+                    event(output,state,'CANCELLED',job['id'],attempts[-1])
+                continue
             try:current=identity(job)
             except Exception as e:
                 attempts.append(dict(id=unique_id(),status='BLOCKED',error='Preflight: '+str(e),finished_utc=utc()))
@@ -165,19 +184,33 @@ def run(queue_path,output,fresh=False):
                 print(job['id']+': '+attempts[-1]['status']+' (unchanged; evidence verified)',flush=True);continue
             aid=unique_id();folder=output/'attempts'/job['id']/aid;folder.mkdir(parents=True)
             attempt=dict(id=aid,status='IN_PROGRESS',started_utc=utc(),folder=rel(folder),identity=current)
+            previous=next((a for a in reversed(attempts) if a.get('receipt')),None)
+            restart_solver=bool(attempts and attempts[-1]['status'] in ('CANCELLED','INTERRUPTED'))
             attempts.append(attempt)
-            save(folder/'request.json',dict(job=job,identity=current,fresh=fresh,created_utc=utc()))
+            request=dict(job=job,identity=current,fresh=fresh or restart_solver,created_utc=utc())
             event(output,state,'STARTED',job['id'],attempt)
             try:
-                supervisor=supervise(folder/'request.json',job.get('job_timeout_seconds',900))
-                if supervisor['status']!='EXITED':raise RuntimeError('Queue worker '+supervisor['status'])
-                attempt.update(collect(folder,job))
+                from .queue_export import eligible
+                if not request['fresh']:
+                    request['export_from']=eligible(previous,current,job)
+                save(folder/'request.json',request)
+                with ops.reserve(folder,ops.requested_bytes(job,current)) as reservation:
+                    attempt['space_reservation']=reservation
+                    supervisor=supervise(folder/'request.json',job.get('job_timeout_seconds',900),
+                                         lambda:ops.is_cancelled(output,job['id']))
+                if supervisor['status']=='CANCELLED':
+                    attempt.update(status='CANCELLED',operator_cancelled=True)
+                elif supervisor['status']!='EXITED':raise RuntimeError('Queue worker '+supervisor['status'])
+                else:attempt.update(collect(folder,job))
                 if identity(job)['key']!=current['key']:
                     attempt.update(status='FAILED',error='Inputs, code or environment changed during the attempt')
+            except ops.SpaceUnavailable as e:
+                attempt.update(status='LOW_SPACE',error=str(e))
             except Exception as e:
                 attempt.update(status='FAILED',error=str(e))
                 (folder/'parent_error.txt').write_text(traceback.format_exc(),encoding='utf-8')
             attempt['finished_utc']=utc()
+            attempt.setdefault('stage_seconds',{}).setdefault('total',ops.seconds(attempt['started_utc'],attempt['finished_utc']))
             save(folder/'completion.json',attempt);event(output,state,'FINISHED',job['id'],attempt)
             print(job['id']+': '+attempt['status'],flush=True)
         result=inspect(output);save(output/'queue_summary.json',result);return result

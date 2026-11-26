@@ -63,6 +63,7 @@ def execute(path,scenario_id,fresh=False,timeout=180,receipt_path=None):
         attempt=unique_id();folder=base/'jobs'/attempt;folder.mkdir(parents=True)
         save(folder/'configuration.json',c)
         state['latest_attempt']=rel(folder);state['status']='IN_PROGRESS';save(base/'state.json',state)
+        operation_start=time.monotonic();timings={}
         errors=[];hyd=None;t={};engine={};nt=None;session=None
         active=intake.control(path);cancelled=bool(active and active['status']=='CANCELLED')
         gate,g=inputs.gate(path,c,s)
@@ -129,6 +130,7 @@ def execute(path,scenario_id,fresh=False,timeout=180,receipt_path=None):
         if gate['status']=='READY_CONDITIONAL' and c['terrain'].get('create_native') and terrain_metadata_ready and t.get('status')=='READY_WITH_LIMITATIONS' and engine.get('status')=='READY':
             try:nt=stage(state,folder,'native_terrain',digest([terrain_key,sha(ROOT/'ras_workflow/ras_terrain.py'),engine['selected']]),lambda d:ras_terrain.create(path,c,engine,d))
             except Exception as e:errors.append('Native terrain: '+str(e))
+        solver_start=time.monotonic();timings['terrain']=round(solver_start-operation_start,3)
         if gate['status']=='READY_CONDITIONAL' and engine.get('status')=='READY':
             try:
                 # DEM download failure does not block a reviewed native benchmark or explicit XS data.
@@ -137,6 +139,7 @@ def execute(path,scenario_id,fresh=False,timeout=180,receipt_path=None):
                 hyd=stage(state,folder,'solver__'+s['id'],digest(identity),lambda d:solve(d,path,c,s,g,engine,attempt,timeout,nt),fresh)
             except Exception as e:errors.append('Solver: '+str(e))
         elif engine.get('status')!='READY' and not cancelled:errors.extend(engine.get('blocking_items',[engine.get('error','Engine unavailable')]))
+        timings['solver']=round(time.monotonic()-solver_start,3)
         summary=dict(schema_version='1.0',attempt_id=attempt,finished_at_utc=utc(),configuration=c,gate=gate,
             calculation_status='COMPUTED' if hyd else ('BLOCKED' if gate['status']=='BLOCKED' or engine.get('status')!='READY' else 'FAILED'),
             terrain=t,terrain_metadata=metadata,native_terrain=nt,hydraulics=hyd,errors=list(errors),
@@ -154,8 +157,10 @@ def execute(path,scenario_id,fresh=False,timeout=180,receipt_path=None):
             attach_automatic(summary,folder/'native_outputs',execution.get('native_export'),execution.get('native_export_error'))
             print('Native outputs: '+summary['automatic_native_outputs']['status'],flush=True)
         save(folder/'summary.json',summary)
+        report_start=time.monotonic()
         try:report.generate(folder/'summary.json',folder/'reports')
         except Exception as e:errors.append('Report: '+str(e));save(folder/'report_error.json',dict(error=str(e),traceback=traceback.format_exc()))
+        delivery_start=time.monotonic();timings['reports']=round(delivery_start-report_start,3)
         delivery_result=None
         if hyd and (folder/'reports/report_manifest.json').exists() and c.get('delivery',{}).get('enabled',True):
             from .site_delivery import generate as generate_delivery
@@ -170,6 +175,7 @@ def execute(path,scenario_id,fresh=False,timeout=180,receipt_path=None):
         except Exception as e:
             current_inputs=[item(path)]
             if gate['status']!='BLOCKED':errors.append('Incomplete input inventory: '+str(e))
+        timings['delivery']=round(time.monotonic()-delivery_start,3)
         terminal=target_status if not errors or session or cancelled else 'FAILED'
         if terminal=='COMPLETED' and delivery_result and delivery_result['status']=='INCOMPLETE':terminal='WAITING_FOR_DELIVERY_REVIEW'
         state.update(status=terminal,workflow_status=terminal,calculation_status=summary['calculation_status'],errors=errors,latest_summary=item(folder/'summary.json'),latest_attempt=rel(folder),updated_at_utc=utc(),
@@ -184,7 +190,8 @@ def execute(path,scenario_id,fresh=False,timeout=180,receipt_path=None):
             solver_folder=(ROOT/hyd['raw_hdf']['path']).parent.parent
             if not solver_folder.is_relative_to(folder):
                 artifacts.extend(item(p) for p in sorted(solver_folder.rglob('*')) if p.is_file())
-        receipt=dict(schema_version='1.0',attempt_id=attempt,project=rel(path),requested_project=rel(requested),scenario_id=scenario_id,
+        timings['total']=round(time.monotonic()-operation_start,3)
+        receipt=dict(schema_version='1.0',stage_seconds=timings,attempt_id=attempt,project=rel(path),requested_project=rel(requested),scenario_id=scenario_id,
             summary=item(folder/'summary.json'),artifacts=artifacts,
             inputs=current_inputs,code=code_identity(),errors=errors,
             calculation_status=summary['calculation_status'],workflow_status=terminal,solver_reused=summary['solver_reused'],
@@ -293,6 +300,9 @@ def main():
     z=sub.add_parser('site-delivery-verify',help='Verify a complete or minimal review folder');z.add_argument('--folder',required=True)
     z=sub.add_parser('report');z.add_argument('--summary',required=True);z.add_argument('--output',required=True);z.add_argument('--culvert-details');z.add_argument('--comparison',action='append',default=[],help='Verified same-site sensitivity or public-case comparison; may be repeated');z.add_argument('--context',help='Bound report purpose, criteria, previous summary and QA decisions')
     z=sub.add_parser('queue-run');z.add_argument('--queue',required=True);z.add_argument('--output',required=True);z.add_argument('--fresh',action='store_true')
+    for verb in ('queue-cancel','queue-resume'):
+        z=sub.add_parser(verb);z.add_argument('--output',required=True);z.add_argument('--job',required=True)
+    z=sub.add_parser('queue-support');z.add_argument('--output',required=True);z.add_argument('--save',type=Path);z.add_argument('--preview-token')
     z=sub.add_parser('queue-status');z.add_argument('--output',required=True)
     z=sub.add_parser('batch-report');z.add_argument('--queue-output',required=True);z.add_argument('--output',required=True)
     z=sub.add_parser('batch-verify');z.add_argument('--output',required=True)
@@ -421,6 +431,15 @@ def main():
             from .queue import run
             result=run(a.queue,a.output,a.fresh);print(json.dumps(result,ensure_ascii=False,indent=2))
             return result['exit_code']
+        if a.command in ('queue-cancel','queue-resume'):
+            from .queue_operations import control
+            print(json.dumps(control(a.output,a.job,a.command.removeprefix('queue-'))));return 0
+        if a.command=='queue-support':
+            from .queue_operations import support,export_support
+            if a.save:print(export_support(a.output,a.save,a.preview_token))
+            else:
+                preview=support(a.output);print(json.dumps(dict(preview=preview,token=digest(preview)),indent=2))
+            return 0
         if a.command=='queue-status':
             from .queue import inspect
             print(json.dumps(inspect(a.output),ensure_ascii=False,indent=2));return 0

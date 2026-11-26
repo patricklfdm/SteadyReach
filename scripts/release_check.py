@@ -146,6 +146,15 @@ def run(args):
                 result['p8']=dict(status='PASSED',receipt='p8/release.json',sha256=sha(receipt))
             except (OSError,ValueError,KeyError,TypeError,RuntimeError,subprocess.SubprocessError) as exc:
                 result['p8']=dict(status='FAILED',error=str(exc));passed=False
+    if getattr(args,'p9',False):
+        result['release_gate']='P9';result['p9']=dict(status='NOT_RUN')
+        if passed:
+            from p9_release import run as operations_check
+            try:
+                receipt=operations_check(root,args.p9_fixture.resolve())
+                result['p9']=dict(status='PASSED',receipt='p9/release.json',sha256=sha(receipt))
+            except (OSError,ValueError,KeyError,TypeError,RuntimeError,subprocess.SubprocessError) as exc:
+                result['p9']=dict(status='FAILED',error=str(exc));passed=False
     result['status']='SOFTWARE_CHECKS_PASSED' if passed else 'NEEDS_ATTENTION'
     save(root/'release.json',result);print(root/'release.json');return 0 if passed else 1
 
@@ -169,7 +178,12 @@ if __name__=='__main__':
     p.add_argument('--p7',action='store_true',help='Require P6 and local hydraulic confidence checks')
     p.add_argument('--p7-visits',type=Path,help='Frozen preregistered USGS field visit folder')
     p.add_argument('--p8',action='store_true',help='Require P7 plus formal station review, offline return and audience-scoped handoff')
+    p.add_argument('--p9',action='store_true',help='Require the P8 checks, signed offline installs, migration and queue recovery')
+    p.add_argument('--p9-fixture',type=Path,help='Local admin distribution and legacy-edition fixture JSON')
     args=p.parse_args()
+    if args.p9:
+        if not args.p9_fixture:p.error('--p9 requires --p9-fixture')
+        args.p8=True
     if args.p8:args.p7=True
     if args.p7:
         if not args.p7_visits:p.error('--p7 requires --p7-visits')
