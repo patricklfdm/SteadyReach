@@ -133,8 +133,10 @@ def run(gate,source,baseline):
             selected['wsp']=key
             page_action(key,'survey-solve')
             pair=edition_pair(key)
-            need(pair['profiles']=={'Feb06':9} and abs(pair['flows_cfs']['Feb06']-41/.3048**3)<.002 and not pair['field_events'],
-                 'Baseline flow, section count or observation isolation differs')
+            need(pair['profiles']=={'Feb06':9} and abs(pair['flows_cfs']['Feb06']-41/.3048**3)<.002 and
+                 len(pair['field_events'])==1 and pair['field_events'][0]['role']=='boundary' and
+                 pair['field_events'][0]['residual_ft'] is None and not pair['field_events'][0]['issues'],
+                 'Baseline flow, section count or held-out observation isolation differs')
             return pair
         if i==12:
             data=selected['survey'];base=selected['wsp']

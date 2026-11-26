@@ -102,15 +102,18 @@ def prepare(raw,out):
         location=dict(latitude=lat,longitude=lon),scenario=dict(id='wsp_feb06',profiles=[dict(id='Feb06',flow_cfs=discharge,source=REPORT+' WSP direct measurement, 2019-02-06.')],
         channel_n=.035,overbank_n=.065,parameter_source='Conditional screening assumptions before native runs. DEM-interpreted banks and constant roughness require engineering review.'),
         geometry=geometry,terrain=dict(raster=DEM,vertical_datum='NAVD88',vertical_unit='m'),files=refs)
-    save(survey/'survey.json',packet)
     shutil.copy2(raw/EVENT,out/EVENT)
-    with (out/'field_return.csv').open('w',newline='',encoding='utf-8') as file:
-        writer=csv.DictWriter(file,fieldnames=river_observations.COLUMNS);writer.writeheader()
-        for station,j,p in marks:
-            boundary=station==100
-            writer.writerow(dict(event='Feb06',date='2019-02-06',role='boundary' if boundary else 'holdout',
-                kind='boundary_stage' if boundary else 'stage',x=p[0],y=p[1],horizontal_crs='EPSG:32615',vertical_datum='NAVD88',
-                elevation=p[2],unit='m',flow=41.,flow_unit='m3/s',source=DATA+' '+EVENT+' row '+str(j+2)))
+    for boundary,destination in [(True,survey/'observed_profiles.csv'),(False,out/'field_return.csv')]:
+        with destination.open('w',newline='',encoding='utf-8') as file:
+            writer=csv.DictWriter(file,fieldnames=['profile',*river_observations.COLUMNS]);writer.writeheader()
+            for station,j,p in marks:
+                if (station==100)!=boundary:continue
+                writer.writerow(dict(profile='Feb06',event='Feb06',date='2019-02-06',role='boundary' if boundary else 'holdout',
+                    kind='boundary_stage' if boundary else 'stage',x=p[0],y=p[1],horizontal_crs='EPSG:32615',vertical_datum='NAVD88',
+                    elevation=p[2],unit='m',flow=41.,flow_unit='m3/s',source=DATA+' '+EVENT+' row '+str(j+2)))
+    refs.append(dict(name='observed_profiles.csv',source=DATA+' measured outlet row only, 2019-02-06',
+                     sha256=sha(survey/'observed_profiles.csv')))
+    save(survey/'survey.json',packet)
     save(out/'preparation.json',dict(discharge_cfs=discharge,sections=9,original_sha256=sha(raw/EVENT),
          raster_sha256=sha(survey/DEM),packet_sha256=sha(survey/'survey.json'),field_sha256=sha(out/'field_return.csv'),
          origin_m=start,coordinate_order='downstream from higher end of released profile',
