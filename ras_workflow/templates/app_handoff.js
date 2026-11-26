@@ -27,7 +27,7 @@ function renderRecipientHandoff(parent){
   if(choice==='unavailable')state.textContent=tr('Check the saved choice under Summary before handoff.','交接前请在结果总览重新核对使用版本。');
  }
  state.addEventListener('iteration-updated',reflect);reflect();
- parent.append(state,action,output);
+ parent.append(state,action,output);renderTeamReview(parent);
 }
 function renderArchivedEdition(parent,edition,caption,refresh){
  const card=el('div',undefined,'card');card.dataset.projectId=edition.id;parent.append(card);

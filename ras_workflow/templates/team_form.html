@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SteadyReach · Offline review</title>
+<style>body{font:1rem/1.5 system-ui;max-width:48rem;margin:2rem auto;padding:0 1rem;color:#19363d}label,input,select,textarea{display:block}label{margin:1rem 0}input,textarea,select{font:inherit;padding:.4rem;max-width:95%}textarea{width:95%}button{font:inherit;padding:.6rem 1rem}code{overflow-wrap:anywhere}</style>
+<h1>Review a submitted edition / 复核已提交的版本</h1><p id="run"></p><code id="hash"></code>
+<form><label>Reviewer / 复核人<input id="actor" maxlength="100" required></label>
+<label>Station / 断面<select id="station"><option value="">Entire edition / 整版</option></select></label>
+<label>Related inputs / 关联输入<select id="deps" multiple></select></label>
+<label>Decision / 处理方式<select id="action"><option value="return">Return for revision / 退回修订</option><option value="review">Reviewed for stated purpose / 已按所述用途复核</option></select></label>
+<label>Comment / 意见<textarea id="note" maxlength="1500" required></textarea></label>
+<button>Save reply JSON / 保存回传 JSON</button><p id="message" role="status"></p></form>
+<script type="application/json" id="request">__REVIEW_REQUEST__</script>
+<script>
+const byId=id=>document.getElementById(id),r=JSON.parse(byId('request').textContent);
+byId('run').textContent=r.edition.project+' · '+r.edition.run;byId('hash').textContent='Summary SHA-256 · '+r.edition.summary_sha256;
+for(const s of r.stations)byId('station').add(new Option('RS '+s,s));
+for(const k of r.dependencies.filter(k=>!k.startsWith('RS/')))byId('deps').add(new Option(k,k));
+document.querySelector('form').onsubmit=e=>{e.preventDefault();const deps=Array.from(byId('deps').selectedOptions,o=>o.value);
+ if(!byId('station').value&&!deps.length){byId('message').textContent='Select a station or related input / 请选择断面或关联输入';return;}
+ const reply={schema:r.schema,edition:r.edition,head:r.head,action:byId('action').value,note:byId('note').value,actor:byId('actor').value,station:byId('station').value,dependencies:deps};
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(reply,null,2)],{type:'application/json'}));a.download='Reply_'+r.edition.run+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+ byId('message').textContent='Send the saved reply to the modeler / 请将保存的回传文件交给建模人';};
+</script></html>

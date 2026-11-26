@@ -72,6 +72,15 @@ async function main() {
         if(kind===(t.type==='file'||t.type==='checkbox'||t.tagName==='SELECT'?'change':'input'))window.__p4.entries.push(t.id);
       },true);`});
     await send('Page.navigate',{url});
+    if(mode==='p8-offline-reply'){
+      await until('!!document.querySelector("#request") && document.readyState==="complete"');
+      await send('Page.setDownloadBehavior',{behavior:'allow',downloadPath:input.directory});
+      await evaluate('document.getElementById("actor").value='+JSON.stringify(input.actor)+';document.getElementById("station").value='+JSON.stringify(input.station)+';document.getElementById("note").value='+JSON.stringify(input.note)+';document.getElementById("deps").value='+JSON.stringify(input.dep)+';document.querySelector("form button").click()');
+      await until('document.getElementById("message").textContent.includes("saved reply")');
+      const file=path.join(input.directory,'Reply_'+input.run_id+'.json');for(let i=0;i<100&&!fs.existsSync(file);i++)await delay(100);
+      if(!fs.existsSync(file))throw Error('Offline reply was not saved');
+      console.log(file);return;
+    }
     if(mode==='recipient-copy'){
       await until('document.readyState==="complete" && document.querySelector("main")?.textContent.includes('+JSON.stringify(run_id)+')');
       if(input.folder){
@@ -153,6 +162,34 @@ async function main() {
       await buttonByName('Inspect hydraulic evidence');
       await until('document.body.textContent.includes('+JSON.stringify('SHA-256 '+source)+')');
       console.log(source);return;
+    }
+    if(mode.startsWith('p8-team-')){
+      await click('#result-tab-delivery');await buttonByName('Open formal review');
+      if(mode==='p8-team-form'){
+        await send('Page.setDownloadBehavior',{behavior:'allow',downloadPath:input.directory});
+        await buttonByName('Download offline review form');
+        const file=path.join(input.directory,'Review_'+run_id+'.html');
+        for(let i=0;i<100&&!fs.existsSync(file);i++)await delay(100);
+        if(!fs.existsSync(file))throw Error('Offline form was not saved');
+        console.log(file);return;
+      }
+      if(mode==='p8-team-import'){
+        await selectFiles('#team-return-file',[input.file]);
+        await buttonByName('Record this offline comment');
+      }else{
+        await fieldValue('team-operator',input.actor);await fieldValue('team-note',input.note);
+        if(mode==='p8-team-review'){await fieldValue('team-station',input.station);await fieldValue('team-deps',input.dep);}
+        if(mode==='p8-team-deliver'){
+          await buttonByName('Preview client and internal files');
+          const value=await evaluate('Array.from(document.querySelector("#team-preview-member").options).find(o=>o.textContent.endsWith("/ Reports/Report_EN.pdf")).value');
+          await fieldValue('team-preview-member',value);await buttonByName('Preview selected file');
+          await until('document.querySelector("#team-preview-member").parentElement.parentElement.querySelector("pre")?.textContent.length>10');
+        }
+        const names={'p8-team-submit':'Submit this edition','p8-team-review':'Record review','p8-team-deliver':'Issue client folders','p8-team-withdraw':'Withdraw formal issue'};
+        await buttonByName(names[mode]);
+      }
+      await until('document.body.textContent.includes("Decision recorded for this run.")');
+      console.log('RECORDED');return;
     }
     if(mode==='p7-reserve'){
       for(const [key,value] of Object.entries(input.event))await fieldValue('validation-'+key,value);

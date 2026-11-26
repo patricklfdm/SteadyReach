@@ -55,6 +55,7 @@ def create():
                 assets={'app_warning_study.js':('app_warning_study.js','application/javascript; charset=utf-8'),'app_field_feedback.js':('app_field_feedback.js','application/javascript; charset=utf-8'),'app_floodplain.js':('app_floodplain.js','application/javascript; charset=utf-8'),'app_observations.js':('app_observations.js','application/javascript; charset=utf-8'),'observation-template.csv':('observation-template.csv','text/csv; charset=utf-8'),'app_river_checks.js':('app_river_checks.js','application/javascript; charset=utf-8'),'app_check_batch.js':('app_check_batch.js','application/javascript; charset=utf-8'),'app_spacing_review.js':('app_spacing_review.js','application/javascript; charset=utf-8'),'app_atlas.js':('app_atlas.js','application/javascript; charset=utf-8'),'app_guidance.js':('app_guidance.js','application/javascript; charset=utf-8'),'app_sensitivity.js':('app_sensitivity.js','application/javascript; charset=utf-8'),'app_geometry_auto.js':('app_geometry_auto.js','application/javascript; charset=utf-8'),'app_results.js':('app_results.js','application/javascript; charset=utf-8'),'app_automation.js':('app_automation.js','application/javascript; charset=utf-8'),'app_map.js':('app_map.js','application/javascript; charset=utf-8'),'app_section_repair.js':('app_section_repair.js','application/javascript; charset=utf-8'),'':('app.html','text/html; charset=utf-8'),'app.js':('app.js','application/javascript; charset=utf-8'),'app_editor.js':('app_editor.js','application/javascript; charset=utf-8'),'app_sources.js':('app_sources.js','application/javascript; charset=utf-8'),'app.css':('app.css','text/css; charset=utf-8')}
                 assets['app_practice.js']=('app_practice.js','application/javascript; charset=utf-8')
                 assets['app_extent.js']=('app_extent.js','application/javascript; charset=utf-8')
+                assets['app_team_review.js']=('app_team_review.js','application/javascript; charset=utf-8')
                 assets['app_handoff.js']=('app_handoff.js','application/javascript; charset=utf-8')
                 if route not in assets:return self.send(404,dict(error='Not found'))
                 file,mime=assets[route];self.send(200,(ROOT/'ras_workflow/templates'/file).read_bytes(),mime)
@@ -98,6 +99,13 @@ def create():
                     elif route=='iteration-choice':
                         from .iteration_choice import choose
                         result=choose(key,body)
+                    elif route in ('team-inspect','team-form','team-scope','team-file','team-decide'):
+                        from . import team_delivery,team_review
+                        if route=='team-inspect':result=team_review.inspect(key)
+                        elif route=='team-scope':result=team_delivery.preview(key)
+                        elif route=='team-file':result=team_delivery.preview_file(key,body)
+                        elif route=='team-form':result=team_review.offline_form(key,body.get('head'))
+                        else:result=team_review.decide(key,body)
                     elif route=='handoff-export':
                         from .recipient_handoff import export
                         result=export(key,body)

@@ -2,6 +2,10 @@
 
 [简体中文](LOCAL_RELEASE_CN.md) · [Production priorities and acceptance criteria](PRODUCTION_ROADMAP_EN.md)
 
+## P8 team review and recipient scope
+
+Use the P7 command and its frozen inputs below, replacing `--p7` with `--p8`. Inspect `p8/release.json` alongside the overall release record. The test uses separate local browser sessions for a submission and an offline station comment. It follows the returned edition through a new solve, review, selected delivery and withdrawal. Trace the two recipient manifests, both native HDFs and both report languages to the same run. The retained source documents can be inspected in the internal project. [Team review guide](TEAM_REVIEW_EN.md)
+
 ## P7 station evidence and flow range
 
 Use the P6 fixtures below and add the frozen USGS field visits. Replace `--p6` with `--p7 --p7-visits <frozen-visit-directory>`. Check the overall release status and the P7 receipt in the same run. It links each modeled comparison to the native output, observation role and station. It also records the displayed limits in both report languages, the two packages, the station map and the offline handoff. Require a separate observation when a disclosed event informs a revised hydraulic input. [Freezing the events and interpreting the results](STATION_EVIDENCE_EN.md)
