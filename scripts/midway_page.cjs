@@ -154,6 +154,20 @@ async function main() {
       await until('document.body.textContent.includes('+JSON.stringify('SHA-256 '+source)+')');
       console.log(source);return;
     }
+    if(mode==='p7-reserve'){
+      for(const [key,value] of Object.entries(input.event))await fieldValue('validation-'+key,value);
+      await buttonByName('Add station event');
+      await buttonByName('Save intended use and delivery conditions');
+      await until('current.production_scope?.validation_plan?.length===1');
+      console.log('RESERVED');return;
+    }
+    if(mode==='p7-map'){
+      await click('#result-tab-review');
+      await evaluate('(()=>{const s=Array.from(document.querySelectorAll("summary")).find(e=>e.textContent.includes("Computed section review"));if(!s)throw Error("Missing computed atlas");for(let p=s;p;p=p.parentElement)if(p.tagName==="DETAILS")p.open=true;})()');
+      await buttonByName('Check local evidence and alternatives');
+      await until('!!document.querySelector("#confidence-profile") && !!document.querySelector("svg[aria-label*=evidence i],svg[aria-label*=Evidence]")');
+      console.log('MAPPED');return;
+    }
     if(mode==='p6-review-changes'){
       await buttonByName('Review calculation inputs →');
       await until('!!document.getElementById("return-scope") && !!document.getElementById("confirm-parameters")');

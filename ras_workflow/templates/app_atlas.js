@@ -53,6 +53,33 @@ function renderResultAtlas(parent){
   for(const error of data.source_errors)output.append(el('p',error,'warning'));
   output.append(el('p',tr('Native warning coverage: ','原生警告覆盖：')+warningCoverageLabel(data.warning_coverage)));
   if(data.unlocated_issues.length){const other=details(output,'Messages without a unique section ('+data.unlocated_issues.length+')','无法唯一定位到断面的信息（'+data.unlocated_issues.length+'）');table(other,['Profile','RS','Code','Message'],data.unlocated_issues.map(i=>[i.profile??'—',i.station??'—',i.code,i.evidence?.native_message||i.recommended_action]));}
+  if(current.model_type==='river'){
+   const panel=details(output,'Support by station and flow','断面与流量的实测支持范围');
+   const region=el('div');panel.append(button('Check local evidence and alternatives','核对局部证据与方案',async()=>{
+    const c=await api('qa-confidence',{id,summary_hash:hash});if(c.run_id!==data.run_id)throw Error(tr('Run changed.','运行编号已变化。'));
+    region.replaceChildren();const selector=field(region,'confidence-profile','Modeled profile','计算工况',c.profiles[0].profile,'select',c.profiles.map(p=>[p.profile,p.profile,p.profile]));
+    const body=el('div');region.append(body);
+    function drawEvidence(){body.replaceChildren();const pf=c.profiles.find(p=>p.profile===selector.value);
+     body.append(el('p',pf.flow_cfs+' cfs · '+tr('Matched events / observations ','匹配事件／观测点 ')+pf.event_count+' / '+pf.matched_points+' · '+tr('Mean signed stage error (ft) ','平均有符号水位偏差（ft） ')+atlasNumber(pf.mean_signed_ft)));
+     const cuts=new Map(data.sections.filter(r=>r.profile===pf.profile&&r.map).map(r=>[Number(r.rs),r.map.cutline_xy]));
+     const points=[...cuts.values()].flat(),colors={INVESTIGATE:'#a53f25',PENDING:'#626a73',STOP_AT_TESTED_POINT:'#087159'};
+     const labels={INVESTIGATE:tr('Investigate','调查'),PENDING:tr('Evidence pending','待补证据'),STOP_AT_TESTED_POINT:tr('Stop at tested point','该已检点可结束检查')};
+     if(points.length){const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]),x0=Math.min(...xs),y0=Math.min(...ys),scale=Math.min(540/Math.max(1,Math.max(...xs)-x0),265/Math.max(1,Math.max(...ys)-y0));
+      const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 600 305');svg.setAttribute('aria-label',tr('Evidence at modeled cross sections, north up','计算断面证据分布，北向上'));body.append(svg);
+      for(const r of pf.sections){const cut=cuts.get(Number(r.rs));if(!cut)continue;const line=svgEl(svg,'polyline',{points:cut.map(p=>(25+(p[0]-x0)*scale)+','+(280-(p[1]-y0)*scale)).join(' '),stroke:colors[r.decision],'stroke-width':3,fill:'none'});svgEl(line,'title',{}).textContent='RS '+r.rs+' · '+labels[r.decision];}
+     }
+     body.append(el('p',tr('Rust indicates investigation, gray indicates missing evidence and green indicates a tested point. Other flows and locations remain pending.','锈红表示需调查，灰色表示证据待补，绿色表示已检点。其他流量和地点仍待核验。')));
+     for(const r of pf.sections){const d=details(body,'RS '+r.rs+' · '+labels[r.decision],'RS '+r.rs+' · '+labels[r.decision]);
+      d.append(el('p',tr('Wet sides / native messages: ','湿端／原生及 QA 提示：')+(r.wet_sides.join(', ')||'—')+' / '+(r.messages.join(', ')||'—')));
+      if(r.overbank_percent)d.append(el('p',tr('Left / right overbank share (%) ','左右漫滩分流比（%） ')+r.overbank_percent.map(atlasNumber).join(' / ')));
+      if(r.overbank_change_points)d.append(el('p',tr('Change in left / right overbank share (percentage points) ','左右漫滩分流变化（百分点） ')+r.overbank_change_points.map(atlasNumber).join(' / ')));
+      if(r.tests.length)table(d,[tr('Test','检验'),tr('Case','工况'),'ΔWSE (ft)'],r.tests.map(t=>[t.kind,t.case,atlasNumber(t.delta_ft)]));
+      if(r.observations.length)table(d,[tr('Event','事件'),tr('Date','日期'),tr('Role','用途'),tr('Signed error (ft)','有符号偏差（ft）'),tr('Uncertainty (ft)','不确定度（ft）')],r.observations.map(e=>[e.event,e.date,e.role,atlasNumber(e.residual_ft),atlasNumber(e.uncertainty_ft)]));
+     }
+    }
+    selector.onchange=drawEvidence;drawEvidence();
+   }),region);
+  }
   const controls=el('div');output.append(controls);
   const profile=field(controls,'atlas-profile','Profile','工况','','select',[['','All profiles','全部工况'],...[...new Set(data.sections.map(r=>r.profile))].map(v=>[v,v,v])]);
   const scope=field(controls,'atlas-scope','Show','显示','attention','select',[['attention','Warnings / observations','警告／几何观察'],['all','All computed sections','全部计算断面']]);

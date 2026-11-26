@@ -411,6 +411,14 @@ def review(m):
     refreshed = []
     if not m.get('native_review') and not m.get('active_project'):
         refreshed = refresh_equivalent_candidates(m)
+    scope=m.get('production_scope') or {}
+    if m.get('parent_revision') and (scope.get('validation_plan') or scope.get('validation_protocol_active')) and not m.get('native_review'):
+        from .validation_plan import revision_roles
+        _,_,_,config,geometry=objects(m)
+        scope=revision_roles(m,config,geometry)
+        if scope!=m['production_scope']:
+            m['production_scope']=scope;m['revision']+=1;m.pop('pending_review',None)
+            core.persist(m,'RECLASSIFY_EXPOSED_EVENT_AFTER_REVISION')
     data=binding(m)
     if m.get('native_review'):
         errors=core.check(m);fields=[];native=core.native_preview(m)

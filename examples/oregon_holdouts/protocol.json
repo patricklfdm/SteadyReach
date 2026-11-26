@@ -1,0 +1,25 @@
+{
+  "schema": "p7_site_selection_1",
+  "purpose": "Screen the availability of independent high-flow stage observations for 1D steady comparisons. Do not authorize design.",
+  "stations": [
+    {
+      "id": "USGS-14162500",
+      "name": "McKenzie River near Vida",
+      "events": 2
+    },
+    {
+      "id": "USGS-14166000",
+      "name": "Willamette River at Harrisburg",
+      "events": 1
+    }
+  ],
+  "start": "2015-01-01",
+  "end": "2025-12-31",
+  "selection": "At each station, group approved field-measurement discharge and mean gage height by the same field visit ID. Require one reading of each in cfs and ft. Rank by measured discharge descending, then visit ID. Require at least 30 days between every selected event at either site. Process stations in the order listed. Compare discharge with the 90th percentile of all approved paired visits at that station in the window; call this high relative to sampled visits only. Never infer floodplain activation from this rank.",
+  "role": "independent_holdout",
+  "station_rule": "Only a uniquely matched interior section at the real field site can support a local stage comparison. Match event flow/date, dated gage zero and model vertical reference. Require stated vertical uncertainty for a supported result. A control or an observation consulted in choosing hydraulic inputs cannot count.",
+  "limit_ft": 0.5,
+  "tolerance_basis": "Internal software pilot investigation threshold, fixed before event selection. No site design tolerance established.",
+  "calibration": "None on these events. If geometry, boundary or parameters are tuned to any selected observation, retire its independent role across descendants and require a new event.",
+  "geographic_limit": "Unmodeled reaches, other flows, missing geometry or datum ties remain pending; no residual can be inferred from visit data alone."
+}

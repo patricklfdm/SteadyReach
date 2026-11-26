@@ -128,6 +128,15 @@ def run(args):
                 result['p6']=dict(status='PASSED',receipt='p6/release.json',sha256=sha(receipt))
             except (OSError,ValueError,KeyError,RuntimeError,TypeError,subprocess.SubprocessError) as exc:
                 result['p6']=dict(status='FAILED',error=str(exc));passed=False
+    if getattr(args,'p7',False):
+        result['release_gate']='P7';result['p7']=dict(status='NOT_RUN')
+        if passed:
+            from p7_release import run as confidence
+            try:
+                receipt=confidence(root,args.historical_root.resolve(),args.p7_visits.resolve())
+                result['p7']=dict(status='PASSED',receipt='p7/release.json',sha256=sha(receipt))
+            except (OSError,ValueError,KeyError,TypeError,RuntimeError,subprocess.SubprocessError) as exc:
+                result['p7']=dict(status='FAILED',error=str(exc));passed=False
     result['status']='SOFTWARE_CHECKS_PASSED' if passed else 'NEEDS_ATTENTION'
     save(root/'release.json',result);print(root/'release.json');return 0 if passed else 1
 
@@ -148,7 +157,12 @@ if __name__=='__main__':
     p.add_argument('--p5',action='store_true',help='Require P4 plus edition storage, offline packages and native restore replay')
     p.add_argument('--p5-archive-dir',type=Path,help='Existing local archive folder outside this isolated checkout')
     p.add_argument('--p6',action='store_true',help='Require P5 and the three-site frozen intake and return checks')
+    p.add_argument('--p7',action='store_true',help='Require P6 and local hydraulic confidence checks')
+    p.add_argument('--p7-visits',type=Path,help='Frozen preregistered USGS field visit folder')
     args=p.parse_args()
+    if args.p7:
+        if not args.p7_visits:p.error('--p7 requires --p7-visits')
+        args.p6=True
     if args.p6:args.p5=True
     if args.p5:
         if not args.p5_archive_dir or not args.p5_archive_dir.is_dir() or args.p5_archive_dir.resolve().is_relative_to(REPO):

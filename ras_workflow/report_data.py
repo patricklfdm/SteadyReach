@@ -28,10 +28,14 @@ def collect(summary_path, comparisons=()):
                 banks_ft=[float(a['Left Bank']),float(a['Right Bank'])],channel_length_ft=number(a['Len Channel']),profiles={}))
         for pi,p in enumerate(h['profiles']):
             w=f[BASE+'/Cross Sections/Water Surface'][pi];eg=f[BASE+'/Cross Sections/Energy Grade'][pi]
+            block=f[BASE+'/Cross Sections'];flow=block['Flow'][pi];extra=block.get('Additional Variables')
+            splits=[extra[k][pi] for k in ('Flow Left OB','Flow Right OB')] if extra is not None and all(k in extra for k in ('Flow Left OB','Flow Right OB')) else []
             for i,row in enumerate(rows):
+                q=number(flow[i]);ob=[number(values[i]) for values in splits]
+                shares=[100*v/q for v in ob] if q and len(ob)==2 and None not in ob else None
                 matches=[v for v in controller['rows'] if v['profile']==p['profile_id'] and v['station']==row['rs'] and not v['node_type']]
                 if len(matches)!=1:raise ValueError('Ambiguous native section result')
-                m=matches[0]['metrics'];row['profiles'][p['profile_id']]=dict(wse_ft=float(w[i]),egl_ft=float(eg[i]),
+                m=matches[0]['metrics'];row['profiles'][p['profile_id']]=dict(wse_ft=float(w[i]),egl_ft=float(eg[i]),flow_cfs=q,overbank_percent=shares,
                     critical_wse_ft=number(m.get('Crit W.S.')),velocity_fts=number(m.get('Vel Chnl')),
                     froude=number(m.get('Froude # Chl')),min_error_ft=number(m.get('Min Error')),
                     left_freeboard_ft=number(m.get('L. Freeboard')),right_freeboard_ft=number(m.get('R. Freeboard')))
@@ -148,6 +152,11 @@ def collect(summary_path, comparisons=()):
     if feedback and feedback['mode']=='event':
         from .field_results import verified_observations
         reviewed_events.extend(verified_observations(feedback))
+    if h.get('model_type')=='river':
+        from .hydraulic_confidence import assess
+        from .validation_plan import usable
+        river_checks['confidence']=assess(s,rows,reviewed_events,diagnostics,studies,revision)
+        if 'events' in river_checks:river_checks['events']=usable(river_checks['events'],s['configuration'].get('production_scope',{}))
     purpose_decision=evaluate(s,reviewed_events,revision)
     return dict(purpose_decision=purpose_decision, studies=studies, field_feedback=feedback, river_checks=river_checks, revision_comparison=revision,schema_version='readable_report_data_1.0',created_utc=utc(),summary=s,sections=rows,
         geometry=geometry,map_geometry=map_geometry,geometry_source=geometry_source,raster_source=raster_source,diagnostics=diagnostics,
@@ -237,6 +246,21 @@ def figures(data, folder, language="en"):
                 ax.plot(*cut.T,color='#b24433' if iswet else '#234f73',lw=1)
                 if i in labelled_indices:
                     ax.text(*cut[0],str(row['rs']),fontsize=6.5,color='#162f43',bbox=dict(facecolor='white',alpha=.6,pad=.3,edgecolor='none'))
+            confidence=(data.get('river_checks') or {}).get('confidence') or {}
+            observed={};markers={'WITHIN':('o','#1c7542'),'EXCEEDED':('X','#aa3131'),'PENDING':('D','#a26205')}
+            for prof in confidence.get('profiles',[]):
+                for point in prof['sections']:
+                    for obs in point['observations']:
+                        if obs['state'] in markers:observed.setdefault(point['rs'],set()).add(obs['state'])
+            from .revision_inputs import station_key
+            labelled=set()
+            for cross in g['cross_sections']:
+                states=observed.get(station_key(cross['rs']),())
+                state=next((k for k in ('EXCEEDED','PENDING','WITHIN') if k in states),None)
+                if state:
+                    symbol,color=markers[state];x,y=np.array(transform.transform(*cross['center_xy']))-origin
+                    caption={'EXCEEDED':tr('Stage error exceeds limit','水位偏差超限'),'PENDING':tr('Observation pending evidence','观测依据待补'),'WITHIN':tr('Within event tolerance','事件误差满足容差')}[state]
+                    ax.scatter(x,y,marker=symbol,c=color,s=45,zorder=6,label=caption if state not in labelled else None);labelled.add(state)
             centres=np.array([transform.transform(*r['center_xy']) for r in g['cross_sections']])-origin
             ax.plot(*centres.T,'k--',lw=.8,label=tr('Section-centre connection (indicative)','断面中心连线（示意）'))
             if len(centres)>1:ax.annotate('',xy=centres[1],xytext=centres[0],arrowprops=dict(arrowstyle='->',lw=1.5))

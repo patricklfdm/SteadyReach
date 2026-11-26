@@ -104,6 +104,8 @@ def collect(summary_path, summary):
                 raise ValueError('Spacing convergence assessment changed')
             entries+=convergence['sources']+convergence['comparisons']
         studies.append(dict(analysis=item(path), cases=cases, comparisons=comparisons,convergence=convergence,
+                            spacing_steps=[dict(case=b['id'],previous=a['id'],differences=pair['cross_section_differences'])
+                                           for a,b,pair in zip(cases,cases[1:],pairs)] if convergence else [],
                             end_coverage=end_coverage, coverage_batch=analysis.get('coverage_batch'), excluded_intervals=plan.get('excluded_intervals',[]), deferred_intervals=plan.get('deferred_intervals',[]),
                             selection=plan.get('selection'), intervals=plan.get('intervals',[]),
                             hydraulic_qa='REVIEW_REQUIRED', engineering_acceptance='NOT_ASSESSED'))

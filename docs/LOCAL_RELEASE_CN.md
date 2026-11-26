@@ -2,6 +2,10 @@
 
 [English](LOCAL_RELEASE_EN.md) · [生产化开发顺序与验收标准](PRODUCTION_ROADMAP_CN.md)
 
+## P7 断面实测支持与流量范围
+
+沿用下方 P6 的实测资料和本机配置，另准备已冻结的 USGS 流量测验记录。把 `--p6` 换成 `--p7 --p7-visits <冻结测验记录目录>`。打开同一次运行的总回执与 P7 专项回执，核对原生结果、实测用途、断面位置、中英文报告和两种交付包。若已公开的观测参与水力参数调整，修订版需要另一个独立观测事件。[冻结事件与解读结果](STATION_EVIDENCE_CN.md)
+
 ## P6 资料清单与离线重放验收
 
 在同机隔离副本中沿用完整 P5 命令，将 `--p5` 改为 `--p6`。保留独立测量包、Midway 原件、Dexter 观测、航片、归档目录与 `--historical-root`。历史目录须含已登记的 Soquel 版本及其来源回执。验收通过的标志为总回执 `status=SOFTWARE_CHECKS_PASSED` 且 `p6.status=PASSED`。在 `status/release_checks/<本次编号>/p6/release.json` 查看各站缺项和边界判定、资料指纹、沿用数、页面输入记录及离线重算的运行编号。

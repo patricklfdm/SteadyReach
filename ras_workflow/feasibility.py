@@ -19,7 +19,12 @@ def scope(data):
     result = {'purpose': purpose, 'flow_paths': paths}
     if data.get('criteria') is not None:
         result['criteria'] = criteria(data['criteria'])
-    return result
+    from datetime import date
+    from .validation_plan import normalize,scope_update
+    if data.get('validation_plan'):result['validation_plan']=normalize(data['validation_plan'])
+    history=data.get('calibration_dates',[])
+    if not isinstance(history,list) or len(history)>1000:raise ValueError('Invalid calibration history')
+    return scope_update({'calibration_dates':[date.fromisoformat(v).isoformat() for v in history]},result)
 
 
 def assess(model, config, geometry, answers, acquisition=None, native=None, reach=None):

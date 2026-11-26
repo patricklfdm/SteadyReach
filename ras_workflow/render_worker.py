@@ -13,21 +13,45 @@ def main():
     exe = Path(request['tools']['libreoffice']['path'])
     if sha(exe) != request['tools']['libreoffice']['sha256']: raise ValueError('LibreOffice changed')
     docx = ROOT/request['docx']['path']
+    pdf, command = convert_document(exe, docx, request['docx']['sha256'], out)
+    render_pages(pdf, docx, out, request, command)
+
+
+def convert_document(exe, docx, expected, out):
+    attempts = []
+    for number in range(1, 3):
+        pdf, command, receipt = convert_once(exe, docx, expected)
+        attempts.append(receipt)
+        save(out/'conversion.json', {**receipt, 'attempts': attempts})
+        if receipt['valid_pdf']:
+            return pdf, command
+        print(f"LibreOffice conversion {number} failed with exit {receipt['returncode']}", flush=True)
+    raise RuntimeError('LibreOffice failed to produce a valid PDF in two isolated attempts')
+
+
+def convert_once(exe, docx, expected):
     # Deep Windows job paths can exceed LibreOffice's profile/backend path limit.
     # Give each conversion a short, owned workspace and copy exact DOCX bytes.
     work = ROOT/'.tools/lo'/unique_id(); work.mkdir(parents=True, exist_ok=False)
     profile = work/'profile'; profile.mkdir()
     source = work/'document.docx'; shutil.copyfile(docx, source)
-    if sha(source) != request['docx']['sha256']: raise ValueError('Conversion input copy mismatch')
+    if sha(source) != expected: raise ValueError('Conversion input copy mismatch')
     pdf = work/'document.pdf'
     command = [str(exe), '-env:UserInstallation='+profile.resolve().as_uri(), '--headless', '--norestore',
                '--convert-to', 'pdf:writer_pdf_Export', '--outdir', str(work), str(source)]
     r = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', errors='replace',
                        creationflags=subprocess.CREATE_NO_WINDOW)
     print(r.stdout); print(r.stderr, file=sys.stderr)
-    save(out/'conversion.json', dict(command=command, returncode=r.returncode, stdout=r.stdout, stderr=r.stderr,
-         work=rel(work), copied_docx=item(source), finished_utc=utc()))
-    if r.returncode or not pdf.is_file() or pdf.read_bytes()[:5] != b'%PDF-': raise RuntimeError('LibreOffice did not produce a new valid PDF')
+    valid = False
+    if r.returncode == 0 and pdf.is_file():
+        with pdf.open('rb') as stream:
+            valid = stream.read(5) == b'%PDF-'
+    receipt = dict(command=command, returncode=r.returncode, stdout=r.stdout, stderr=r.stderr,
+                   work=rel(work), copied_docx=item(source), valid_pdf=valid, finished_utc=utc())
+    return pdf, command, receipt
+
+
+def render_pages(pdf, docx, out, request, command):
     import pypdfium2 as pdfium
     from pypdf import PdfReader
     pages = []

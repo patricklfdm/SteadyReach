@@ -176,7 +176,8 @@ def update(key,body):
         from .feasibility import scope
         if m.get('active_project') or m.get('summary'):
             raise ValueError('Change the scope on an editable revision / 请在可编辑修订版修改用途')
-        m['production_scope'] = scope(body['production_scope'])
+        from .validation_plan import scope_update
+        m['production_scope'] = scope_update(m.get('production_scope',{}),scope(body['production_scope']))
     allowed={'native_length_unit','vertical_datum','horizontal_crs','dem_vertical_unit','dem_vertical_datum'}
     values=body.get('metadata',{})
     if set(values)-allowed:raise ValueError('Unknown metadata fields')

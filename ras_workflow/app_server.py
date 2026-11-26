@@ -138,6 +138,12 @@ def create():
                     elif route=='invert-request':
                         from .invert_request import issue
                         result=issue(key,body)
+                    elif route=='qa-confidence':
+                        from .result_guidance import load_evidence
+                        from .report_data import collect
+                        _,path,_,_,_,_=load_evidence(key,body)
+                        result=collect(path)['river_checks'].get('confidence')
+                        if not result:raise ValueError('Select a solved river reach / 请选择已计算的河道版本')
                     elif route=='qa-atlas':
                         from .result_atlas import collect
                         result=collect(key,body)

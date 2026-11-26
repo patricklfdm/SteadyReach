@@ -347,7 +347,9 @@ def assess(model, path, summary, diagnostics, studies, guidance):
         if feedback['mode']=='geometry' and feedback['decision'] in ('request_survey','review_2d'):
             findings.append(finding('FLOW_PATH_DISPOSITION',2,'floodplain','Resolve the recorded floodplain condition before sign-off.',
                                     '送签前复核已记录的漫滩条件。',station=feedback['comparison']['station'],condition=feedback['condition']))
-    measured,missing_accuracy,exceeds=holdout_stages(reviewed_events)
+    from .validation_plan import usable
+    scope=summary.get('configuration',{}).get('production_scope') or {}
+    measured,missing_accuracy,exceeds=holdout_stages(usable(reviewed_events,scope))
     if is_river and not measured:
         findings.append(finding('FIELD_SUPPORT',2,'observations' if editable else 'qa',
             'Document an independent measured event before submitting a site performance claim for sign-off.',

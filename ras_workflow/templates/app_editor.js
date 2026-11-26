@@ -92,6 +92,7 @@ function renderFinalReview(){
   ...(c.site_geometry?[[tr('Field geometry','场地几何'),tr('Source required','须有来源')]]:[]),
   ...(c.min_freeboard_ft!=null?[[tr('Road margin','道路余高'),'≥ '+c.min_freeboard_ft+' ft']]:[]),
   ...(c.event?[[c.event+(c.rs?' · RS '+c.rs:''),'≤ '+c.max_residual_ft+' ft']]:[]),...(c.basis?[[tr('Basis','依据'),c.basis]]:[])]);
+ if(scope.validation_plan?.length)table(conditions,[tr('Event / date','事件／日期'),'RS',tr('Profile','工况'),tr('Role','用途'),tr('Limit (ft)','限值（ft）')],scope.validation_plan.map(r=>[r.event+' · '+r.date,r.rs,r.profile,r.role,r.tolerance_ft]));
  const returned=review.return_scope,scoped=returned?.mode==='CHANGES_ONLY';
  if(scoped){const box=el('section',undefined,'card');box.id='return-scope';screen.append(box);box.append(el('h2',tr('Review changes from the field return','集中确认本次补资料的变化')),el('p',returned.affected.length+tr(' affected · ',' 项受影响 · ')+returned.retained.length+tr(' previously confirmed inputs carried forward',' 项沿用原确认')));
   if(returned.affected.length){const keys=new Set(returned.affected.map(r=>r.key));parameterTable(box,review.fields.filter(f=>keys.has(f.key)));}
@@ -224,16 +225,41 @@ function scopeFields(parent,scope,atHome=false){
  const rs=field(rules,'accept-rs','Observation river station (blank for all matched stations)','观测断面 RS（留空覆盖所有匹配断面）',c.rs);
  const error=field(rules,'accept-error','Maximum absolute stage error, ft','最大绝对水位误差，ft',c.max_residual_ft,'number');
  const basis=field(rules,'accept-basis','Source of numerical limits','数值限值依据',c.basis);
+ const protocol=details(box,'Reserve station events before computing','运算前登记断面与事件');
+ const stored=field(protocol,'validation-rows','Saved event rows','已登记事件',JSON.stringify(scope.validation_plan||[]));stored.parentElement.hidden=true;
+ const grid=el('div',undefined,'grid');protocol.append(grid);
+ const input={};
+ for(const [k,en,zh,type] of [['profile','Profile ID','工况 ID','text'],['event','Event ID','事件 ID','text'],['date','Event date','事件日期','date'],['rs','River station','断面 RS','number'],['tolerance_ft','Investigation tolerance (ft)','调查容差（ft）','number'],['basis','Source of the tolerance','容差依据','text']])input[k]=field(grid,'validation-'+k,en,zh,'',type);
+ input.role=field(grid,'validation-role','Observation use','观测用途','holdout','select',[['holdout','Independent holdout','独立验证'],['calibration','Used to choose or tune inputs','已用于选择或调整参数'],['boundary','Boundary control','边界控制']]);
+ const display=el('div');protocol.append(display);
+ function eventRows(){return JSON.parse(stored.value);}
+ function writeEvents(rows){stored.value=JSON.stringify(rows);stored.dispatchEvent(new Event('input',{bubbles:true}));showEvents();}
+ function showEvents(){display.replaceChildren();for(const [i,row] of eventRows().entries()){
+  const line=el('p',row.event+' · '+row.date+' · '+row.profile+' · RS '+row.rs+' · '+row.role+' · '+row.tolerance_ft+' ft ');
+  line.append(button('Remove','移除',()=>writeEvents(eventRows().filter((v,j)=>j!==i))));
+  if(row.role==='holdout')line.append(button('Used for tuning','已用于调参',()=>writeEvents(eventRows().map((r,j)=>j===i?{...r,role:'calibration'}:r))));
+  display.append(line);
+ }}
+ protocol.append(button('Add station event','添加断面事件',()=>{
+  const row=Object.fromEntries(Object.entries(input).map(([k,v])=>[k,v.value.trim()]));
+  if(Object.values(row).some(v=>v==='')||!Number.isFinite(Number(row.tolerance_ft))||Number(row.tolerance_ft)<0)throw Error(tr('Complete the event, station, role and nonnegative tolerance.','请填完整事件、断面、用途和非负容差。'));
+  row.tolerance_ft=Number(row.tolerance_ft);
+  if(eventRows().some(r=>r.profile===row.profile&&r.date===row.date&&Number(r.rs)===Number(row.rs)))throw Error(tr('This station and event date are already listed for the profile.','该工况、断面与日期已登记。'));
+  writeEvents([...eventRows(),row]);
+ }));
+ protocol.append(el('p',tr('Only interior observations reserved before the run count toward geographic support. If an event informed geometry, roughness or boundary choices, mark it used for tuning. A different independent event is then required.','仅计算前登记的内部观测可用于判定适用范围。若某个事件已用于选择几何、糙率或边界，请标为已用于调参，再补另一个独立事件。')));
+ showEvents();stored.addEventListener('input',showEvents);
  for(const control of [profile,ends,margin,site,event,rs,error,basis])control.addEventListener('input',()=>{agreement.value='yes';});
  function value(){
-  if(agreement.value!=='yes')return {purpose:purpose.value,flow_paths:paths.value};
+  const base={purpose:purpose.value,flow_paths:paths.value};const rows=eventRows();if(rows.length)base.validation_plan=rows;
+  if(agreement.value!=='yes')return base;
   const criteria={dry_ends:ends.value==='yes',site_geometry:site.value==='yes'};
   for(const [key,input] of Object.entries({profile,event,rs,basis}))if(input.value.trim())criteria[key]=input.value.trim();
   for(const [key,input] of Object.entries({min_freeboard_ft:margin,max_residual_ft:error})){
    if(input.validity?.badInput)throw Error(tr('Check the numerical limit.','请核对数值限值。'));
    if(input.value!=='')criteria[key]=Number(input.value);
   }
-  return {purpose:purpose.value,flow_paths:paths.value,criteria};
+  return {...base,criteria};
  }
  if(!atHome){
   const inputs=Array.from(box.querySelectorAll('input,select,textarea'));
@@ -243,7 +269,7 @@ function scopeFields(parent,scope,atHome=false){
    current=updated;forgetForm(key,inputs);
   };
   const pending=()=>stageChange('purpose',tr('Delivery conditions','交付条件'),readDraft(key)?1:0,commit);
-  restoreForm(key,inputs);update();explain();observeForm(key,inputs,pending);pending();
+  restoreForm(key,inputs);showEvents();update();explain();observeForm(key,inputs,pending);pending();
   box.append(button('Save intended use and delivery conditions','保存用途与交付条件',async()=>{
    await save();await commit();pending();await open(current.id);
    notify(tr('Project use and conditions saved.','项目用途和交付条件已保存。'));

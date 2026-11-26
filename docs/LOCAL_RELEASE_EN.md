@@ -2,6 +2,10 @@
 
 [简体中文](LOCAL_RELEASE_CN.md) · [Production priorities and acceptance criteria](PRODUCTION_ROADMAP_EN.md)
 
+## P7 station evidence and flow range
+
+Use the P6 fixtures below and add the frozen USGS field visits. Replace `--p6` with `--p7 --p7-visits <frozen-visit-directory>`. Check the overall release status and the P7 receipt in the same run. It links each modeled comparison to the native output, observation role and station. It also records the displayed limits in both report languages, the two packages, the station map and the offline handoff. Require a separate observation when a disclosed event informs a revised hydraulic input. [Freezing the events and interpreting the results](STATION_EVIDENCE_EN.md)
+
 ## P6 intake and offline replay gate
 
 In an isolated checkout on the same workstation, use the full P5 command with `--p6` in place of `--p5`. Retain the independent survey, private Midway fixture, Dexter observation, imagery, archive directory and `--historical-root`. The historical root must contain the registered Soquel source edition and receipt. Require both `status=SOFTWARE_CHECKS_PASSED` and `p6.status=PASSED`. Open `status/release_checks/<run>/p6/release.json` for site-specific gaps and boundary findings, evidence hashes, carried confirmations, browser input counts and the fresh replay run ID.

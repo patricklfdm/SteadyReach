@@ -180,6 +180,32 @@ def build(data, plots, folder, language='en', detail='full', details=None):
               row.get('diagnostics',{}).get('native_messages','—'),n(row.get('max_wse_change_ft'))] for row in result['cases']],
             [1.6,1.2,1.3,2.6])
     checks=data.get('river_checks') or {}
+    confidence=checks.get('confidence')
+    if confidence:
+        d.add_heading(tr('Where the observations support this run','实测证据适用的断面与流量'),1)
+        p('Local comparisons apply at the listed station and modeled flow. Other locations and intervening flows remain pending. A positive residual means the computed water level is higher than the observation.',
+          '局部对比仅适用于列出的断面与计算流量。其余地点与流量区间仍待核验。正偏差表示计算水位高于实测水位。')
+        from .validation_plan import STATES
+        for result in confidence['profiles']:
+            worst=result['worst']
+            d.add_paragraph(result['profile']+f" · {result['flow_cfs']:g} cfs · "+tr('Matched events / points','匹配事件数／点数')+
+                            f" {result['event_count']} / {result['matched_points']} · "+tr('Mean signed error (ft)','平均有符号偏差（ft）')+
+                            ' '+n(result['mean_signed_ft'])+(' · '+tr('Worst RS','最大偏差 RS')+' '+worst['rs']+' ('+n(worst['signed_ft'])+' ft)' if worst else ''))
+            points=result['sections']
+            for srow in points:
+                for obs in srow['observations']:
+                    status=STATES.get(obs['state'],('Context only','仅作背景'))
+                    d.add_paragraph(f"RS {srow['rs']} · {obs['event']} · {obs['date']} · "+tr(*status)+' · '+tr('signed error / uncertainty / limit (ft)','有符号偏差／不确定度／限值（ft）')+
+                                    ' '+ ' / '.join(n(obs.get(k)) for k in ('residual_ft','uncertainty_ft','tolerance_ft')))
+            for kind,eng,zh in [('boundary','Boundary','边界'),('roughness','Roughness','糙率'),('spacing','Spacing','断面间距')]:
+                trials=[(srow['rs'],test) for srow in points for test in srow['tests'] if test['kind']==kind]
+                if trials:
+                    station,test=max(trials,key=lambda pair:abs(pair[1]['delta_ft']))
+                    d.add_paragraph(tr(eng,zh)+' · '+test['case']+' · RS '+station+f" · ΔWSE {test['delta_ft']:+.3f} ft")
+            locations=[srow['rs'] for srow in points if srow['decision']=='INVESTIGATE']
+            if locations:d.add_paragraph(tr('Investigate RS ','需调查的 RS ')+', '.join(locations))
+            limits=['RS '+r['rs']+f" @ {r['flow_cfs']:g} cfs" for r in result['supported_points']]
+            d.add_paragraph(tr('Observed points within the frozen tolerance: ','实测满足冻结容差的点：')+(', '.join(limits) or tr('None established','尚未证实')))
     edge=checks.get('extent_review')
     if edge:
         d.add_heading(tr('Spatial comparison of native results','原生计算空间对照'),2)

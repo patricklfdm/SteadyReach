@@ -37,6 +37,9 @@ def criteria(raw):
 
 def evaluate(summary, events=(), comparison=None):
     scope = summary.get('configuration',{}).get('production_scope') or {}
+    from .validation_plan import score,usable,STATES
+    planned=score(summary,events)
+    events=usable(events,scope)
     purpose = scope.get('purpose','screening')
     rules = scope.get('criteria')
     rows = []
@@ -153,6 +156,15 @@ def evaluate(summary, events=(), comparison=None):
                 peak=max(abs(r['residual_ft']) for r in measured)
                 add('met' if peak<=limit else 'exceeded',where+f' · Peak absolute stage error {peak:.3f} ft (limit {limit:g} ft).',
                     where+f' · 最大绝对水位误差 {peak:.3f} ft（限值 {limit:g} ft）。')
+    if scope.get('calibration_dates') and not any(r['role']=='holdout' for r in planned) and purpose=='review':
+        add('missing','Reserve a replacement independent event before claiming field performance.',
+            '需另行登记独立验证事件，才能评价现场表现。')
+    for result in planned:
+        if result['role']!='holdout':continue
+        state=result['state'];prefix=result['event']+' · '+result['date']+' · RS '+result['rs']+' · '
+        tool='observations';profile=result['profile']
+        add('met' if state=='WITHIN' else 'exceeded' if state=='EXCEEDED' else 'missing',
+            prefix+STATES[state][0],prefix+STATES[state][1],[result['rs']])
     state = ('REVISE' if any(r['state']=='exceeded' for r in rows) else
              'NEED_EVIDENCE' if any(r['state']=='missing' for r in rows) else 'CONDITIONS_MET')
     labels = {'REVISE':('Revise before intended-use delivery','修订后再按约定用途交付'),
