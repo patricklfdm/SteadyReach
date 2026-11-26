@@ -57,6 +57,7 @@ def create():
                 assets['app_extent.js']=('app_extent.js','application/javascript; charset=utf-8')
                 assets['app_team_review.js']=('app_team_review.js','application/javascript; charset=utf-8')
                 assets['app_handoff.js']=('app_handoff.js','application/javascript; charset=utf-8')
+                assets['app_raw_measurements.js']=('app_raw_measurements.js','application/javascript; charset=utf-8')
                 if route not in assets:return self.send(404,dict(error='Not found'))
                 file,mime=assets[route];self.send(200,(ROOT/'ras_workflow/templates'/file).read_bytes(),mime)
             except Exception as e:self.send(400,dict(error=str(e)))
@@ -89,6 +90,9 @@ def create():
                     key=body['id']
                     if route in ('storage-preview','storage-archive','storage-retire','storage-restore','storage-pin'):
                         result=edition_storage.perform(ROOT,key,route.removeprefix('storage-'),body)
+                    elif route in ('raw-inspect','raw-columns','raw-preview','raw-apply'):
+                        from .raw_intake import action
+                        result=action(key,body,route.removeprefix('raw-'))
                     elif route in ('intake-inspect','intake-freeze','intake-replay','intake-survey-copy','intake-note'):
                         from .intake_freeze import perform
                         result=perform(key,route.removeprefix('intake-'),body)

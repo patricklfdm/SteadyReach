@@ -88,7 +88,7 @@ def changes(content,fields,g,summary_hash,documented):
 def record_bytes(document):
     if not document:return None
     name=Path(document['name'])
-    if name.name!=str(name) or name.suffix.lower() not in ('.pdf','.txt','.json','.csv','.jpg','.jpeg','.png'):
+    if name.name!=str(name) or name.suffix.lower() not in ('.pdf','.txt','.json','.csv','.tsv','.jpg','.jpeg','.png'):
         raise ValueError('Choose a field PDF, text, JSON, CSV or photograph')
     data=base64.b64decode(document['data'],validate=True)
     if not 0<len(data)<=12_000_000:raise ValueError('Field source must be under 12 MB')

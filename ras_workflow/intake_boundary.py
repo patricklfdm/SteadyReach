@@ -119,7 +119,7 @@ def controls_for_run(m,config,geometry,fields,notices=None):
     from .intake_freeze import local
     stage=next((f for f in fields if f['key']=='g.boundaries.downstream.stages_ft'),{})
     named=station(stage.get('basis'))
-    candidates=[*m.get('attachments',[]),*config.get('returned_observations',[])]
+    candidates=[*m.get('attachments',[]),*config.get('returned_observations',[]),*config.get('field_return_sources',[])]
     if not named and not any(Path(r.get('original_name') or r['path']).name.lower() in ('observed_profiles.csv','intake_evidence.json') for r in candidates):return []
     ctx=context(m,prepared=(config,geometry,fields));checked=screen(ctx,documents(ctx,local));errors=[]
     for p,z in zip(ctx['profiles'],end.get('stages_ft') or []):

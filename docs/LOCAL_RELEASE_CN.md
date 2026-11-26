@@ -2,6 +2,16 @@
 
 [English](LOCAL_RELEASE_EN.md) · [生产化开发顺序与验收标准](PRODUCTION_ROADMAP_CN.md)
 
+## P11 原始测量表验收
+
+在新的同机隔离检出中，先按安装指南配置 HEC-RAS 7.0.1、QGIS 和报告转换器。准备原 P10 验收工作区、保留 Soquel 原版的工作区，以及冻结的 USGS 11160000 现场测验 GeoJSON。可从[USGS 2024 年测验接口](https://api.waterdata.usgs.gov/ogcapi/v0/collections/field-measurements/items?f=json&monitoring_location_id=USGS-11160000&datetime=2024-01-01%2F2024-12-31&limit=1000)取得并保存原始响应。运行下方命令时替换三个输入路径。
+
+```powershell
+.\.venv\Scripts\python.exe scripts/p11_release.py --p10-workspace D:\P10 --soquel-workspace D:\SoquelSource --soquel-visits D:\FieldData\soquel_2024.json
+```
+
+脚本在空白隔离检出里复制正式案例，通过本机自动化浏览器核对原始行并实际运行 Washington 出口工况和内点回传修订。两次均校验原生 HDF 和带地图的双包。Soquel 检查异地水尺，Midway 检查空白和单端回传，所用单端数值属于验收模拟。回执在 `status/p11/<批次>/release.json`。原件、模型、报告和验收目录保留在本机。[工程师页面操作](HYDRAULIC_INTAKE_CN.md)
+
 ## P9 离线发行、升级与队列恢复
 
 沿用下方 P8 的现场资料，将 `--p8` 换为 `--p9 --p9-fixture <管理员验收配置.json>`。此本机配置记录签名发行目录（`release`）、独立信任的公钥（`trusted_key`）、基础 Python（`python`）、两个历史软件安装目录（`previous_installations`），以及已安装的 `qgis`、`converter` 与 `runtime` 路径。签名私钥和工程数据留在本机。查看同一批次 `p9/` 下的迁移和队列回执，逐一核对恢复任务的两个交付包。重试出图后，水力运行编号和原生 HDF 须与失败前的计算一致。[管理员操作说明](OPERATIONS_CN.md)

@@ -2,6 +2,15 @@
 
 [简体中文](HYDRAULIC_INTAKE_CN.md)
 
+## Start with an original field table
+
+1. Open a prepared project and choose **Import an original measurement table → Start from my field table**. River observations need located cross sections. Select a UTF-8 CSV or tab-delimited file up to 2 MB and 10,000 rows, or a USGS field-measurements GeoJSON. For an Excel workbook, save the relevant sheet as UTF-8 CSV.
+2. Choose **Read columns and suggest matches**. For example, `X,Y,measwse` identifies position and water elevation. A registered FGDC XML that names this file and attribute can supply units and reference systems. Verify the event date, discharge, profile and survey CRS against the source. Dates from filenames and discharges from the model are suggestions. Nonempty source columns take precedence over whole-table defaults.
+3. Choose **Locate and preview source rows**. On a longitudinal trace, a candidate must be within 5 m of a section center and match that cut unambiguously. Review the nearest row, its role and nearby alternatives. Check out-of-range points, duplicates, ties and datum conflicts before adopting. Flood marks away from the center or influenced by a structure require separate location review.
+4. An editable single-profile subcritical or mixed-flow model can adopt one directly surveyed outlet. Screening or review with unquantified vertical accuracy requires explicit consent. Interior levels are hidden in this preview. After computation, return unused interior observations for one event, confirm their independence and create a separate revision. Both paths retain the normal final input confirmation.
+5. For a remote gage, compare coordinates, distance and datum. USGS discharge and relative height are paired by site and visit. Use the gage-boundary procedure below once the zero, event and transfer are documented. Culvert sheets accept `group,inletinvertft,outletinvertft,datum` or `group,end,elevation,unit,datum`. Groups start at 1; use `inlet` or `outlet` for the end. A blank end preserves its previous value and evidence class.
+
+
 Open a saved coordinate or survey project. Expand **Hydraulic evidence and offline replay** and select **Inspect hydraulic evidence**. Do this before choosing a boundary or requesting site measurements. The list uses the current draft or the sealed inputs of the calculated edition.
 
 | Evidence | What to check | Useful next record |

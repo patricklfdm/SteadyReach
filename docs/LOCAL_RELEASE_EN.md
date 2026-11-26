@@ -2,6 +2,16 @@
 
 [简体中文](LOCAL_RELEASE_CN.md) · [Production priorities and acceptance criteria](PRODUCTION_ROADMAP_EN.md)
 
+## P11 original measurement intake
+
+Configure HEC-RAS 7.0.1, QGIS and the report converter in a fresh isolated checkout on the acceptance workstation. Supply the completed P10 workspace, the workspace containing the original Soquel edition, and a frozen USGS site 11160000 field-measurements GeoJSON. Save the original response from the [USGS 2024 visits endpoint](https://api.waterdata.usgs.gov/ogcapi/v0/collections/field-measurements/items?f=json&monitoring_location_id=USGS-11160000&datetime=2024-01-01%2F2024-12-31&limit=1000). Replace the three paths in this example.
+
+```powershell
+.\.venv\Scripts\python.exe scripts/p11_release.py --p10-workspace D:\P10 --soquel-workspace D:\SoquelSource --soquel-visits D:\FieldData\soquel_2024.json
+```
+
+The gate copies the registered cases into the isolated checkout. An automated local browser reviews source rows and runs Washington with the outlet, followed by the interior-observation revision. It verifies both native results and both mapped delivery pairs. Soquel exercises remote gage exclusion. Midway exercises missing inverts and a single-end software rehearsal. The receipt is `status/p11/<batch>/release.json`. Source materials, project editions and generated deliveries stay on the workstation. [Engineer instructions](HYDRAULIC_INTAKE_EN.md)
+
 ## P9 distribution, upgrade and queue recovery
 
 Start with the P8 inputs below. Replace `--p8` with `--p9 --p9-fixture <administrator-fixture.json>`. The local fixture identifies the signed release directory (`release`), independently pinned public key (`trusted_key`), base interpreter (`python`), two historic installation directories (`previous_installations`), and the installed `qgis`, `converter` and `runtime` paths. Keep signing keys and project data on the workstation. Inspect the migration and queue receipts under `p9/` and verify the two packages for every recovered calculation. A successful export retry must preserve the original hydraulic run and HDF. [Administrator instructions](OPERATIONS_EN.md)

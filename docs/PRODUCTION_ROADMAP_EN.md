@@ -2,6 +2,10 @@
 
 [简体中文](PRODUCTION_ROADMAP_CN.md)
 
+## P11 original measurement tables
+
+On the acceptance workstation the automated browser selected outlet row 413 from the original Washington field table. The first calculation used the outlet. A separate revision returned eight independent interior observations. All nine native water levels in both runs reproduced the P10 baseline. The largest measured difference remained +0.429 ft at RS 400. Both mapped delivery pairs passed verification. Fourteen Soquel off-site gage visits remained context. Midway retained both missing invert surveys; a single-end rehearsal reopened only the inlet. The regression suites passed 532 Python and 44 page tests. Independent engineering approval, first-user and second-machine acceptance remain pending. [User instructions](HYDRAULIC_INTAKE_EN.md) · [Reproduce the gate](LOCAL_RELEASE_EN.md)
+
 ## Proposed enterprise roadmap, P5–P10
 
 The P4 baseline runs a native 1D steady-flow calculation on Windows, supports independently confirmed revisions and field returns, assesses the project purpose, and produces bilingual reports and two verifiable delivery packages. Each phase below retains earlier native regressions, adds a failure or counterexample, and records the input edition, run identity, verdict and reproduction steps. The proposed software acceptance targets are separate from the engineering tolerances agreed for each site.

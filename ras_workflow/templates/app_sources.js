@@ -377,6 +377,7 @@ function drawRoadChange(parent,rows){
 }
 
 function renderIntakeEvidence(parent,edition){
+ if((edition.intake||edition.results)&&!edition.native)renderRawMeasurements(parent,edition);
  const panel=details(parent,'Hydraulic evidence and offline replay','水力资料清单与离线重放');
  const area=el('div');area.setAttribute('aria-live','polite');const id=edition.id;
  const names={terrain:tr('Terrain','地形'),channel:tr('Submerged channel','水下河槽'),flow:tr('Discharge','流量'),stage:tr('Stage and boundary','水位与边界'),structure:tr('Crossing geometry','设施几何')};

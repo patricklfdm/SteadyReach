@@ -83,6 +83,12 @@ def merge_holdouts(existing, incoming):
 def records(summary):
     returned=summary.get('configuration',{}).get('returned_observations',[])
     rows,refs=survey_records(summary)
+    raw_sources=[r for r in summary.get('configuration',{}).get('field_return_sources',[]) if r.get('role')=='raw_survey_evidence']
+    if raw_sources and not intact(raw_sources):raise ValueError('Restore the original field book and outlet evidence')
+    for ref in raw_sources:
+        if Path(ref['path']).name=='observed_profiles.csv':
+            rows.extend(profile_rows((ROOT/ref['path']).read_text('utf-8-sig'),summary))
+    refs.extend(raw_sources)
     originals=summary.get('configuration',{}).get('returned_observation_originals',[])
     if (returned or originals) and not intact([*returned,*originals]):
         raise ValueError('Restore the observation source bound to this calculation.')

@@ -263,6 +263,9 @@ def _load(session_path,active=True):
 
 def _objects(p,d):
     c=read(ROOT/p['original_project']['path']);g=normalize_geometry(d['geometry'])
+    raw_sources=[r for r in d.get('uploads',[]) if r.get('role')=='raw_survey_evidence']
+    if raw_sources:
+        c['field_return_sources']=list({r['path']:r for r in [*c.get('field_return_sources',[]),*raw_sources]}.values())
     if d.get('section_workflow'):
         receipt=d['section_workflow'];t=copy.deepcopy(receipt['terrain'])
         for key in ['raster','provenance']:

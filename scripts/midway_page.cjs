@@ -143,6 +143,30 @@ async function main() {
       const {nodeId}=await send('DOM.querySelector',{nodeId:root.nodeId,selector});
       await send('DOM.setFileInputFiles',{nodeId,files});
     }
+    if(mode==='p11-field-book'){
+      await buttonByName('Start from my field table');
+      if(input.inspectText){
+        await until('document.getElementById("raw-measurements").textContent.includes('+JSON.stringify(input.inspectText)+')');
+        if(!input.file){console.log('VERIFIED');return;}
+      }
+      await selectFiles('#raw-file',[input.file]);
+      if(input.measurement)await fieldValue('raw-mode',input.measurement);
+      await buttonByName('Read columns and suggest matches');
+      await until('!!document.getElementById("raw-meta-unit")');
+      for(const [key,value] of Object.entries(input.expectedDefaults||{})){
+        if(await evaluate('document.getElementById('+JSON.stringify('raw-meta-'+key)+').value')!==value)throw Error('Unexpected source suggestion: '+key);
+      }
+      for(const [key,value] of Object.entries(input.metadata||{}))await fieldValue('raw-meta-'+key,value);
+      await buttonByName('Locate and preview source rows');
+      const count=await evaluate('document.querySelectorAll("[id^=raw-pick-]").length');
+      if(count!==input.count)throw Error('Expected '+input.count+' selectable lines, got '+count+' '+await evaluate('document.getElementById("raw-measurements").innerText.slice(-1500)'));
+      if(!count){console.log('BLOCKED');return;}
+      await click('#raw-ack');
+      if(input.conditional)await click('#raw-conditional');
+      await buttonByName(input.child?'Create editable revision':'Save selected measurements');
+      await until('!busy && document.getElementById("notice").textContent.includes("Measurements saved")');
+      console.log(await evaluate('current.id'));return;
+    }
     if(mode==='p6-evidence'){
       await buttonByName('Inspect hydraulic evidence');
       await until('document.body.textContent.includes("Current edition") && document.body.textContent.includes("Next request if needed")');
