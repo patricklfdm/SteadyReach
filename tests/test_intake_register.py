@@ -30,6 +30,33 @@ class IntakeBoundary(unittest.TestCase):
         self.doc['observations'].append((dict(self.row,elevation=53),{'sha256':'other'}))
         self.assertEqual(self.result()['status'],'CONFLICT')
 
+    def test_direct_survey_outlet_requires_a_matching_independent_point(self):
+        self.row.update(kind='boundary_stage',source='Survey A, row 12',vertical_uncertainty='')
+        event=dict(profile='Flood',event='Flood-A',date='2015-10-01',method='direct_outlet_survey',
+                   point_source=self.row['source'],unit='ft',horizontal_crs='EPSG:4326',vertical_datum='NAVD88',
+                   source={'sha256':'independent-point'},accept_unquantified_for_screening=True,
+                   native_point={k:self.row[k] for k in ('x','y','elevation')})
+        self.doc['events']=[event]
+        self.assertEqual(self.result()['status'],'CONDITIONAL_SURVEY')
+        self.assertEqual(self.result()['issues'],['UNCERTAINTY_MISSING'])
+        geom=dict(self.ctx['geom'],model_type='river',boundaries={'downstream':{'type':'known_stage','stages_ft':[51]}})
+        model=dict(attachments=[{'path':'survey/observed_profiles.csv'}],production_scope={'purpose':'review'})
+        with patch('ras_workflow.intake_register.context',return_value=self.ctx),patch.object(b,'documents',return_value=self.doc):
+            self.assertEqual(b.controls_for_run(model,{},geom,[]),[])
+            with patch.dict(model,production_scope={'purpose':'design'}):
+                self.assertTrue(b.controls_for_run(model,{},geom,[]))
+        for key,val in [('elevation',52),('x',-120.),('date','2014-10-01'),('vertical_datum','NGVD29'),
+                        ('source','USGS-12345678'),('vertical_uncertainty','0'),('kind','gage_height')]:
+            with self.subTest(key=key),patch.dict(self.row,{key:val}):
+                self.assertEqual(self.result()['status'],'BLOCKED')
+        with patch.dict(event,source={'sha256':'original'}):
+            self.assertEqual(self.result()['status'],'BLOCKED')
+        with patch.dict(self.row,vertical_uncertainty=.1),patch.dict(event,vertical_uncertainty=.1):
+            self.assertEqual(self.result()['status'],'ELIGIBLE')
+        x,y=self.loc(5000050)
+        with patch.dict(self.row,x=x,y=y),patch.dict(event['native_point'],x=x,y=y):
+            self.assertIn('DOCUMENTED_TRANSFER_REQUIRED',self.result()['issues'])
+
     def test_bound_transfer_is_event_specific(self):
         xy=self.loc(5000200);self.row.update(x=xy[0],y=xy[1]);self.doc['stations']['12345678']['lonlat']=xy
         self.assertIn('DOCUMENTED_TRANSFER_REQUIRED',self.result()['issues'])

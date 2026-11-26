@@ -97,10 +97,24 @@ def prepare(raw,out):
     save(discharge_ref,dict(reach='WSP',date=selected[0][0],flow_m3s=float(selected[0][1]),measurement_type=selected[0][2],
         provider=REPORT,original_sha256=sha(raw/'table3.txt')))
     refs.append(dict(name=discharge_ref.name,source=REPORT+' WSP discharge row, 2019-02-06',sha256=sha(discharge_ref)))
+    _, outlet_index, outlet = marks[-1]
+    source_label = DATA+' '+EVENT+' row '+str(outlet_index+2)
+    point_file = survey/'SurveyedOutlet.csv'
+    with point_file.open('w',newline='',encoding='utf-8') as stream:
+        writer=csv.writer(stream)
+        writer.writerow(['x','y','elevation'])
+        writer.writerow(outlet)
+    refs.append(dict(name=point_file.name,source=source_label,sha256=sha(point_file)))
+    declaration = survey/'intake_evidence.json'
+    save(declaration,dict(schema='intake_evidence_1',events=[dict(profile='Feb06',event='Feb06',date='2019-02-06',
+        method='direct_outlet_survey',point_source=source_label,source_sha256=sha(point_file),
+        dataset_sha256=sha(raw/EVENT),horizontal_crs='EPSG:32615',vertical_datum='NAVD88',unit='m',
+        accept_unquantified_for_screening=True)]))
+    refs.append(dict(name=declaration.name,source=source_label,sha256=sha(declaration)))
     discharge=float(selected[0][1])*METERS_TO_FT**3
     packet=dict(schema_version='steadyreach_survey_1',title='Big River at Washington State Park, Missouri',
         location=dict(latitude=lat,longitude=lon),scenario=dict(id='wsp_feb06',profiles=[dict(id='Feb06',flow_cfs=discharge,source=REPORT+' WSP direct measurement, 2019-02-06.')],
-        channel_n=.035,overbank_n=.065,parameter_source='Conditional screening assumptions before native runs. DEM-interpreted banks and constant roughness require engineering review.'),
+        channel_n=.035,overbank_n=.065,parameter_source='Conditional screening. Banks and uniform roughness require review. The directly surveyed outlet uses NAVD88. USGS reports no formal vertical accuracy assessment. Obtain the uncertainty before using this boundary for design. / 条件性初筛。岸站和统一糙率待核。出口为 NAVD88 原位水位，USGS 未公布正式垂直精度评定，设计采用前须补精度依据。'),
         geometry=geometry,terrain=dict(raster=DEM,vertical_datum='NAVD88',vertical_unit='m'),files=refs)
     shutil.copy2(raw/EVENT,out/EVENT)
     for boundary,destination in [(True,survey/'observed_profiles.csv'),(False,out/'field_return.csv')]:

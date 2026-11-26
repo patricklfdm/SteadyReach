@@ -38,6 +38,12 @@ For supplied survey sources, a supplemental `intake_evidence.json` can link an e
 
 Use ISO dates, numeric offsets and uncertainties in feet, and station IDs from registered USGS monitoring-location records. The transferred stage equals the observed absolute stage in feet plus the signed offset. A conflicting or unsupported declared boundary prevents confirmation of that known-stage input. Existing normal-depth controls retain their own basis.
 
+## Directly surveyed outlet
+
+For an absolute water level measured on the outlet cross section, include the measured point as a CSV extract with the header `x,y,elevation` and one data row. List the file in the survey manifest. In `intake_evidence.json`, bind the event to this extract’s SHA-256 with `method: "direct_outlet_survey"`. Provide the profile, event, date, coordinate system, vertical datum, unit and original point citation in `point_source`. Enter the same citation in the boundary row of `observed_profiles.csv` with kind `boundary_stage`. The Washington State Park example prepares these files from the dated provider record.
+
+The application compares the two records, locates the point on the downstream section and checks the event discharge and imposed elevation. When the source lacks a quantified vertical uncertainty, `accept_unquantified_for_screening: true` permits a conditional run for screening or engineering review following confirmation. The confirmation page and report identify the missing accuracy. Other uses and mismatches remain blocked. A relative gage height or off-site gage follows the gage-zero and transfer checks above. The imposed outlet is excluded from residual scoring.
+
 ## Freeze, replay and resume
 
 1. Select **Freeze these sources**. Keep the archive path and SHA-256 receipt. The archive includes the working DEM, material actually registered by this edition, recorded search responses and available local imagery. Full unclipped provider tiles are recorded separately by reference.

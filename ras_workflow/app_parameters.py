@@ -428,9 +428,10 @@ def review(m):
         from .app_automation import preflight
         for q in preflight(m,data['geometry'])['issues']:
             if q['blocking']:errors.append(dict(code=q['code'],field=q.get('field',''),en=q['message'],zh=q['zh']))
+    boundary_notices=[]
     if not native and m.get('model_type')=='river':
         from .intake_boundary import controls_for_run
-        errors.extend(controls_for_run(m,data['configuration'],data['geometry'],fields))
+        errors.extend(controls_for_run(m,data['configuration'],data['geometry'],fields,boundary_notices))
     from .feasibility import assess
     from .app_acquisition import snapshot
     reach = read(ROOT/m['public_reach']['path']) if m.get('public_reach') else None
@@ -449,7 +450,7 @@ def review(m):
     errors.extend(readiness['issues'])
     packet=dict(run_readiness=readiness,schema_version='parameter_review_1',project_id=m['id'],revision=m['revision'],fingerprint=digest(data),
         inputs=data,fields=fields,native=native,errors=errors,ready=not errors,created_utc=utc(),engineering_acceptance='NOT_ASSESSED',
-        refreshed_equivalent_fields=[change['field'] for change in refreshed],
+        boundary_notices=boundary_notices,refreshed_equivalent_fields=[change['field'] for change in refreshed],
         attention=[] if native else attention(m, fields), feasibility=feasibility)
     if m.get('intake_return'):
         from .return_scope import assess as return_scope

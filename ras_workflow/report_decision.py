@@ -47,7 +47,13 @@ def add(document,data,cn):
     river_checks=data.get('river_checks') or {}
     if river_checks.get('screen') or river_checks.get('events'):
         from .river_observations import holdout_stages
-        measured,missing,exceeds=holdout_stages(river_checks.get('events',[]))
+        events=river_checks.get('events',[])
+        for row in events:
+            if row.get('role')=='boundary' and not row.get('issues') and row.get('uncertainty_ft') is None:
+                rs=(row.get('location') or {}).get('rs','?')
+                document.add_paragraph(tr(f"At RS {rs}, the imposed {row.get('profile','')} outlet water level has no quantified vertical uncertainty. Confirm its accuracy before engineering acceptance.",
+                                          f"RS {rs} 的 {row.get('profile','')} 出口采用指定水位，垂直精度尚未量化。工程验收前须核实精度。"))
+        measured,missing,exceeds=holdout_stages(events)
         if measured:
             row=max(measured,key=lambda r:abs(r['residual_ft']))
             text=tr('Largest modeled minus observed stage in registered holdouts','已登记留出事件中最大的计算减实测水位差')

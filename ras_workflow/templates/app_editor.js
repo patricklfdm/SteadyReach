@@ -93,6 +93,7 @@ function renderFinalReview(){
   ...(c.min_freeboard_ft!=null?[[tr('Road margin','道路余高'),'≥ '+c.min_freeboard_ft+' ft']]:[]),
   ...(c.event?[[c.event+(c.rs?' · RS '+c.rs:''),'≤ '+c.max_residual_ft+' ft']]:[]),...(c.basis?[[tr('Basis','依据'),c.basis]]:[])]);
  if(scope.validation_plan?.length)table(conditions,[tr('Event / date','事件／日期'),'RS',tr('Profile','工况'),tr('Role','用途'),tr('Limit (ft)','限值（ft）')],scope.validation_plan.map(r=>[r.event+' · '+r.date,r.rs,r.profile,r.role,r.tolerance_ft]));
+ for(const n of review.boundary_notices||[])screen.append(el('p',n.profile+' · RS '+n.rs+' · '+tr(n.en,n.zh),'warning'));
  const returned=review.return_scope,scoped=returned?.mode==='CHANGES_ONLY';
  if(scoped){const box=el('section',undefined,'card');box.id='return-scope';screen.append(box);box.append(el('h2',tr('Review changes from the field return','集中确认本次补资料的变化')),el('p',returned.affected.length+tr(' affected · ',' 项受影响 · ')+returned.retained.length+tr(' previously confirmed inputs carried forward',' 项沿用原确认')));
   if(returned.affected.length){const keys=new Set(returned.affected.map(r=>r.key));parameterTable(box,review.fields.filter(f=>keys.has(f.key)));}

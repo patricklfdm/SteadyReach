@@ -137,6 +137,11 @@ def run(gate,source,baseline):
                  len(pair['field_events'])==1 and pair['field_events'][0]['role']=='boundary' and
                  pair['field_events'][0]['residual_ft'] is None and not pair['field_events'][0]['issues'],
                  'Baseline flow, section count or held-out observation isolation differs')
+            edition=app_core.model(key)
+            review=read(ROOT/edition['pending_review']['path'])
+            need(any(n['profile']=='Feb06' and n['rs']=='100' for n in review.get('boundary_notices',[])),
+                 'Surveyed outlet uncertainty was not shown before confirmation')
+            pair['outlet_uncertainty']='UNQUANTIFIED_CONDITIONAL'
             return pair
         if i==12:
             data=selected['survey'];base=selected['wsp']

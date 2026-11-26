@@ -19,6 +19,39 @@ def station(value):
     return match.group(1) if match else None
 
 
+def surveyed_point(original, open_source):
+    """Read one original outlet point. A declaration cannot supply the coordinates or elevation."""
+    with open_source(original).open(encoding='utf-8-sig', newline='') as stream:
+        reader = csv.DictReader(stream)
+        if reader.fieldnames != ['x', 'y', 'elevation']:
+            raise ValueError('Direct survey evidence requires an x,y,elevation CSV point extract')
+        row = next(reader, None)
+        if not row or next(reader, None) is not None or None in row:
+            raise ValueError('Supply exactly one direct survey point per outlet source')
+        values = {k: number(row, k) for k in ('x','y','elevation')}
+        if any(v is None for v in values.values()):
+            raise ValueError('Direct survey point has an invalid coordinate or elevation')
+        return values
+
+
+def direct_event(row, ref, events):
+    if row.get('role') != 'boundary' or row.get('kind') != 'boundary_stage' or station(row.get('source')):
+        return None
+    matches = [e for e in events if e.get('profile') == row.get('profile')]
+    if len(matches) != 1:
+        return None
+    event = matches[0]
+    if (event.get('method') != 'direct_outlet_survey' or not event.get('native_point')
+            or event.get('station') or event['source']['sha256'] == ref['sha256']
+            or not row.get('source') or event.get('point_source') != row['source']
+            or any(not row.get(k) or event.get(k) != row[k] for k in
+                   ('date','event','unit','horizontal_crs','vertical_datum'))
+            or number(row,'vertical_uncertainty') != number(event,'vertical_uncertainty')
+            or any(number(row,k) != v for k,v in event['native_point'].items())):
+        return None
+    return event
+
+
 def documents(ctx,open_source):
     stations={};measurements=[];observations=[];events=[];transfers=[];zeros=[];ties=[];metadata=[]
     by_hash={r['sha256']:r for r in ctx['sources']};seen=set()
@@ -47,7 +80,10 @@ def documents(ctx,open_source):
                     if key=='records' and r.get('category') not in ('terrain','channel','flow','stage','structure'):
                         raise ValueError('Unknown evidence category')
                     if (r.get('date') and not iso(r['date'])) or (key!='records' and not iso(r.get('date'))):raise ValueError('Supply an ISO evidence date')
-                    target.append(dict(r,source=original,declaration=ref['sha256']))
+                    bound = dict(r,source=original,declaration=ref['sha256'])
+                    if key=='events' and r.get('method')=='direct_outlet_survey':
+                        bound['native_point']=surveyed_point(original,open_source)
+                    target.append(bound)
             continue
         features=raw.get('features',[]) if raw.get('type')=='FeatureCollection' else [raw]
         for feature in features or []:
@@ -75,7 +111,7 @@ def documents(ctx,open_source):
     return dict(stations=stations,observations=observations,events=events,transfers=transfers,gage_zeros=zeros,datum_ties=ties,metadata=metadata,measurements=measurements)
 
 
-def controls_for_run(m,config,geometry,fields):
+def controls_for_run(m,config,geometry,fields,notices=None):
     """Check declared gage-derived tailwater at the same gate as manual inputs."""
     end=(geometry.get('boundaries') or {}).get('downstream') or {}
     if geometry.get('model_type')!='river' or end.get('type')!='known_stage':return []
@@ -89,7 +125,14 @@ def controls_for_run(m,config,geometry,fields):
     for p,z in zip(ctx['profiles'],end.get('stages_ft') or []):
         applicable=[r for r in checked['rows'] if r['profile']==p['id'] and r['role']=='boundary']
         if not named and not applicable:continue
-        if not applicable or not finite(z) or any(r['status']!='ELIGIBLE' or (named and r['station']!=named) or abs(r['stage_ft']-z)>.002 for r in applicable):
+        allowed={'ELIGIBLE'}
+        if not named and (m.get('production_scope') or {}).get('purpose') in ('screening','review'):
+            allowed.add('CONDITIONAL_SURVEY')
+        if notices is not None and any(r['status']=='CONDITIONAL_SURVEY' for r in applicable):
+            notices.append(dict(profile=p['id'],rs=checked['end_rs'],
+                en='Outlet stage comes from a direct survey without quantified vertical uncertainty. Use this stage conditionally and obtain the survey accuracy for engineering acceptance.',
+                zh='出口水位来自原位测量，垂直精度尚未量化。本次按条件采用，工程验收前需补测量精度依据。'))
+        if not applicable or not finite(z) or any(r['status'] not in allowed or (named and r['station']!=named) or abs(r['stage_ft']-z)>.002 for r in applicable):
             issues=sorted({v for r in applicable for v in r['issues']}) or ['STAGE_OR_STATION_NOT_SUPPORTED']
             errors.append(dict(code='UNSUPPORTED_GAGE_BOUNDARY',field='g.boundaries.downstream.stages_ft',
                 en=p['id']+' · verify the event, station, datum and imposed stage. '+', '.join(issues),
@@ -120,7 +163,8 @@ def screen(ctx,docs):
         matches=[e for e in docs['events'] if e.get('profile')==row.get('profile')]
         identity={(e.get('event'),e.get('date'),str(e.get('station','')).removeprefix('USGS-')) for e in matches}
         if not control:reasons.append('INDEPENDENT_OR_CONTEXT')
-        if not day or not event or not identifier or identity!={(event,day,identifier)}:reasons.append('EVENT_OR_STATION_UNVERIFIED')
+        direct=direct_event(row,ref,docs['events'])
+        if not day or not event or (not direct and (not identifier or identity!={(event,day,identifier)})):reasons.append('EVENT_OR_STATION_UNVERIFIED')
         if geom.get('flow_regime')=='supercritical':reasons.append('DOWNSTREAM_CONTROL_INACTIVE')
         q=number(row,'flow');qfactor=FLOWS.get(row.get('flow_unit'));flow=(profile or {}).get('flow_cfs')
         if not finite(flow) or q is None or not qfactor or abs(q*qfactor-flow)>max(1e-5,abs(flow)*1e-7):reasons.append('DISCHARGE_MISMATCH')
@@ -156,7 +200,7 @@ def screen(ctx,docs):
                 ll=Transformer.from_crs(row.get('horizontal_crs'),4326,always_xy=True).transform(*xy,errcheck=True)
                 if Geod(ellps='WGS84').inv(*ll,*registered['lonlat'])[2]>5:reasons.append('STATION_LOCATION_MISMATCH')
             except (ValueError,TypeError,RuntimeError):reasons.append('STATION_LOCATION_MISMATCH')
-        else:reasons.append('STATION_LOCATION_UNVERIFIED')
+        elif not direct:reasons.append('STATION_LOCATION_UNVERIFIED')
         stage=z*factor if z is not None and factor else None;transfer=None
         if not end_rs:reasons.append('BOUNDARY_GEOMETRY_UNVERIFIED')
         if issues or not at or at['rs']!=end_rs:
@@ -168,13 +212,16 @@ def screen(ctx,docs):
             else:
                 transfer=valid[0]
                 if stage is not None:stage+=transfer['offset_ft']
+        conditional = bool(direct and direct.get('accept_unquantified_for_screening') is True
+                           and reasons==['UNCERTAINTY_MISSING'] and row.get('vertical_uncertainty') in (None,''))
         rows.append(dict(profile=row.get('profile'),event=event,date=day,station=identifier,role=role,source=ref,datum=source_datum,
+            **({'survey_point_source':direct['source'],'method':'direct_outlet_survey'} if direct else {}),
             observational_uncertainty_ft=u*factor if u is not None and factor else None,
             unit=row.get('unit'),matched_rs=(at or {}).get('rs'),target_rs=end_rs,issues=reasons,transfer=transfer,
-            stage_ft=stage if not reasons else None,status='ELIGIBLE' if not reasons else 'CONTEXT' if not control else 'BLOCKED'))
+            stage_ft=stage if not reasons or conditional else None,status='CONDITIONAL_SURVEY' if conditional else 'ELIGIBLE' if not reasons else 'CONTEXT' if not control else 'BLOCKED'))
     for profile in profiles:
         controls=[r for r in rows if r['profile']==profile and r['role']=='boundary']
         if len({(r['event'],r['date'],r['station'],r['stage_ft']) for r in controls})>1:
             for r in controls:r.update(status='CONFLICT',issues=r['issues']+['CONFLICTING_CONTROLS'],stage_ft=None)
     return dict(end_rs=end_rs,stations=stations,rows=rows,status='CONFLICT' if any(r['status']=='CONFLICT' for r in rows) else
-                'BLOCKED' if any(r['status']=='BLOCKED' for r in rows) else 'ELIGIBLE' if any(r['status']=='ELIGIBLE' for r in rows) else 'NO_BOUNDARY_OBSERVATION')
+                'BLOCKED' if any(r['status']=='BLOCKED' for r in rows) else 'CONDITIONAL_SURVEY' if any(r['status']=='CONDITIONAL_SURVEY' for r in rows) else 'ELIGIBLE' if any(r['status']=='ELIGIBLE' for r in rows) else 'NO_BOUNDARY_OBSERVATION')
