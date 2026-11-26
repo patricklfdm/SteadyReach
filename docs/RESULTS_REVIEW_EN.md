@@ -4,11 +4,20 @@
 
 ### From a result to the next decision
 
-1. Open **Summary → What should I review first?** Up to three actions lead to the affected case, section or comparison. Expand **All project acceptance conditions** for the other items. A decrease in warning count can accompany a large change in stage or overbank conveyance. Read both changes at their respective river stations before selecting an edition.
+1. Open **Summary → What should I review first?** The first three actions lead to the affected sections, observed event or edition comparison. Expand **Other review actions** for the remaining recommendations and **All project acceptance conditions** for the project criteria. The opening report section also identifies locations that warrant action and explains why.
 2. When new records arrive, click **Compare and import returned field records**. Download the worksheet for this run. Fill only the available rows, keeping the supplied station axis, profile order and prior values. Enter elevations in feet in the displayed datum. Use `reported` with an original or `assumed` with the basis. For example, a survey of one inlet can be returned while its outlet stays open. A road or river cross section takes an elevation array in the original station order. A returned downstream stage replaces the normal-depth boundary for the listed profiles.
 3. For an independent river observation, choose **Independent event stage**. Include the named profile, same-event flow, observation location, units, datum and original. A gage height needs the gage zero in the stated vertical datum. Enter the measurement uncertainty only when documented. Preview the differences, confirm the return, check the complete child edition and start the calculation. Both editions remain available for comparison.
 4. In **Hydraulic review → Prepare checks and delivery together**, select a question. Boundary and roughness investigations use adopted ranges for those parameters. You can enter a project stage threshold in feet with its basis and set a maximum number of new native calculations. A budget of zero permits verified reuse. Read the signed maximum, its station and all stations above threshold. A missing range calls for evidence. An exceedance calls for inspection at the affected stations. A result within tolerance closes only the tested range. Spacing and geometry questions retain their own coverage and comparison criteria.
 5. Select the edition for the intended use, open the two packages and check the bilingual recipient guide. The independent observation, supporting original and remaining limitations travel with the selected report. [Worked Dexter example](../examples/dexter_or/README.md)
+
+### When to pause a revision
+
+| What appears in the summary | What to do next |
+|---|---|
+| The left or right overbank share changes sharply at a common section. | Trace the connected flow path on terrain and imagery between neighboring sections. Check road openings and bank positions. If connectivity is uncertain, retain the reference geometry and request a bank-to-high-ground survey. |
+| A boundary test affects sections away from the outlet or inlet. | Open **Review sensitivity**. The card identifies the tested case with the farthest observed exceedance, its peak signed change, and how many sections exceeded the displayed threshold. Check individual sections in the study. Obtain event-matched boundary control before adopting affected levels. |
+| A measured stage is poorly reproduced, or its accuracy is unknown. | Open **Check observed event**. Check the event flow, gage zero, datum transfer and vertical uncertainty before revising the bed or roughness. Use the original project limit when recorded. Reserve a new event for validation if this observation guides tuning. |
+| Warnings fall while the absolute error grows at the same field point. | Open **Compare editions**. The comparison uses survey or field-feedback stages bound to the calculated profiles, matching the event, flow, source, datum, observed level and section center. Retain the parent as a reference at that location. This recommendation leaves edition selection and project acceptance to the engineer. |
 
 [Q100 river sensitivity, grouped issues and operator counts](RIVER_REVIEW_EN.md)
 

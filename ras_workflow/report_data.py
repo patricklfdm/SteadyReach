@@ -158,7 +158,9 @@ def collect(summary_path, comparisons=()):
         river_checks['confidence']=assess(s,rows,reviewed_events,diagnostics,studies,revision)
         if 'events' in river_checks:river_checks['events']=usable(river_checks['events'],s['configuration'].get('production_scope',{}))
     purpose_decision=evaluate(s,reviewed_events,revision)
-    return dict(purpose_decision=purpose_decision, studies=studies, field_feedback=feedback, river_checks=river_checks, revision_comparison=revision,schema_version='readable_report_data_1.0',created_utc=utc(),summary=s,sections=rows,
+    from .review_decisions import site_steps
+    steps=site_steps(s['configuration'].get('production_scope') or {},reviewed_events,studies) if h.get('model_type')=='river' else []
+    return dict(purpose_decision=purpose_decision, review_steps=steps, studies=studies, field_feedback=feedback, river_checks=river_checks, revision_comparison=revision,schema_version='readable_report_data_1.0',created_utc=utc(),summary=s,sections=rows,
         geometry=geometry,map_geometry=map_geometry,geometry_source=geometry_source,raster_source=raster_source,diagnostics=diagnostics,
         language_review=language_review,native_supplement=supplement,comparisons=compared,reference_comparisons=references,native_inputs=native_inputs,native_input_error=native_input_error,
         sources=sources,report_generation_is_solver_run=False)

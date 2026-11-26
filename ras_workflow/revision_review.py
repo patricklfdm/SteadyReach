@@ -49,8 +49,8 @@ def investigation(review, overbanks):
         note_en=f" Native warning count fell by {-delta}." if delta is not None and delta<0 else ''
         note_zh=f"原生警告减少 {-delta} 条。" if note_en else ''
         result.append(dict(kind='overbank_share',profile='Q100',station=r['station'],side=side,
-            en=f"Q100 · RS {r['station']} {side} overbank share {facts}."+note_en+" Verify the flow path between adjacent sections and check bank locations against field evidence before selecting an edition.",
-            zh=f"Q100 · RS {r['station']} {'左' if i==0 else '右'}滩流量占比 {facts}。"+note_zh+"选版前请检查相邻断面间的过流连通性，并对照现场资料复核岸站。"))
+            en=f"Q100 · RS {r['station']} {side} overbank share {facts}."+note_en+" Trace the floodplain path between adjacent sections and check banks and road openings. If continuity remains uncertain, retain the reference geometry and request surveyed sections before editing conveyance again.",
+            zh=f"Q100 · RS {r['station']} {'左' if i==0 else '右'}滩流量占比 {facts}。"+note_zh+"沿相邻断面核查漫滩连通、岸站和道路开口。若仍无法确认，保留参考几何，先补测断面再调整过流范围。"))
     return result
 
 

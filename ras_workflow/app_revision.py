@@ -188,6 +188,26 @@ def compare(m,summary):
     from .revision_review import investigation
     review['investigation']=investigation(review,overbanks)
     review['metrics']=metric_rows(rows)
+    field_sources=[]
+    if current.get('model_type')=='river' and review['warning_delta'] is not None and review['warning_delta']<0:
+        from .survey_events import records
+        from .validation_plan import usable
+        from .review_decisions import residual_regression
+        from .field_results import collect as feedback, verified_observations
+        paired=[]
+        try:
+            for edition in (old,summary):
+                obs,refs=records(edition)
+                extra,extra_refs=feedback(edition)
+                if extra and extra['mode']=='event':
+                    obs.extend(verified_observations(extra))
+                field_sources.extend(refs+extra_refs)
+                # The parent's holdouts define this historical diagnostic. A child's
+                # recalibrated event never acquires a new independent validation role.
+                paired.append(usable(obs,edition['configuration'].get('production_scope') or {}) if edition is old else obs)
+            review['field_regression']=residual_regression(*paired,sections,review['warning_delta'])
+        except (KeyError,OSError,ValueError) as error:
+            review['field_regression_error']=str(error)
     diagnostic_sources=[ref for s,d in ((old,diagnostics['previous']),(summary,diagnostics['current']))
                         if d['status']=='VERIFIED' for ref in (s['hydraulics'].get('diagnostics'),s.get('native_supplement')) if ref]
     return dict(status='COMPARISON_NOT_ACCEPTANCE',parent=parent,rows=rows,cross_sections=sections,profiles=profiles,input_context=input_context,overbank_changes=overbanks,
@@ -195,7 +215,7 @@ def compare(m,summary):
         unmatched_previous_profiles=sorted(a.keys()-new_water.keys()),
         unmatched_current_profiles=sorted(new_water.keys()-a.keys()),
         diagnostics=diagnostics,review=review,
-        sources=[parent['summary'],previous['raw_hdf'],previous['raw_controller'],current['raw_hdf'],current['raw_controller']]+input_context['sources']+diagnostic_sources)
+        sources=[parent['summary'],previous['raw_hdf'],previous['raw_controller'],current['raw_hdf'],current['raw_controller']]+input_context['sources']+diagnostic_sources+field_sources)
 
 
 def _diagnostic_summary(summary):

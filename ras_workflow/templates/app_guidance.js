@@ -159,6 +159,8 @@ function priorityRows(assessment,comparison){
  }
  const errors=(assessment.findings||[]).filter(f=>['OUTPUT_CONSISTENCY','EVIDENCE_GAPS','WARNING_COVERAGE'].includes(f.code));
  for(const f of errors)add(f.code,f.reason.en,f.reason.zh,f.target);
+ if(review?.field_regression){const r=review.field_regression;add(r.code,r.en,r.zh,r.action.tool,r.action);}
+ if(review?.field_regression_error)add('observation-error','Restore the paired observation records before judging the change in field fit.','请先恢复两版可比的观测记录，再判断修订对实测吻合程度的影响。','comparison');
  if(review?.flags?.includes('CHECK_WATER_LEVEL_CHANGE')&&review.maximum_at_verified_center){
   const v=review.maximum_at_verified_center,delta=Number(v.change).toFixed(3);
   let en=v.profile+' · RS '+v.station+' · signed stage change '+delta+' ft.',zh=v.profile+' · RS '+v.station+' · 水位变化 '+delta+' ft。';
@@ -166,6 +168,8 @@ function priorityRows(assessment,comparison){
   if(split){en+=' '+split.en;zh+=' '+split.zh;}
   add('revision-change',en,zh,'comparison');
  }
+ else if(review?.investigation){const split=review.investigation.find(r=>r.kind==='overbank_share');if(split)add('revision-change',split.en,split.zh,'comparison');}
+ for(const r of assessment.review_steps||[])add(r.code,r.en,r.zh,r.action.tool,r.action);
  for(const state of ['exceeded','missing']){
   for(const row of rows.filter(r=>r.state===state&&r.action)){
    const key=row.action.tool;
@@ -181,11 +185,15 @@ function showResultAssessment(overview,a,box=overview){
  if(a.purpose_decision){
   const d=a.purpose_decision, panel=el('section',undefined,'card');overview.append(panel);
   panel.append(el('h3',label(d)),el('p',tr(d.note_en,d.note_zh)));
-  const priorities=priorityRows(a,current.comparison).slice(0,3);
+  const orderedPriorities=priorityRows(a,current.comparison), priorities=orderedPriorities.slice(0,3);
   if(priorities.length){
    const first=el('section');first.id='result-priorities';panel.append(first);
    first.append(el('h3',tr('What should I review first?','现在先处理什么？')));
    for(const row of priorities){const card=el('div');first.append(card);card.append(el('p',label(row)));purposeAction(card,row);}
+   if(orderedPriorities.length>3){
+    const more=details(first,'Other review actions','其他复核动作');
+    for(const row of orderedPriorities.slice(3)){more.append(el('p',label(row)));purposeAction(more,row);}
+   }
   }
   const all=details(panel,'All project acceptance conditions','查看全部用途条件');
   for(const row of d.rows){all.append(el('p',label(row),row.state==='met'?'muted':'warning'));if(!priorities.some(p=>p.action===row.action))purposeAction(all,row);}

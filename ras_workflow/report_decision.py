@@ -13,6 +13,16 @@ def add(document,data,cn):
     s=data['summary'];h=s['hydraulics']
     tr=lambda en,zh:zh if cn else en
     document.add_heading(tr('Scope and decision','用途与复核决定'),2)
+    review=(data.get('revision_comparison') or {}).get('review') or {}
+    steps=[r for r in [review.get('field_regression'),*data.get('review_steps',[])] if r]
+    steps.extend(r for r in review.get('investigation',[]) if r.get('kind')=='overbank_share')
+    if steps:
+        document.add_heading(tr('Where to investigate and when to stop','先查哪里，何时暂停试算'),3)
+        for row in steps:
+            document.add_paragraph(tr(row['en'],row['zh']))
+    if review.get('field_regression_error'):
+        document.add_paragraph(tr('Restore the paired observation records before judging the change in field fit.',
+                                  '请先恢复两版可比的观测记录，再判断修订对实测吻合程度的影响。'))
     decision=data.get('purpose_decision')
     if decision:
         lang='zh' if cn else 'en'
