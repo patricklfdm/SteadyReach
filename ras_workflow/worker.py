@@ -95,6 +95,9 @@ def verify_native(hdf, expected, profiles):
             path=BASE+'/Cross Sections/Additional Variables/Critical Water Surface'
             critical=h[path][:,-1].astype(float).tolist() if path in h else None
             check_known_stages(profiles,attrs[-1]['RS'].decode().strip(),wanted,w[:,-1].astype(float).tolist(),critical)
+        for number, stage_ft in expected.get('imported_downstream_stages_ft', {}).items():
+            index = int(number) - 1
+            check_known_stages([profiles[index]], attrs[-1]['RS'].decode().strip(), [stage_ft], [float(w[index, -1])])
         checks=dict(model_type=expected.get('model_type','culvert'),profile_names=actual_names,profiles_and_flows=True,culvert_groups=len(groups),road_readback=road_check,
             barrels=[int(x['Barrels']) for x in groups],geometry_and_structure=True,no_additional_bridge=True,
             xs_count=len(attrs),roughness='verified' if 'channel_n' in expected or 'manning_by_section' in expected else 'preserved reviewed native input',

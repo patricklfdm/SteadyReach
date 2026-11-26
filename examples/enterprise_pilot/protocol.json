@@ -1,0 +1,147 @@
+{
+  "schema": "steadyreach_pilot_matrix_1",
+  "frozen_before_native_runs": true,
+  "purpose": "Single-workstation screening, operations and handoff. Separate package readiness from hydraulic support and engineering approval.",
+  "selection": {
+    "new_field_reach": "WSP, Washington State Park reach on the Big River, Missouri. Separate site at river km 105.7; earlier Rockford test at km 16.5. February 6, 2019 direct measurement, 41.0 m3/s. Nine parallel surveyed cuts 30 m apart in the straightest interior 240 m corridor determined by XY only. Freeze channel n=0.035 and overbank n=0.065 as conditional trial values. Use observed downstream stage only as the outlet, exclude it from comparisons; use no observed interior stages in geometry, roughness or choice of reach. Diagnostics only; contextual stages already public. Signed residuals and flags to be reported regardless of magnitude.",
+    "new_culvert": "Konkapot River at Main Road, Monterey, Massachusetts. June 2020 public project report, Conceptual Design Alternative 1, 15-ft clear span and 10-ft clear height above streambed. Published Q100 is 1,620 cfs. Reconstruct only a local conditional screening subreach from source sections or from terrain with explicit assumptions. Published modeled stages are not measured validation. Existing dam and footbridge, any unverified submerged sections or terrain differences limit transfer. Keep published figures distinct from field data. Redirect unsupported existing arch geometry if reliable support is absent.",
+    "public_native": "USACE Spring Creek Example 3 twin barrels. Different plan from the bundled multiple-culvert geometry template on the same teaching reach. Separate native-input regression only."
+  },
+  "workloads": [
+    {
+      "id": "case_01",
+      "route": "coordinate",
+      "site": "Midway",
+      "task": "missing inverts"
+    },
+    {
+      "id": "case_02",
+      "route": "coordinate",
+      "site": "Soquel",
+      "task": "off-site relative stage"
+    },
+    {
+      "id": "case_03",
+      "route": "coordinate",
+      "site": "Konkapot",
+      "task": "incomplete site-only opening"
+    },
+    {
+      "id": "case_04",
+      "route": "partial",
+      "site": "Midway",
+      "task": "partial invert field return"
+    },
+    {
+      "id": "case_05",
+      "route": "partial",
+      "site": "Soquel",
+      "task": "incompatible vertical datum"
+    },
+    {
+      "id": "case_06",
+      "route": "partial",
+      "site": "Konkapot",
+      "task": "conceptual alternative inputs"
+    },
+    {
+      "id": "case_07",
+      "route": "survey",
+      "site": "Dexter",
+      "task": "blinded baseline"
+    },
+    {
+      "id": "case_08",
+      "route": "survey",
+      "site": "Dexter",
+      "task": "bound field return"
+    },
+    {
+      "id": "case_09",
+      "route": "survey",
+      "site": "Siletz",
+      "task": "observed interior exceedance"
+    },
+    {
+      "id": "case_10",
+      "route": "survey",
+      "site": "Rockford",
+      "task": "original known event"
+    },
+    {
+      "id": "case_11",
+      "route": "survey",
+      "site": "Washington State Park",
+      "task": "Feb 6 baseline"
+    },
+    {
+      "id": "case_12",
+      "route": "survey",
+      "site": "Washington State Park",
+      "task": "returned interior measurements"
+    },
+    {
+      "id": "case_13",
+      "route": "native",
+      "site": "Spring Creek",
+      "task": "original plan p01"
+    },
+    {
+      "id": "case_14",
+      "route": "native",
+      "site": "Phelps Brook",
+      "task": "original plan p01"
+    },
+    {
+      "id": "case_15",
+      "route": "native",
+      "site": "Phelps Brook",
+      "task": "tampered selected input"
+    },
+    {
+      "id": "case_16",
+      "route": "survey",
+      "site": "Dexter",
+      "task": "offline cache replay"
+    },
+    {
+      "id": "case_17",
+      "route": "survey",
+      "site": "Rockford",
+      "task": "recover after low space"
+    },
+    {
+      "id": "case_18",
+      "route": "survey",
+      "site": "Washington State Park",
+      "task": "offline report and handoff"
+    },
+    {
+      "id": "case_19",
+      "route": "partial",
+      "site": "Midway",
+      "task": "superseding revision"
+    },
+    {
+      "id": "case_20",
+      "route": "survey",
+      "site": "Dexter",
+      "task": "recover pinned delivery from archive"
+    },
+    {"id":"case_21","route":"native","site":"Spring Creek","task":"offline independent replay of three published known-stage profiles"},
+    {"id":"case_22","route":"survey","site":"Siletz","task":"fresh frozen-data replay for transfer"},
+    {"id":"case_23","route":"survey","site":"Rockford","task":"unattended field survey repeat"},
+    {"id":"case_24","route":"partial","site":"Konkapot","task":"independent alternative A repeat"},
+    {"id":"case_25","route":"survey","site":"Washington State Park","task":"independent replay of the same February event with identical assumptions"},
+    {"id":"case_26","route":"partial","site":"Midway","task":"recalculate the selected revision and trace both packages"}
+
+  ],
+  "metrics": {
+    "first_pass": "Only jobs that can compute with the supplied evidence count in the eligible denominator. Report all 26 cases, all seeded blockers, both package scopes and the count of genuinely independent new native runs. Replays at a site are repeated jobs, never independent field validations.",
+    "false_delivery": "Any seeded blocker allowing an inappropriate ready verdict is a false release. Hydraulically conditional handoff stays marked conditional.",
+    "performance": "Compare the same P5 Dexter and Rockford nine-section restore-and-recalculate workloads on the same hardware. Report the sample size, stage and total nearest-rank P95. Investigate >20% increase. Missing comparable stage timing stays unknown.",
+    "storage": "Measure volume-wide free-space and isolated working bytes before and after jobs. Label sampling interval and other concurrent activity.",
+    "human": "Deferred",
+    "cross_machine": "Deferred"
+  }
+}

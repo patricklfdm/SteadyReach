@@ -3,6 +3,7 @@
 Card layouts are those observed in the shipped USACE examples and USGS
 Phelps model. Unsupported layouts stop at inspection, before user approval.
 """
+import math
 import re
 import shutil
 from pathlib import Path
@@ -121,12 +122,21 @@ def _inspect(project, *, selected_plan=None):
         for side,prefix in [('upstream','Up'),('downstream','Dn')]:
             typ=int(card(chunk,prefix+' Type'));bc[side]=dict(type=typ)
             if typ==3:bc[side]['slope']=float(card(chunk,prefix+' Slope'))
-            elif typ!=0:raise ValueError('Importer currently supports normal-depth or unused boundaries; other boundaries are retained only through an existing reviewed recipe')
+            elif typ == 1 and side == 'downstream' and regimes == ['Subcritical Flow']:
+                stage = float(card(chunk, prefix + ' Known WS'))
+                if not math.isfinite(stage):
+                    raise ValueError('Known downstream stage must be finite')
+                bc[side]['stage_ft'] = stage
+            elif typ != 0:
+                raise ValueError('Unsupported steady boundary. A known stage is supported at the downstream end of a subcritical plan.')
         boundaries.append(bc)
     if [v['profile_number'] for v in boundaries]!=list(range(1,count+1)):raise ValueError('Boundary profile identities differ')
     expected=dict(groups=groups,xs_count=len(sections),xs_stations=[v['rs'] for v in sections],road_width_ft=float(deck[1]),
         road_min_ft=min(v[1] for rows in roads.values() for v in rows),us_xs_rs=station[ci-1],ds_xs_rs=station[ci+1],structure_rs=station[ci],
         road_profiles=roads,weir_minimum_override_ft=float(deck[6]) if deck[6] else None)
+    known = {str(row['profile_number']): row['downstream']['stage_ft'] for row in boundaries if row['downstream']['type'] == 1}
+    if known:
+        expected['imported_downstream_stages_ft'] = known
     return dict(selected_plan=current,previous_current_plan=previous,plan_title=card(pl,'Plan Title'),
         regime=regimes[0],river_reach=river,sections=sections,boundaries=boundaries,expected_native=expected,
         profiles=[dict(id=n.strip(),flow_cfs=q) for n,q in zip(names,flows)],

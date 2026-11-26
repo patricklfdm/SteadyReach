@@ -16,6 +16,19 @@ from ras_workflow.release_metrics import cohort,metrics
 
 def run(args):
     root=REPO/'status/release_checks'/unique_id();root.mkdir(parents=True)
+    if getattr(args,'p10',False):
+        from pilot_metrics import sample_storage,storage_summary,write_summary
+        with sample_storage(REPO,root):
+            status=run_checks(args,root)
+        state=read(root/'release.json')
+        state['storage']=storage_summary(root/'storage_samples.jsonl')
+        state['pilot_reports']=write_summary(root,state['storage'])
+        save(root/'release.json',state)
+        return status
+    return run_checks(args,root)
+
+
+def run_checks(args,root):
     result=dict(scope='same-machine',release_gate='P2' if args.p2 else 'standard',tests={},projects=[],field_packet=None,engineering_approval='PENDING')
     def execute(name,cmd):
         start=time.monotonic()
@@ -155,6 +168,17 @@ def run(args):
                 result['p9']=dict(status='PASSED',receipt='p9/release.json',sha256=sha(receipt))
             except (OSError,ValueError,KeyError,TypeError,RuntimeError,subprocess.SubprocessError) as exc:
                 result['p9']=dict(status='FAILED',error=str(exc));passed=False
+    if getattr(args,'p10',False):
+        result['release_gate']='P10'
+        result['p10']=dict(status='NOT_RUN')
+        if passed:
+            from p10_release import run as pilot
+            try:
+                evidence=pilot(root,args.p10_sources.resolve(),args.p10_baseline.resolve())
+                result['p10']=dict(status='PASSED',receipt='p10/release.json',sha256=sha(evidence))
+            except (OSError,ValueError,KeyError,TypeError,RuntimeError,subprocess.SubprocessError) as exc:
+                result['p10']=dict(status='FAILED',error=str(exc))
+                passed=False
     result['status']='SOFTWARE_CHECKS_PASSED' if passed else 'NEEDS_ATTENTION'
     save(root/'release.json',result);print(root/'release.json');return 0 if passed else 1
 
@@ -180,7 +204,13 @@ if __name__=='__main__':
     p.add_argument('--p8',action='store_true',help='Require P7 plus formal station review, offline return and audience-scoped handoff')
     p.add_argument('--p9',action='store_true',help='Require the P8 checks, signed offline installs, migration and queue recovery')
     p.add_argument('--p9-fixture',type=Path,help='Local admin distribution and legacy-edition fixture JSON')
+    p.add_argument('--p10',action='store_true',help='Require P9 and the fixed 26-job pilot on the same host')
+    p.add_argument('--p10-sources',type=Path,help='Directory of frozen pilot originals')
+    p.add_argument('--p10-baseline',type=Path,help='Original P5 same-host timing receipt')
     args=p.parse_args()
+    if args.p10:
+        if not args.p10_sources or not args.p10_baseline:p.error('--p10 requires --p10-sources and --p10-baseline')
+        args.p9=True
     if args.p9:
         if not args.p9_fixture:p.error('--p9 requires --p9-fixture')
         args.p8=True

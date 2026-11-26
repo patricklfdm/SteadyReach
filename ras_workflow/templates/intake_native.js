@@ -29,7 +29,7 @@ function nativeInputCard(screen){
  const details=el('details');details.append(el('summary',tr('Section banks, Manning n, road and boundaries','断面岸站、糙率、路顶及边界')));
  const table=(headers,rows)=>{const t=el('table'),h=el('tr');for(const v of headers)h.append(el('th',v));t.append(h);for(const row of rows){const r=el('tr');for(const v of row)r.append(el('td',String(v)));t.append(r);}return t;};
  details.append(table([tr('River station','河站'),tr('Left / right bank (ft)','左 / 右岸站 (ft)'),tr('Manning n by start station','各起始站点的 Manning n'),tr('Ineffective areas','无效流区')],p.sections.map(s=>[s.rs,s.banks.join(' / '),s.manning.map(n=>n[0]+': '+n[1]).join('; '),s.ineffective_areas?tr('Present','有'):tr('None','无')])));
- const boundary=b=>b.type===0?tr('Unused for this regime','本流态不使用'):b.type===3?tr('Normal depth; slope = ','正常水深；坡度 = ')+b.slope:tr('Type ','类型 ')+b.type;
+ const boundary=b=>b.type===0?tr('Unused for this regime','本流态不使用'):b.type===3?tr('Normal depth; slope = ','正常水深；坡度 = ')+b.slope:b.type===1?tr('Known stage ','已知水位 ')+b.stage_ft+' ft':tr('Type ','类型 ')+b.type;
  details.append(el('h3',tr('Profile boundaries','各工况边界')),table([tr('Profile','工况'),tr('Upstream','上游'),tr('Downstream','下游')],p.boundaries.map(b=>[p.profiles[b.profile_number-1]?.id||b.profile_number,boundary(b.upstream),boundary(b.downstream)])));
  for(const [side,rows] of Object.entries(p.expected_native.road_profiles)){const z=rows.map(v=>v[1]);details.append(el('p',(side==='upstream'?tr('Upstream road','上游侧路顶'):tr('Downstream road','下游侧路顶'))+': '+rows.length+tr(' points; elevation ',' 个点；高程 ')+Math.min(...z)+'–'+Math.max(...z)+' ft'));}
  details.append(el('p',tr('Road width: ','道路宽度：')+p.expected_native.road_width_ft+' ft'));

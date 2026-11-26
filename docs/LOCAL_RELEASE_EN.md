@@ -122,3 +122,5 @@ Run `python scripts/release_check.py --p3 --packet "<frozen review folder>" --mi
 For a repeatable offline export, add `--transfer-imagery "<folder containing Aerial.tif and acquisition.json>"`. The Siletz run uses the hashed NAIP originals in the frozen review folder.
 
 For deeply nested input snapshots, `Complete/Evidence/input_paths.json` maps the original relative path to the shorter copy under `Complete/Evidence/InputFiles` with its byte length and SHA-256. If a Windows browser cannot read a long path, copy the whole handoff folder near the drive root and check that copy.
+
+[Enterprise pilot scope and operator guide](PILOT_EN.md)

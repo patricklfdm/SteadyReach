@@ -1,0 +1,15 @@
+{
+  "wsp_imagery/Aerial.tif": "195f9c90f6a0533582504ade45283e7914f20a61d436f5b03eedd6ea54f868f6",
+  "wsp_imagery/acquisition.json": "6b40765326d925d568171a6c6522ad951147100669c73010c6955a1cefc44b42",
+  "konkapot_imagery/Aerial.tif": "2dc97ce812d83cf61095070198f99281159766fffbd4c05d4f6f8345284ca6c7",
+  "konkapot_imagery/acquisition.json": "a8118703e2b3c2e72740587c4d2dfc0687729a5753acaaeb53209cf2dbde7962",
+  "Konkapot_terrain_source.json": "fc046a262f416fe3d8a920cf5a6822f1ac01c666dfb07bda856b43619b590445",
+  "BigRiverMO_dem.xml": "b43bb07e8f7b2fcd32fd996b8d8e7746249acfacbdcb79e3d93ba9f2f532d0c5",
+  "BigRiverMO_WaterSurfProf.xml": "5b94c89e3728051c5873d8ad3e19a7c2115353fa171239760718e5f04b33ed55",
+  "BigRiverMO_WSP_20190206_WaterSurfProf.csv": "e42eb1c66e576e614f86f2a579abb6a5834770009e7471f9cee25531b752876e",
+  "BigRiverMO_WSP_dem.tif.zip": "3cbe016927170c3bb79342abc02e3b956af1dc044c24b525e5367b0323fb0bf5",
+  "table3.txt": "078a37bf153edecd53e1de1547c2e2e486c95fbfa7164e7ea6da9fc07ccb6118",
+  "Konkapot_conceptual_report.pdf": "e8bdf8b193942fa3267efc749e80e1f591a1830e57c87d3fc01181af791ce3b4",
+  "Konkapot_USGS_terrain.tif": "6991160cf9512b0dd4a4a8cf0f5dd14cea874be4e101559880524febc815f2da",
+  "USACE_example_projects_702.zip": "5f6da1e2b718cb86cca35a18bc7ddd9f77be775ad6f706d4456fdf9db22411d0"
+}

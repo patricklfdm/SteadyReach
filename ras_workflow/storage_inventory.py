@@ -44,9 +44,16 @@ def regular_tree(folder,locks=None):
 def references(root,folder,files):
     targets=set()
     known=set()
+    # All paths originate in regular_tree. That traversal checks every member for links.
+    # Compare path components using host filesystem case semantics and a separator.
+    root_prefix=os.path.join(os.path.normcase(str(root)),'')
+    own_prefix=os.path.join(os.path.normcase(str(folder)),'')
+    depth=len(folder.parts)
     for path in files:
-        parts=path.relative_to(folder).parts
-        if path.suffix.lower()!='.json' or any(p in SKIP_METADATA or p.startswith('Handoff_') for p in parts):
+        if path.suffix.lower()!='.json':
+            continue
+        parts=path.parts[depth:]
+        if any(p in SKIP_METADATA or p.startswith('Handoff_') for p in parts):
             continue
         for raw in set(PATH_VALUE.findall(path.read_bytes())):
             value=json.loads(b'"'+raw+b'"').replace('\\','/')
@@ -54,10 +61,13 @@ def references(root,folder,files):
             if (base,value) in known:continue
             known.add((base,value))
             if any(c in value for c in '\x00\r\n*?"<>|') or len(value)>2048:continue
-            ref=Path(os.path.abspath(base/value))
-            if ref.is_relative_to(folder) or not ref.is_relative_to(root):continue
-            parts=ref.relative_to(root).parts
-            if len(parts)>=2 and parts[0] in PREFIXES and parts[:2] not in (('status','app'),('status','edition_storage')):
+            absolute=os.path.abspath(os.path.join(base,value))
+            normalized=os.path.normcase(absolute)
+            if not normalized.startswith(root_prefix) or normalized.startswith(own_prefix) or normalized==own_prefix[:-1]:
+                continue
+            ref=Path(absolute)
+            relative=ref.parts[len(root.parts):]
+            if len(relative)>=2 and relative[0] in PREFIXES and relative[:2] not in (('status','app'),('status','edition_storage')):
                 targets.add(ref)
     return targets
 

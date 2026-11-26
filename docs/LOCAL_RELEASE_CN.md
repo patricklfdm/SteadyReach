@@ -122,3 +122,5 @@ P4 发版检查包含完整 P3。沿用 P3 命令，增加 `--p4 --dexter-survey
 要在离线条件下稳定复核另一地点的地图，增加 `--transfer-imagery "<同时含 Aerial.tif 和 acquisition.json 的目录>"`。Siletz 使用冻结复核资料中已校验的 NAIP 原件。
 
 完整包把层级过深的输入快照存到 `Complete/Evidence/InputFiles`，在 `Complete/Evidence/input_paths.json` 记录原相对路径、包内位置、字节数和 SHA-256。若收件人在 Windows 上遇到长路径读取失败，可将整个交接目录复制到盘符根目录附近后重新校验。
+
+[企业试点范围与操作说明](PILOT_CN.md)
