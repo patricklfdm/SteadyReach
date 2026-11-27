@@ -1,22 +1,29 @@
-# Installation quick reference
+# Getting started with SteadyReach
 
 [English](GETTING_STARTED_EN.md) | [简体中文](GETTING_STARTED_CN.md)
 
-Before choosing the boundary or requesting field records, open **Hydraulic evidence and offline replay → Inspect hydraulic evidence** to check gaps, station applicability and source editions. A field return reopens the affected inputs for confirmation. [Evidence intake and returns](HYDRAULIC_INTAKE_EN.md)
+On Windows, extract the repository to a writable local folder and double-click **start_workflow.cmd**. Keep its console open. The browser opens the project page. [Installation and prerequisites](WINDOWS_SETUP_EN.md) · [User manual](USER_GUIDE_EN.md)
 
-To see disk usage, keep an edition online, or recover working files while keeping its published packages, use **Saved projects → Manage this version → Storage and recovery by edition**. [Edition storage and recovery](LOCAL_RELEASE_EN.md#archive-and-recover-one-edition)
-
-**Agree the delivery conditions before computing.** Open **Intended use and flow paths → Delivery conditions for this purpose**. Choose screening, comparison or engineering review, then enable the conditions. Select the modeled profile, any required dry section ends and source-backed geometry. For a culvert you can specify minimum road margin. For a river you can name a registered independent event, an optional observation RS and the maximum absolute stage error in feet. Give the project basis for numerical limits. The confirmation screen records these choices with that run.
-
-After computing, read **Delivery assessment** and the opening decision in either full report. A failed limit lists what to revise. A missing observation or survey lists what to obtain. Use an editable revision to change model inputs or agreed conditions, recompute and choose the working edition before exporting its recipient guide. An open case can be transferred for diagnostic review. Meeting the listed checks supports the agreed purpose within the reported hydraulic QA limits. Engineering sign-off remains with the responsible engineer.
+1. Choose **Coordinates / partial information** for a site pin, photos, PDFs or loose survey sheets. The preparation page searches public sources and accepts your files. Choose **Georeferenced river survey package** if you have `survey.json` and its listed files, or **Existing HEC-RAS model** for supported steady culvert files.
+2. On **Prepare model**, follow the first suggested action. Check the river or crossing, sections and proposed banks on the map. Review estimated inputs or obtain measurements where the source is missing.
+3. Choose **Review calculation inputs**. **View checks to resolve** takes you to the blockers. After correcting inputs, save and refresh the list. When checks pass, **Go to final confirmation** takes you to the checkbox. Confirm and run when you have reviewed the assumptions.
+4. On **Summary**, check the intended use and the limiting result. Open **Hydraulic review** for the evidence or an editable revision. Open **Reports and maps** for the PDFs and delivery folders.
 
 On your first visit, open **Try a worked river example**. Choose a Manning’s n, inspect the water-level change at RS 516 for the same East Fork flood, and open the practice report to compare all four sections. The exercise uses verified HEC-RAS outputs and keeps your selection in this browser tab. When starting your own location, choose the site type. Use the river option for a reach between bridges whose structures are excluded. Use the culvert option to calculate barrel flow, headwater or road overflow.
 
+## Site data, checks and revisions
+
+Before choosing the boundary or requesting field records, open **Hydraulic evidence and offline replay → Inspect hydraulic evidence** to check gaps, station applicability and source editions. A field return reopens the affected inputs for confirmation. [Evidence intake and returns](HYDRAULIC_INTAKE_EN.md)
+
+**Agree the delivery conditions before computing.** Open **Intended use and flow paths → Delivery conditions for this purpose**. Choose screening, comparison or engineering review, then enable the conditions. Select the modeled profile, any required dry section ends and source-backed geometry. For a culvert you can specify minimum road margin. For a river you can name a registered independent event, an optional observation RS and the maximum absolute stage error in feet. Give the project basis for numerical limits. The confirmation screen records these choices with that run.
+
 Open **Start a new project** or expand an entry under **Saved projects** to continue a previous version. Use coordinates for a new site, a survey package when you already have `survey.json` with its referenced files, or native input for a supported existing culvert model. At final confirmation, check the separate HEC-RAS, report and GIS rows. A mapped project checks its projected terrain crop before solving. If GIS needs attention, correct the terrain or choose hydraulic results and reports only, then confirm the revised outputs. Native geometry can require a second extent check after compilation. After preparation, choose **Review calculation inputs** when the required data are ready. To inspect a draft, expand the site data, geometry or hydraulic parameters. Check the assumptions and delivery options before authorizing a run.
 
-After the run, **Summary** shows flow, water levels and the first issue requiring judgment. **Hydraulic review** contains the warnings and scenario studies. **Reports and maps** opens the PDFs, QGIS and both delivery packages. On the home page, expand a site's entry to find the original and its revisions. Version management is inside each entry.
+After computing, read **Delivery assessment** and the opening decision in either full report. A failed limit lists what to revise. A missing observation or survey lists what to obtain. Use an editable revision to change model inputs or agreed conditions, recompute and choose the working edition before exporting its recipient guide. An open case can be transferred for diagnostic review. Meeting the listed checks supports the agreed purpose within the reported hydraulic QA limits. Engineering sign-off remains with the responsible engineer.
 
-**Drafts and adoption.** The current browser tab retains the project form and pending selections across language changes, navigation and refresh. **Save all selected changes** or **Review calculation inputs** applies the selected parameters and banks to the model. Direct parameter edits still autosave. After refreshing, reselect any attachments listed by name. Field feedback is drafted per flood event and written to the project with **Save and preview field feedback**.
+To see disk usage, keep an edition online, or recover working files while keeping its published packages, use **Saved projects → Manage this version → Storage and recovery by edition**. [Edition storage and recovery](LOCAL_RELEASE_EN.md#archive-and-recover-one-edition)
+
+**Drafts and adoption.** The current browser tab retains the project form and pending selections across language changes, navigation and refresh. **Save all selected changes** or **Review calculation inputs** applies the selected parameters and banks to the model. Direct parameter edits still autosave. After refreshing, reselect any attachments listed by name. Field feedback is drafted per flood event and written to the project with **Save and preview field feedback**. A selected survey folder stays available when switching languages in the tab. After reloading, choose the folder again.
 
 **Revisions and batch recovery.** Use the revision number, purpose, local time and latest task to identify an edition. When a follow-up batch stops, check the delivery status, saved cases and retry scope alongside the existing hydraulic result. Resuming the batch may invoke HEC-RAS for cases that still require calculation.
 
@@ -27,8 +34,6 @@ For a reach without structures, choose **River reach (bridges excluded)** and fo
 On a new site, import the available material and check the crossing and elevation context, then choose **Prepare an automatic draft**. Review highlighted uncertainty and the complete parameter list before **Confirm and run HEC-RAS**.
 
 For a site without an existing model, use [consolidated preparation](AUTOMATION_EN.md) to avoid repeated parameter transcription and separate bank confirmations.
-
-Use the [Windows installation guide](WINDOWS_SETUP_EN.md), then the [user manual](USER_GUIDE_EN.md). Daily entry: `start_workflow.cmd`.
 
 After the run, see [Results, revisions and sensitivity](RESULTS_REVIEW_EN.md) for optional native output completion, one-click QGIS preview and safe recalculation.
 

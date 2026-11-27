@@ -7,7 +7,14 @@ function parameterInput(parent,f){
  const kind=f.kind==='choice'?'select':['array','matrix'].includes(f.kind)?'textarea':['number','integer'].includes(f.kind)?'number':'text';
  const options=f.kind==='choice'?[['','Not supplied','尚未填写'],...f.options.map(o=>[o,o,o])]:null;
  const value=Object.hasOwn(edited,f.key)?edited[f.key]:f.value;
- const input=field(box,'input-'+f.key,f.label.en+(f.unit?' · '+f.unit:''),f.label.zh+(f.unit?' · '+f.unit:''),format(value,f.kind),kind,options,v=>{try{edited[f.key]=parseInput(f,v);input.setCustomValidity('');mark();if(finalReview){finalReview=null;invalidateReview();}else if(f.kind==='choice'){task(async()=>{await save();await open(current.id);document.getElementById('input-'+f.key)?.scrollIntoView({block:'center'});},tr('Update dependent fields','更新相关参数'));}}catch(e){input.setCustomValidity(e.message);notify(tr('Invalid input: ','输入无效：')+e.message,true);}});
+ const input=field(box,'input-'+f.key,f.label.en+(f.unit?' · '+f.unit:''),f.label.zh+(f.unit?' · '+f.unit:''),format(value,f.kind),kind,options,v=>{
+  const reviewing=!!document.getElementById('confirm-run');
+  if(reviewing){finalReview=null;invalidateReview();}
+  try{
+   edited[f.key]=parseInput(f,v);input.setCustomValidity('');mark();
+   if(!reviewing&&f.kind==='choice')task(async()=>{await save();await open(current.id);document.getElementById('input-'+f.key)?.scrollIntoView({block:'center'});},tr('Update dependent fields','更新相关参数'));
+  }catch(e){input.setCustomValidity(e.message);notify(tr('Invalid input: ','输入无效：')+e.message,true);}
+ });
  const tag=el('span',f.missing&&!f.required?tr('Optional · not supplied','可选 · 未填写'):originName(f.evidence_class),f.evidence_class==='assumed'||f.evidence_class==='inferred'?'tag assumption':'tag');box.append(tag);
  const info=details(box,'Source / change input origin','来源／修改数据类别');const origin=field(info,'origin-'+f.key,'Input origin (optional to change)','数据类别（可修改）',['reported','assumed'].includes(f.evidence_class)?f.evidence_class:'user_entered','select',[
  ['user_entered','User entry / correction','用户填写／修改'],['reported','Copied from supplied material','从资料中转录'],['assumed','Estimate / assumption','估计／假设']],v=>{classEdits[f.key]=v;edited[f.key]=parseInput(f,input.value);tag.textContent=originName(v);tag.className=v==='assumed'?'tag assumption':'tag';mark();if(finalReview){finalReview=null;invalidateReview();}});
@@ -27,7 +34,11 @@ function parameterInput(parent,f){
  }
  return input;
 }
-function invalidateReview(){const b=$('#confirm-run');if(b)b.disabled=true;const c=$('#confirm-parameters');if(c)c.checked=false;const state=$('#review-state');if(state)state.textContent=tr('Edited. Save and refresh this list before confirming.','参数已修改。请保存并刷新清单后再确认。');}
+function invalidateReview(){
+ const b=$('#confirm-run');if(b)b.disabled=true;
+ const c=$('#confirm-parameters');if(c){c.checked=false;c.disabled=true;}
+ const state=$('#review-state');if(state)state.textContent=tr('Edited. Save and refresh this list before confirming.','参数已修改。请保存并刷新清单后再确认。');
+}
 function parameterTable(parent,fields){
  const wrap=el('div',undefined,'scroll'),t=el('table',undefined,'parameter-table'),head=el('tr');for(const title of [tr('Parameter','参数'),tr('Value','数值'),tr('Origin','来源')])head.append(el('th',title));t.append(head);
  for(const f of fields){const row=el('tr'),value=el('td'),text=format(f.value,f.kind);row.append(el('td',tr(f.label.en,f.label.zh)+(f.unit?' · '+f.unit:'')),value,el('td',f.missing&&!f.required?tr('Optional · not supplied','可选 · 未填写'):originName(f.evidence_class)));
@@ -83,6 +94,12 @@ function renderFinalReview(){
  el('p',tr('Nothing has been solved yet. Edit any field; changes cancel this confirmation. No name, reason, or signature is required.','尚未开始求解。可以修改任意字段，修改后本次确认会失效。无需姓名、理由或签名。')),
  button('← Back to preparation','← 返回准备页面',async()=>{await save();finalReview=null;await open(current.id);}));
  const state=el('p',review.ready?tr('Technical input checks passed. Assumptions remain conditional.','必要输入检查通过。假设仍属于条件性输入。'):tr('Fill the items below, then refresh this list. The solver is paused.','请补齐下列项目并刷新清单，求解器处于等待状态。'),review.ready?'status':'warning');state.id='review-state';screen.append(state);
+ if(review.ready||review.errors.length){
+  const jump=el('button',review.ready?tr('Go to final confirmation','前往最终确认'):tr('View checks to resolve','查看待处理检查')+' ('+review.errors.length+')');
+  jump.type='button';jump.id='review-next';jump.setAttribute('aria-controls',review.ready?'review-confirmation':'review-issues');
+  jump.onclick=()=>{const target=document.getElementById(review.ready?(dirty||!finalReview?.ready?'review-confirmation':'confirm-parameters'):'review-issues');target.focus({preventScroll:true});target.scrollIntoView({block:'center'});};
+  screen.append(jump);
+ }
  const scope=review.inputs?.production_scope||{}, c=scope.criteria;
  const conditions=details(screen,'Delivery conditions for this run','本次运算的交付条件',false);
  conditions.append(el('p',c?tr('These conditions are tied to this edition.','以下条件随本版输入冻结。'):tr('Conditions have not been agreed. Set them in project preparation to assess delivery.','尚未约定条件，可返回项目准备页面设置。')));
@@ -123,7 +140,18 @@ function renderFinalReview(){
    panel.scrollIntoView({block:'start'});
   }));
  }
- if(review.errors.length){const ul=el('ul');const remaining=review.errors.length>8?details(screen,'All remaining input checks','其余输入检查',false):null;const restList=el('ul');remaining?.append(restList);for(const [index,e] of review.errors.entries()){const f=review.fields.find(f=>f.key===e.field),li=el('li',typeof e==='string'?e:(f?tr(f.label.en,f.label.zh)+': ':'')+tr(e.en,e.zh));if(f)li.append(button('Go to field','定位此项',async()=>{const input=document.getElementById('input-'+f.key);let parent=input?.parentElement;while(parent){if(parent.tagName==='DETAILS')parent.open=true;parent=parent.parentElement;}input?.scrollIntoView({block:'center'});input?.focus();}));if(index<8)ul.append(li);else restList.append(li);}screen.append(ul);}
+ if(review.errors.length){
+  const heading=el('h2',tr('Checks to resolve','待处理检查'));heading.id='review-issues';heading.tabIndex=-1;screen.append(heading);
+  const list=el('ul');screen.append(list);
+  const restList=el('ul');
+  if(review.errors.length>8)details(screen,'Show '+(review.errors.length-8)+' more checks','展开其余 '+(review.errors.length-8)+' 项检查').append(restList);
+  for(const [index,e] of review.errors.entries()){
+   const f=review.fields.find(field=>field.key===e.field);
+   const li=el('li',typeof e==='string'?e:(f?tr(f.label.en,f.label.zh)+' · ':'')+tr(e.en,e.zh));
+   if(f)li.append(button('Go to field','定位此项',()=>revealParameter(f.key)));
+   (index<8?list:restList).append(li);
+  }
+ }
  if(review.refreshed_equivalent_fields?.length)screen.append(el('p',review.refreshed_equivalent_fields.length+tr(' unchanged derived values were rebound to the current geometry. Values, ranges and sources are listed below.',' 项数值及依据均相同的推导值已自动关联当前几何。请在下方核对数值、范围和来源。'),'status'));
  renderDependencyReview(screen,review);
  const context=details(screen,'Project, map settings and source files','项目、地图设置和来源文件',false);table(context,[tr('Setting','设置'),tr('Value','数值')],[[tr('Coordinates','坐标'),JSON.stringify(review.inputs.configuration?.location||current.native?.location||'see input source')],['GIS / Mapper',String(review.inputs.gis)],...Object.entries(review.inputs.metadata)]);table(context,[tr('Source','来源'), 'SHA-256'],review.inputs.sources.map(s=>[s.path,s.sha256]));
@@ -142,8 +170,9 @@ function renderFinalReview(){
   parameterTable(fields,review.fields);
   const edit=details(fields,'Edit values (all fields)','修改数值（全部字段）');for(const f of review.fields)parameterInput(edit,{...f,parameter_candidates:[]});
  }
- const actions=el('div',undefined,'card confirm-card');screen.append(actions);actions.append(button('Save and refresh parameter list','保存并刷新参数清单',showFinalReview));
+ const actions=el('div',undefined,'card confirm-card');actions.id='review-confirmation';actions.tabIndex=-1;screen.append(actions);actions.append(button('Save and refresh parameter list','保存并刷新参数清单',showFinalReview));
  const consent=check(actions,scoped?'I reviewed the field return and affected inputs and want to run this revision.':'I have checked these inputs, including estimates, bank positions and limitations, and want to run this conditional calculation.',scoped?'我已核对本次回传及受影响参数，确认运行此修订。':'我已核对这些输入、估计值、左右岸及限制，确认采用它们进行本次条件性计算。',false,v=>{const b=$('#confirm-run');if(b)b.disabled=!v||!finalReview?.ready||dirty;});consent.id='confirm-parameters';
+ consent.disabled=!review.ready;
  const run=button('Confirm and run HEC-RAS','确认并运行 HEC-RAS',async()=>{if(!consent.checked||dirty||!finalReview?.ready)throw Error(tr('Refresh and confirm the current parameters first.','请先刷新并确认当前参数。'));await api('start',{id:current.id,revision:current.revision,start:true,confirmed:true,review_token:finalReview.review_token});finalReview=null;await open(current.id);},'primary');run.id='confirm-run';run.disabled=true;actions.append(run);
 }
 function renderDependencyReview(parent,review){

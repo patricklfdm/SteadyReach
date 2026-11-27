@@ -20,7 +20,7 @@ function rememberForm(key,inputs){
   if(input.type==='file'){
    const k=key+'/'+input.id;
    if(input.files.length){draftFiles.set(k,input.files);values[input.id]=Array.from(input.files,f=>f.name);}
-   else values[input.id]=input.dataset.reselect?JSON.parse(input.dataset.reselect):[];
+   else {draftFiles.delete(k);values[input.id]=input.dataset.reselect?JSON.parse(input.dataset.reselect):[];}
   }else values[input.id]=input.type==='checkbox'?input.checked:input.value;
  }
  writeDraft(key,values);
@@ -127,6 +127,7 @@ async function home(){
  const lat=field(coords,'latitude','Latitude (WGS84)','纬度（WGS84）','','number');
  const lon=field(coords,'longitude','Longitude (WGS84)','经度（WGS84）','','number');
  const q=field(form,'flow','Discharge (cfs), if known','流量（cfs，已知时填写）','','number');
+ const fileHint=el('p','', 'warning'),surveyInputs=el('div');card.append(fileHint,surveyInputs);
  const more=details(card,'Optional roughness','可选：已知糙率');
  field(more,'channel_n','Channel Manning n','主槽糙率','','number');
  field(more,'overbank_n','Overbank Manning n','两侧漫滩糙率','','number');
@@ -141,33 +142,43 @@ async function home(){
  const intent=scopeFields(card,{},true);
  const key=draftKey('new-project','home');
  const surveyed=el('label',undefined,'field');surveyed.hidden=true;
- surveyed.append(el('span',tr('Select survey.json, the GeoTIFF and all sources listed in the manifest. Location, flow and roughness are read from the package.','选择 survey.json、GeoTIFF 和清单所列全部来源文件。坐标、流量及糙率取自资料包。')));
- const measured=el('input');measured.type='file';measured.multiple=true;measured.id='survey-files';const selection=el('small');selection.setAttribute('aria-live','polite');const selectionInfo=()=>{const files=Array.from(measured.files);const size=(files.reduce((sum,f)=>sum+f.size,0)/1e6).toFixed(1);selection.textContent=[files.length+tr(' files',' 个文件')+' · '+size+' MB',tr('15 MB per file / 50 MB total','单文件 15 MB／总计 50 MB'),surveyLimit(files)].filter(Boolean).join(' · ');};measured.onchange=selectionInfo;surveyed.append(measured,selection);card.append(surveyed);
+ surveyed.append(el('span',tr('Or select survey.json, the GeoTIFF and each listed source file.','也可逐份选择 survey.json、GeoTIFF 及清单所列来源文件。')));
+ const measured=el('input');measured.type='file';measured.multiple=true;measured.id='survey-files';const selection=el('small');selection.setAttribute('aria-live','polite');const selectionInfo=()=>{const files=Array.from(measured.files);const size=(files.reduce((sum,f)=>sum+f.size,0)/1e6).toFixed(1);selection.textContent=[files.length+tr(' files',' 个文件')+' · '+size+' MB',tr('15 MB per file / 50 MB total','单文件 15 MB／总计 50 MB'),surveyLimit(files)].filter(Boolean).join(' · ');};surveyed.append(measured,selection);
  const folderInput=el('input');folderInput.type='file';folderInput.webkitdirectory=true;folderInput.multiple=true;folderInput.id='survey-directory';
- const folderLabel=el('label',tr('Or select the survey folder','也可选择实测资料目录'));folderLabel.append(folderInput);
+ const folderLabel=el('label',tr('Select the survey folder','选择实测资料目录'),'field');folderLabel.append(folderInput);
  const preview=el('div');preview.setAttribute('aria-live','polite');
- let selectedSurvey=[],surveyEpoch=0;
- measured.onchange=()=>{surveyEpoch++;folderInput.value='';selectedSurvey=[];preview.replaceChildren();selectionInfo();};
- folderInput.onchange=async()=>{
-  const epoch=++surveyEpoch;measured.value='';selectedSurvey=[];preview.replaceChildren();
-  try{
-   const files=Array.from(folderInput.files), manifests=files.filter(f=>f.name.toLowerCase()==='survey.json');
+ let surveyEpoch=0;
+ async function surveyFiles(){
+   if(!folderInput.files.length)return Array.from(measured.files);
+   const files=Array.from(folderInput.files),manifests=files.filter(f=>f.name.toLowerCase()==='survey.json');
    if(manifests.length!==1)throw Error(tr('Choose a folder containing exactly one survey.json. Found ','请选择只含一份 survey.json 的目录，找到 ')+manifests.length);
    const manifest=JSON.parse(await manifests[0].text()),chosen=[manifests[0]];
+   if(!Array.isArray(manifest.files))throw Error(tr('survey.json must list the source files.','survey.json 需要列出来源文件。'));
    for(const ref of manifest.files){
     const matches=files.filter(f=>f.name===ref.name);
     if(matches.length!==1)throw Error(ref.name+' · '+tr('matching files','个同名文件')+' '+matches.length);
     chosen.push(matches[0]);
    }
+   return chosen;
+ }
+ measured.onchange=()=>{surveyEpoch++;folderInput.value='';delete folderInput.dataset.reselect;preview.replaceChildren();selectionInfo();};
+ async function describeFolder(){
+  const epoch=++surveyEpoch;preview.replaceChildren();
+  try{
+   const chosen=await surveyFiles();
    if(epoch!==surveyEpoch)return;
    const issue=surveyLimit(chosen);if(issue)throw Error(issue);
-   selectedSurvey=chosen;selection.textContent=chosen.map(f=>f.name).join(' · ');
+   selection.textContent=chosen.map(f=>f.name).join(' · ');
   }catch(error){if(epoch===surveyEpoch)selection.textContent=error.message;}
- };
+ }
+ folderInput.onchange=()=>{measured.value='';delete measured.dataset.reselect;void describeFolder();};
  const inspectSurvey=button('Inspect survey sources and event criteria','检查测量原件与事件条件',async()=>{
-  const epoch=surveyEpoch,files=selectedSurvey.length?selectedSurvey:Array.from(measured.files);
+  const epoch=surveyEpoch,files=await surveyFiles();
+  if(!files.length)inputError(folderInput,tr('Select the survey folder or its source files first.','请先选择实测资料目录或所需的来源文件。'));
+  const limit=surveyLimit(files);if(limit)inputError(folderInput.files.length?folderInput:measured,limit);
   const info=await api('survey-preview',{survey_files:await encodeFiles(files)});
   if(epoch!==surveyEpoch)return;
+  notify(tr('Survey package checked. ','实测资料包检查通过。')+info.files.length+tr(' source files · ',' 份来源文件 · ')+info.profiles.join(', '),false,'success');
   preview.replaceChildren(el('p',info.profiles.join(' · ')+' | '+info.files.join(', ')));
   if(!info.criteria){preview.append(el('p',tr('Set project-specific limits under Intended use if available.','可在“用途和过流路径”下填写本项目有依据的误差限值。')));return;}
   const c=info.criteria;preview.append(el('p',c.event+' · RS '+c.rs+' · '+c.basis),
@@ -178,29 +189,31 @@ async function home(){
     notify(tr('Event conditions applied. Review them before computing.','事件条件已采用，可在运算前核对或修改。'));
    }));
  });
- card.append(folderLabel,inspectSurvey,preview);
+ surveyInputs.append(folderLabel,surveyed,inspectSurvey,preview);
+ const routeHint=el('small');routeHint.id='route-help';route.parentElement.append(routeHint);route.setAttribute('aria-describedby',routeHint.id);
  let locationScope='';modelType.onchange=()=>{if(route.value==='coordinates')locationScope=modelType.value;};
  route.onchange=()=>{const useSurvey=route.value==='survey';native.hidden=route.value!=='native';surveyed.hidden=!useSurvey;
+ routeHint.textContent=useSurvey?tr('Use a folder with survey.json and its listed files. For loose survey sheets, start with coordinates and import the sheets during preparation.','已有 survey.json 清单及配套文件时选此项。只有测量表或图纸时，请选“坐标／部分资料”，建项后导入。'):route.value==='native'?tr('For a steady-flow culvert project, select its project, plan, geometry and flow files together. Coordinates are optional for inspection.','适用于已有的涵洞恒定流工程。一起选择工程、计划、几何和流量文件。检查模型时坐标可留空。'):tr('Choose the site type and enter a name and both coordinates. The workflow looks for terrain and source data. You can add drawings and measurements next.','选择地点类型，填写名称和经纬度。程序会查找地形和公开资料，下一步可补图纸和测量表。');
  archived.parentElement.hidden=route.value!=='coordinates';archivedSurvey.parentElement.hidden=!useSurvey;
- for(const part of [folderLabel,inspectSurvey,preview])part.hidden=!useSurvey;
+ surveyInputs.hidden=!useSurvey;
  for(const input of [lat,lon,q,$('#channel_n'),$('#overbank_n'),modelType])input.disabled=useSurvey;
- for(const input of [lat,lon,q,modelType])input.parentElement.hidden=useSurvey;
+ for(const input of [lat,lon,q])input.parentElement.hidden=useSurvey;
+ modelType.parentElement.hidden=route.value!=='coordinates';
  coords.hidden=useSurvey;more.parentElement.hidden=useSurvey;modelType.disabled=useSurvey||route.value==='native';
  if(useSurvey)modelType.value='river';else if(route.value==='native')modelType.value='culvert';else modelType.value=locationScope;};
  const gis=check(card,'Also prepare GIS / Mapper / exhibits','同时准备 GIS、Mapper 和展示图',true,()=>{});gis.id='new-gis';
  const inputs=Array.from(card.querySelectorAll('input,select,textarea'));
  restoreForm(key,inputs);if(route.value==='coordinates')locationScope=modelType.value;route.onchange();$('#project-purpose').dispatchEvent(new Event('change'));$('#project-flow-paths').dispatchEvent(new Event('change'));selectionInfo();
- const fileHint=el('p','', 'warning');card.append(fileHint);
+ if(folderInput.files.length)void describeFolder();
  function updateForm(){
   title.required=true;modelType.required=route.value==='coordinates';lat.required=lon.required=route.value==='coordinates';
-  measured.required=route.value==='survey';
+  measured.required=route.value==='survey'&&!folderInput.files.length;
   for(const input of [title,modelType,lat,lon,measured])input.setAttribute('aria-required',String(input.required));
-  const file=route.value==='survey'?measured:route.value==='native'?$('#native-files'):null;
+  const file=route.value==='survey'?(folderInput.dataset.reselect?folderInput:measured):route.value==='native'?$('#native-files'):null;
   fileHint.hidden=!file?.dataset.reselect;
-  if(!fileHint.hidden)fileHint.textContent=tr('Reselect these files after reload: ','刷新后请重新选择这些文件：')+JSON.parse(file.dataset.reselect).join(', ');
+  if(!fileHint.hidden)fileHint.textContent=file===folderInput?tr('Reselect your survey folder after reloading the page.','页面刷新后，请重新选择刚才的实测资料目录。'):tr('Reselect these files after reload: ','刷新后请重新选择这些文件：')+JSON.parse(file.dataset.reselect).join(', ');
  }
  updateForm();observeForm(key,inputs,updateForm);
- card.append(el('small',tr('Enter a project name. For a location start, also choose the site type and enter both coordinates.','请填写项目名称。按坐标建项时，还需选择地点类型、填写经纬度。')));
  card.append(button('Prepare project','准备项目',async()=>{
  if(!title.value.trim())inputError(title,tr('Enter a project name.','请填写项目名称。'));
  if(route.value!=='survey'){
@@ -212,7 +225,7 @@ async function home(){
   if(route.value==='native'&&!$('#native-files').files.length&&!$('#native-path').value.trim())inputError($('#native-files'),tr('Select native inputs or enter a project path.','请选择原生输入文件或填写工程路径。'));
  }
  let body={production_scope:intent(),model_type:modelType.value,route:route.value,title:title.value,latitude:lat.value,longitude:lon.value,flow_cfs:q.value,channel_n:$('#channel_n').value,overbank_n:$('#overbank_n').value,gis:gis.checked};if(route.value==='native')Object.assign(body,await nativeBody());
- if(route.value==='survey'){const selected=selectedSurvey.length?selectedSurvey:Array.from(measured.files);if(!selected.length)inputError(measured,tr('Select the survey files or a folder with one complete manifest.','请选择测量文件或含一份完整清单的目录。'));const limit=surveyLimit(selected);if(limit)inputError(measured,limit);body.survey_files=await encodeFiles(selected);}
+ if(route.value==='survey'){const selected=await surveyFiles();if(!selected.length)inputError(folderInput.dataset.reselect?folderInput:measured,tr('Select the survey files or a folder with one complete manifest.','请选择测量文件或含一份完整清单的目录。'));const limit=surveyLimit(selected);if(limit)inputError(folderInput.files.length?folderInput:measured,limit);body.survey_files=await encodeFiles(selected);}
  if(route.value==='coordinates'&&rasters.files.length){const issue=surveyLimit(rasters.files);if(issue)inputError(rasters,issue);body.local_rasters=await encodeFiles(rasters.files);body.dem_vertical_unit=demUnit.value;body.dem_vertical_datum=demDatum.value;}
  if(route.value==='survey'&&surveyAerial.files.length){const issue=surveyLimit(surveyAerial.files);if(issue)inputError(surveyAerial,issue);body.local_rasters=await encodeFiles(surveyAerial.files);}
  const r=await api('create',body);forgetForm(key,inputs);await open(r.id);if(r.preparation_waiting)notify(tr('Project saved. Another job is running. When it finishes, choose Prepare terrain and inputs in this project.','项目已保存。另一任务正在运行，待其结束后可在此项目继续准备地形和输入。'));},'primary'));}
@@ -261,11 +274,14 @@ function versionCaption(project,originalTitle,sequence){
  const time=Number.isFinite(date.getTime())?' · '+date.toLocaleString(lang==='zh'?'zh-CN':'en-US'):'';
  return (sequence?tr('Revision ','修订 ')+sequence:tr('Revision','修订'))+' · '+purpose+time;
 }
+function familyTitle(group){
+ return group.original?.title||group.versions.at(-1)?.title?.replace(/(?:\s*·\s*(?:revision|QA draft))+$/gi,'').trim()||group.id;
+}
 function indexEditions(projects,deleted){
  const numbers=new Map();
  for(const family of savedProjectGroups([...projects,...deleted],[])){
   const editions=family.versions.filter(p=>p.id!==family.id).sort((a,b)=>(a.created_utc||'').localeCompare(b.created_utc||'')||a.id.localeCompare(b.id));
-  editions.forEach((p,i)=>{numbers.set(p.id,i+1);writeDraft(draftKey('edition',p.id),{rootTitle:family.original?.title||family.id,sequence:i+1});});
+  editions.forEach((p,i)=>{numbers.set(p.id,i+1);writeDraft(draftKey('edition',p.id),{rootTitle:familyTitle(family),sequence:i+1});});
  }
  return numbers;
 }
@@ -277,10 +293,10 @@ async function renderSavedProjects(parent){
  const deleted=data.deleted_projects||[];
  const sequenceById=indexEditions(available,deleted);
  for(const group of savedProjectGroups(available,deleted)){
-  const title=group.original?.title??group.id;
+  const title=familyTitle(group);
   const count=group.versions.length;
   const entry=details(parent,title+' · '+count+(count===1?' version':' versions'),title+' · '+count+' 个版本',false,'project-group/'+group.id);
-  if(!group.original)entry.append(el('p',tr('The original project is unavailable.','本机缺少原项目记录。'),'muted'));
+  if(!group.original)entry.append(el('p',tr('Original project unavailable · ','本机缺少原项目记录 · ')+group.id,'muted'));
   else if(group.versions[0].id!==group.id)entry.append(el('p',tr('The original project is in Deleted projects.','原项目已移至回收站。'),'muted'));
   for(const project of group.versions){
    const sequence=sequenceById.get(project.id);
@@ -363,9 +379,11 @@ function render(){const m=current;rememberView({project:m.id,page:'model'});shel
  screen.append(el('div',undefined,'progress'),el('p',tr('Working locally. You may close this browser tab; keep the launcher running.','正在本机处理。可关闭浏览器标签页，请保留启动程序。')),region);
  const record=el('pre');record.id='task-record';details(screen,'Technical details','技术详情').append(record);updateProcessing(m);return;
  }
- if(!m.native_review&&typeof renderIntakeEvidence==='function')renderIntakeEvidence(screen,m);
  if(m.results&&m.status!=='ABANDONED'){renderResults(screen);return;}
- renderTaskRecovery(screen,m);if(m.calculation_recovery&&m.calculation_recovery.mode!=='REVIEW_INPUTS'&&!m.results?.run_id)return;if(m.feedback_spec&&(m.job?.status==='FAILED'||!m.results)){screen.append(button('Resume confirmed field check','继续已确认的现场情景',async()=>{await api('field/resume',{id:m.id,confirmed:true});await open(m.id);}));if(!m.results)return;}if(m.summary){screen.append(el('p',tr('L0 · The saved calculation evidence is unavailable. Restore the matching summary before reviewing results.','L0 · 保存的计算证据不可用。请恢复对应的汇总文件后再复核结果。'),'warning'));}if(m.feasibility?.state==='outside'){renderFeasibility(screen,m.feasibility,true);return;}
+ const nextStep=el('div');screen.append(nextStep);
+ renderTaskRecovery(nextStep,m);
+ if(!m.native_review&&typeof renderIntakeEvidence==='function')renderIntakeEvidence(screen,m);
+ if(m.calculation_recovery&&m.calculation_recovery.mode!=='REVIEW_INPUTS'&&!m.results?.run_id)return;if(m.feedback_spec&&(m.job?.status==='FAILED'||!m.results)){screen.append(button('Resume confirmed field check','继续已确认的现场情景',async()=>{await api('field/resume',{id:m.id,confirmed:true});await open(m.id);}));if(!m.results)return;}if(m.summary){screen.append(el('p',tr('L0 · The saved calculation evidence is unavailable. Restore the matching summary before reviewing results.','L0 · 保存的计算证据不可用。请恢复对应的汇总文件后再复核结果。'),'warning'));}if(m.feasibility?.state==='outside'){renderFeasibility(screen,m.feasibility,true);return;}
  if(m.intake&&!m.native&&m.model_type!=='river'){
   if(m.parent_revision)renderRoadSupplement(screen,m.intake.fields);
   else if(!m.intake.section_count)renderCrossingIntake(screen,m.intake.fields);
@@ -374,10 +392,10 @@ function render(){const m=current;rememberView({project:m.id,page:'model'});shel
  const ready=m.missing.length===0&&(m.native||m.intake?.section_count)&&!preparation.length;
  const reviewInputs=()=>button('Review calculation inputs →','核对运算输入 →',()=>showFinalReview(), 'primary');
  if(ready){
-  const summary=el('section',undefined,'card');screen.append(summary);
+  const summary=el('section',undefined,'card');nextStep.append(summary);
   summary.append(el('h2',tr('Ready for input review','可以核对运算输入')),el('p',m.native?tr('The selected native plan is available for review.','所选原生计划已就绪。'):m.intake.section_count+tr(' cross sections prepared. Check the flow, boundaries and assumptions before running.',' 条断面已就绪。开算前请核对流量、边界和假设。')),reviewInputs());
  }
- renderPreparationActions(screen,preparation);
+ renderPreparationActions(nextStep,preparation);
  const requests=siteEvidenceRequests(m.intake?.fields||[]);
  if(requests.length&&!m.native){
   const panel=details(screen,'Request site records or measurements','集中索取现场资料与补测');
@@ -393,7 +411,15 @@ function render(){const m=current;rememberView({project:m.id,page:'model'});shel
 function mark(){dirty=true;clearTimeout(saveTimer);notify(tr('Unsaved changes','更改尚未保存'),false,'caution');saveTimer=setTimeout(async()=>{if(busy){mark();return;}try{await save();notify(tr('Saved locally','已自动保存到本机'),false,'success');}catch(e){notify(e.message,true);}},1100);}
 async function save(){
  if(!current)return;
- const invalid=document.querySelector('input:invalid,textarea:invalid');if(invalid){invalid.reportValidity();throw Error(tr('Correct the highlighted value before continuing','请先修正标出的无效值'));}
+ // Task buttons temporarily disable inputs. Their custom errors still belong to the draft.
+ const invalid=document.querySelector('input:invalid,textarea:invalid')||
+  Array.from(document.querySelectorAll('.parameter input,.parameter textarea')).find(input=>input.validity.customError||input.validity.badInput);
+ if(invalid){
+  const error=Error(tr('Correct the highlighted value before continuing.','请先修正标出的无效值。'));error.input=invalid;
+  for(let p=invalid.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;
+  if(!invalid.disabled)invalid.reportValidity();
+  throw error;
+ }
  clearTimeout(saveTimer);if(savePromise){await savePromise;if(dirty)return save();return;}if(!current||!dirty)return;
  const id=current.id,metadata={...metaEdits},values={...edited},classes={...classEdits},gis=current.gis;metaEdits={};edited={};classEdits={};dirty=false;
  savePromise=(async()=>{try{const result=await api('save',{id,revision:current.revision,metadata,values:Object.keys(values).length?values:undefined,classes,gis});if(current?.id===id){const pendingGis=current.gis;current=result;if(dirty)current.gis=pendingGis;}}catch(e){metaEdits={...metadata,...metaEdits};edited={...values,...edited};classEdits={...classes,...classEdits};dirty=true;throw e;}finally{savePromise=null;}})();
@@ -481,6 +507,7 @@ function renderResults(screen){
  renderTaskRecovery(recovery,current);
  if(current.feedback_spec&&current.job?.status==='FAILED')recovery.append(button('Resume confirmed field check','继续已确认的现场情景',async()=>{await api('field/resume',{id:current.id,confirmed:true});await open(current.id);}));
  if(!recovery.childElementCount)recovery.parentElement.hidden=true;
+ if(!current.native_review&&typeof renderIntakeEvidence==='function')renderIntakeEvidence(pages.review,current);
  const summary=el('section',undefined,'result-summary');overview.append(summary);
  const profiles=r.metrics||[];
  const values=profiles.map(p=>p.flow_cfs).filter(Number.isFinite);

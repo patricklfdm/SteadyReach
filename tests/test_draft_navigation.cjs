@@ -37,6 +37,27 @@ test('changing language never invokes a pending adoption callback; explicit adop
   assert.equal(vm.runInContext('commits',context),1);
 });
 
+test('switching file selectors discards the old selection for subsequent renders',()=>{
+  const {context}=screen(),folder={...element(),type:'file',id:'folder',files:[{name:'survey.json'}]};
+  const manual={...element(),type:'file',id:'files',files:[]};
+  context.rememberForm('intake',[folder,manual]);
+  folder.files=[];manual.files=[{name:'replacement.tif'}];context.rememberForm('intake',[folder,manual]);
+  const newFolder={...folder,files:[]},newManual={...manual,files:[]};
+  context.restoreForm('intake',[newFolder,newManual]);
+  assert.equal(newFolder.files.length,0);
+  assert.equal(newManual.files[0].name,'replacement.tif');
+});
+
+test('an invalid model value blocks saving even while the task disables inputs',async()=>{
+  const {context}=screen(),input={...element(),disabled:true,validity:{customError:true}},panel={tagName:'DETAILS',open:false};
+  input.parentElement=panel;
+  context.document.querySelector=()=>null;
+  context.document.querySelectorAll=()=>[input];
+  vm.runInContext("current={id:'A'};dirty=true;",context);
+  await assert.rejects(context.save(),err=>err.input===input);
+  assert.equal(panel.open,true);
+});
+
 
 test('batch recovery lists the baseline and the individual retries using the saved journal',()=>{
   const {context}=screen(),shown=[];

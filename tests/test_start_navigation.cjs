@@ -25,16 +25,22 @@ test('Reload restores the saved screen and never submits a calculation', async (
 });
 const home = source.slice(source.indexOf('async function home()'), source.indexOf('function savedProjectGroups'));
 function node() {
-  return {children: [],files:[],dataset:{},querySelectorAll(){return [];},setAttribute(){}, append(...items) { this.children.push(...items); }};
+  return {children: [],files:[],dataset:{},querySelectorAll(){return [];},setAttribute(){},replaceChildren(...items){this.children=items;},append(...items) { this.children.push(...items); }};
 }
 
 for (const hasProjects of [false,true]) {
   test('Home route selection with saved projects = '+hasProjects, async () => {
     const fields = {'#screen': node()};
     const panels = {};
+    const buttons={},elements=[],requests=[];
+    const survey=[{name:'survey.json',text:async()=>JSON.stringify({files:[{name:'river.tif'}]})},{name:'river.tif'},{name:'unlisted.txt'}];
     const context = {
-      poll: null, clearTimeout() {}, rememberView() {}, shell() {}, tr: a => a, el: node, button: node, check:node,
-      renderPractice(){},viewRequest:0,pendingChanges:new Map(),draftKey:()=>'',restoreForm(){},observeForm(){},Event:class{},surveyLimit:()=>'',
+      poll: null, clearTimeout() {}, rememberView() {}, shell() {}, notify(){}, tr: a => a,
+      el(){const e=node();elements.push(e);return e;},button(en,zh,fn){buttons[en]=fn;return node();},check:node,
+      renderPractice(){},viewRequest:0,pendingChanges:new Map(),draftKey:()=>'',restoreForm(){
+        if(hasProjects)elements.find(e=>e.id==='survey-directory').files=survey;
+      },observeForm(){},Event:class{},surveyLimit:()=>'',
+      encodeFiles:async files=>Array.from(files,f=>f.name),api:async(route,body)=>{requests.push(body);return {profiles:['event'],files:body.survey_files};},
       $: id => fields[id], nativeSelector(){fields['#native-files']=node();}, scopeFields(){for(const id of ['#project-flow-paths','#project-purpose'])fields[id]={dispatchEvent(){}};}, renderSavedProjects(saved) {
         saved.querySelector = () => hasProjects;
       },
@@ -56,6 +62,10 @@ for (const hasProjects of [false,true]) {
     route.value='survey';route.onchange();
     assert.equal(fields['#latitude'].parentElement.hidden,true);
     assert.equal(scope.value,'river');
+    if(hasProjects){
+      await buttons['Inspect survey sources and event criteria']();
+      assert.deepEqual(requests.at(-1).survey_files,['survey.json','river.tif']);
+    }
     route.value='native';route.onchange();
     assert.equal(scope.disabled,true);
     assert.equal(scope.value,'culvert');
