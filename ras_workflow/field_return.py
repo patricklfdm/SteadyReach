@@ -103,7 +103,12 @@ def perform(key,body,action):
     document=body.get('document');data=record_bytes(document);mode=body.get('mode')
     summary_hash=m['summary']['sha256']
     if mode=='geometry':
-        rows=changes(content,fields,g,summary_hash,data is not None)
+        from .field_packet import evidence
+        values,metadata=evidence(key,content,summary_hash)
+        rows=changes(values,fields,g,summary_hash,data is not None)
+        for row in rows:
+            if row['key'] in metadata:
+                row['survey']=metadata[row['key']]
         if any(r['key']=='g.boundaries.downstream.stages_ft' for r in rows) and g['boundaries']['downstream']['type']!='known_stage':
             rows.append(dict(key='g.boundaries.downstream.type',location='Downstream boundary',before=g['boundaries']['downstream']['type'],
                 after='known_stage',unit='',datum='',classification='model_setting',source='Apply the returned downstream stage for each listed profile.'))
@@ -112,7 +117,10 @@ def perform(key,body,action):
         prospective=copy.deepcopy(g)
         for change in rows:
             _set(prospective,change['key'].split('.')[1:],change['after'])
+        revised=retire_sampling(prospective,rows)
         introduced=set(geometry_errors(prospective))-set(geometry_errors(g))
+        # New profiles need a fresh bank review in the child before computing.
+        introduced.difference_update(f'XS {i}: terrain/bank review missing or stale' for i in revised)
         if introduced:
             raise ValueError('Returned geometry / 回传几何：'+' · '.join(sorted(introduced)))
     elif mode=='observation' and g.get('model_type')=='river' and data is not None:
@@ -158,6 +166,22 @@ def perform(key,body,action):
         return dict(id=create_draft(m,{},field_return=dict(id=child,mode=mode,rows=rows,sources=sources))['id'])
 
 
+def retire_sampling(geometry,rows):
+    revised=[]
+    for row in rows:
+        parts=row['key'].split('.')
+        if len(parts)!=4 or parts[1]!='cross_sections' or parts[3]!='elevation_ft' or row['before']==row['after']:
+            continue
+        index=int(parts[2])
+        section=geometry['cross_sections'][index]
+        stamp=section.pop('terrain_sampling',None)
+        if stamp:
+            section.setdefault('previous_terrain_sampling',[]).append(stamp)
+        section['returned_profile']=dict(source=row['source'],classification=row['classification'],survey=row.get('survey'))
+        revised.append(index)
+    return revised
+
+
 def apply_to_draft(config,draft,returned):
     refs=returned['sources']
     draft['uploads']=list(draft.get('uploads',[]))+refs
@@ -169,4 +193,6 @@ def apply_to_draft(config,draft,returned):
     for r in returned['rows']:
         source=refs[-1];basis=r['source']
         candidate=dict(value=r['after'],evidence_class=r['classification'],source=source,datum=r['datum'],basis=basis,sources=refs)
+        if r.get('survey'):
+            candidate.update(r['survey'])
         draft['answers'][r['key']]=dict(value=r['after'],evidence_class=r['classification'],basis=basis,confirmed=False,candidate_record=candidate)

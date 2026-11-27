@@ -190,6 +190,21 @@ function renderFieldReturn(parent){
   ...(current.model_type==='river'?[['observation','Independent event stage','独立事件实测水位']]:[])]);
  box.append(el('p',tr('Keep unused rows blank. For a surveyed profile, enter elevations at the listed stations. Reported values require the original record.','无新资料的行留空。实测剖面按表内站距顺序填写高程。填报实测值时请附原始记录。')));
  const identity={id:current.id,summary_hash:current.summary.sha256};
+ if(current.model_type==='river'){
+  const packet=details(box,'Request historical surveys at specific locations','按位置索取历史测量原件');
+  packet.append(el('p',tr('Choose the period represented by your model. The packet maps the surveyed controls, diagnostic sections and an interior search area.','填写模型需要代表的日期范围。补测包在地图上标出待联测控制点、诊断断面和河段内部水位搜索位置。')));
+  const first=field(packet,'survey-start','Earliest applicable survey date','可用测量最早日期','','date');
+  const last=field(packet,'survey-end','Latest applicable survey date','可用测量最晚日期','','date');
+  const extra=field(packet,'survey-rs','Other transects (RS, comma-separated, optional)','额外测线（RS，以逗号分隔，可留空）','');
+  const message=el('p');message.setAttribute('aria-live','polite');
+  packet.append(button('Download mapped field request','下载带定位的补测包',async()=>{
+   const data=await api('survey-packet',{...identity,start:first.value,end:last.value,stations:extra.value});
+   const bytes=Uint8Array.from(atob(data.content),c=>c.charCodeAt(0));
+   const a=el('a'),url=URL.createObjectURL(new Blob([bytes],{type:'application/zip'}));
+   a.href=url;a.download=data.file;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+   message.textContent=tr('Download prepared','下载已准备')+' · '+data.file+' · '+data.count+' '+tr('mapped requests','处定位请求');
+  }),message);
+ }
  box.append(button('Download field-return worksheet','下载本版补测表',async()=>{
   let csv;
   if(mode.value==='observation')csv='event,date,role,kind,x,y,horizontal_crs,elevation,unit,vertical_datum,gage_zero,flow,flow_unit,vertical_uncertainty,horizontal_uncertainty_m,source,profile\r\n';

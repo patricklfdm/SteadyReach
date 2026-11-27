@@ -147,6 +147,15 @@ async function main() {
       const {nodeId}=await send('DOM.querySelector',{nodeId:root.nodeId,selector});
       await send('DOM.setFileInputFiles',{nodeId,files});
     }
+    if(mode==='mapped-field-request'){
+      await click('#result-tab-review');
+      await fieldValue('survey-start',input.start);
+      await fieldValue('survey-end',input.end);
+      await fieldValue('survey-rs',input.stations||'');
+      await buttonByName('Download mapped field request');
+      await until("document.querySelector('#qa-tool-return').textContent.includes('Download prepared')");
+      console.log(project);return;
+    }
     if(mode==='factor-trial'){
       await click('#result-tab-review');
       await until('!!document.querySelector("#qa-factor")');

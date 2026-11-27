@@ -1,5 +1,11 @@
 # 本机生产复核
 
+## P18 按位置索取历史测量原件
+
+计算完成后进入 **复核 → 导回补测并核对变化 → 按位置索取历史测量原件**。填可用测量日期范围，如需额外测线可填 RS，下载 ZIP。GeoJSON 使用 WGS84 经纬度，各要素列明模型高程基准。模型中心仅标明搜索位置，原始水位应按真实坐标及时间导入。回传剖面时填写包内 CSV，附原件、实测日期、方法和精度（ft，未知留空）。水位则走原始测量表入口。回传进入独立修订；历史时段以外的调查另立对应年代版本。
+
+在包含 P17 实算的隔离目录运行 `python scripts/p18_release.py --p17 <P17 release.json> --p11-workspace <P11 工作区> --p11-receipt <P11 release.json> --measurements <Washington 水位原表>`。回执保留两河段补测包、Washington 的实际原始行及影响的水力参数。
+
 [English](LOCAL_RELEASE_EN.md) · [生产化开发顺序与验收标准](PRODUCTION_ROADMAP_CN.md)
 
 ## P17 单因素水位误差诊断

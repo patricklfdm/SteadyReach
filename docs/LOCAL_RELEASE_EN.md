@@ -1,5 +1,11 @@
 # Local production review
 
+## P18 location-specific field requests
+
+In a calculated river edition open **Review → Import a field return and compare changes → Request historical surveys at specific locations**. Set the applicable survey dates and optionally add RS identifiers. Download the ZIP. Take the GeoJSON to the field in WGS84 and use the model datum listed on each feature for reported elevations. Model centers identify search areas. Always use the actual coordinates and time of a recovered water level. For profiles return the included CSV, original record, date, method and uncertainty in ft (leave unknown accuracy blank). Import the original stage table separately. A return goes into a new revision. An out-of-period survey needs a separately dated edition.
+
+Run `python scripts/p18_release.py --p17 <P17 release.json> --p11-workspace <archived P11 checkout> --p11-receipt <P11 release.json> --measurements <Washington field CSV>` in the isolated checkout containing the P17 jobs. The receipt records the Floyd and Turkey packets, the actual Washington source row and the affected hydraulic inputs.
+
 [简体中文](LOCAL_RELEASE_CN.md) · [Production priorities and acceptance criteria](PRODUCTION_ROADMAP_EN.md)
 
 ## P17 single-factor stage diagnostics

@@ -43,7 +43,9 @@ def create_draft(parent,body,preparation_task=None,field_return=None):
     folder=core.folder(key2);folder.mkdir(parents=True)
     c=copy.deepcopy(c);g=copy.deepcopy(g)
     if field_return:
-        from .field_return import apply_to_draft
+        from .field_return import apply_to_draft,retire_sampling
+        if field_return['mode']=='geometry':
+            retire_sampling(g,field_return['rows'])
         apply_to_draft(c,d,field_return)
     c['delivery']=delivery_settings
     for field in ('raster','provenance'):
@@ -85,6 +87,7 @@ def create_draft(parent,body,preparation_task=None,field_return=None):
             summary=parent['summary'],parent_project=parent['project'])
     m.pop('compiled_checkpoint',None)
     m.pop('latest_question',None)
+    m.pop('latest_factor_diagnostic',None)
     m.pop('recovered_task',None)
     for field in ('summary','engine_state','active_project','latest_reports','latest_delivery','previous_delivery','run_confirmation','pending_review','task','run_scenario','exports_need_refresh','pending_study','active_study','latest_study','latest_spacing','latest_coverage','latest_coverage_exports','automatic_preparation','automatic_options','exit_code','sensitivity_suggestions','latest_reports_binding','pending_check_batch','active_check_batch','latest_check_batch','automatic_next_review',
                   'latest_geometry_comparison','latest_warning_study','river_observations','latest_observed_event','observed_event_history','native_export_attempt','assessment_area','extent_review','extent_decision'):
