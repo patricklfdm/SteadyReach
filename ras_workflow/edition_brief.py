@@ -4,7 +4,7 @@ from .river_observations import holdout_stages
 from .validation_plan import usable
 
 
-def build(summary, decision, events):
+def build(summary, decision, events, steps=(), comparison=None):
     h = summary['hydraulics']
     config = summary.get('configuration') or {}
     scope = config.get('production_scope') or {}
@@ -53,9 +53,11 @@ def build(summary, decision, events):
 
     def row(en_title, zh_title, en, zh):
         return dict(heading=dict(en=en_title, zh=zh_title), en=en, zh=zh)
+    from .method_review import conclusions
     return dict(run_id=h.get('run_id'), rows=[
         row('Edition use', '本版用途', answer[0]+' '+decision['en'], answer[1]+decision['zh']),
         row('Flow and field coverage', '流量和实测范围', ' '.join((flows[0],field[0])), flows[1]+field[1]),
         row('Key assumption or limitation', '关键假设或限制', *condition),
         row('Who should follow up', '下一步由谁补什么', *follow),
+        *conclusions(summary,steps,comparison),
     ])

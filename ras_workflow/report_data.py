@@ -161,7 +161,7 @@ def collect(summary_path, comparisons=()):
     from .review_decisions import site_steps
     steps=site_steps(s['configuration'].get('production_scope') or {},reviewed_events,studies) if h.get('model_type')=='river' else []
     from .edition_brief import build as edition_brief
-    return dict(purpose_decision=purpose_decision, edition_brief=edition_brief(s,purpose_decision,reviewed_events), review_steps=steps, studies=studies, field_feedback=feedback, river_checks=river_checks, revision_comparison=revision,schema_version='readable_report_data_1.0',created_utc=utc(),summary=s,sections=rows,
+    return dict(purpose_decision=purpose_decision, edition_brief=edition_brief(s,purpose_decision,reviewed_events,steps,revision), review_steps=steps, studies=studies, field_feedback=feedback, river_checks=river_checks, revision_comparison=revision,schema_version='readable_report_data_1.0',created_utc=utc(),summary=s,sections=rows,
         geometry=geometry,map_geometry=map_geometry,geometry_source=geometry_source,raster_source=raster_source,diagnostics=diagnostics,
         language_review=language_review,native_supplement=supplement,comparisons=compared,reference_comparisons=references,native_inputs=native_inputs,native_input_error=native_input_error,
         sources=sources,report_generation_is_solver_run=False)

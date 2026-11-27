@@ -41,6 +41,10 @@ def load(config_path):
 
 def dependencies(path, c):
     files = [path]
+    hydrograph=(c.get('production_scope') or {}).get('event_hydrograph')
+    if hydrograph:
+        from .method_review import validate
+        files.append(safe_path(ROOT,validate(hydrograph)['source']['path']))
     returned=c.get('field_return_sources',[])
     if returned:
         if not intact(returned):

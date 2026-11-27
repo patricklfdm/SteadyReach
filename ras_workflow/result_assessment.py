@@ -389,7 +389,7 @@ def assess(model, path, summary, diagnostics, studies, guidance):
     from .purpose_acceptance import evaluate
     origin=summary.get('configuration',{}).get('revision_origin')
     comparison=None
-    if origin and summary['configuration'].get('production_scope',{}).get('purpose')=='comparison':
+    if origin:
         from .app_revision import compare
         try:
             comparison=compare(dict(parent_revision=origin),summary)
@@ -397,9 +397,9 @@ def assess(model, path, summary, diagnostics, studies, guidance):
             comparison=None
     result['purpose_decision']=evaluate(summary,reviewed_events,comparison)
     from .edition_brief import build as edition_brief
-    result['edition_brief']=edition_brief(summary,result['purpose_decision'],reviewed_events)
     from .review_decisions import site_steps
     result['review_steps']=site_steps(scope,reviewed_events,studies) if is_river else []
+    result['edition_brief']=edition_brief(summary,result['purpose_decision'],reviewed_events,result['review_steps'],comparison)
     result['evidence_hash'] = digest({k:v for k,v in result.items() if k!='assessed_utc'})
     return result
 

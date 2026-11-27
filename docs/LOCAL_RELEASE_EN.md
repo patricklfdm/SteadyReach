@@ -1,5 +1,11 @@
 # Local production review
 
+## P19 steady-flow applicability
+
+In feasibility for an editable reach, open **Check flood timing with a USGS discharge record**. Select the modeled profile, event date in UTC and the event station’s USGS continuous discharge GeoJSON. The check identifies the station, units, approved records, pagination, event-day gaps and the longest observed interval near the modeled discharge. Verify station applicability and compare the duration with reach travel time. After calculation, the results page, bilingual reports and handoff notes also identify boundary influence, changes in overbank conveyance and conditions that call for a different hydraulic method.
+
+`python scripts/p19_release.py --hydrograph <Turkey_2016.json> --archive <project-workspace> --p17 <P17-release.json>`
+
 ## P18 location-specific field requests
 
 In a calculated river edition open **Review → Import a field return and compare changes → Request historical surveys at specific locations**. Set the applicable survey dates and optionally add RS identifiers. Download the ZIP. Take the GeoJSON to the field in WGS84 and use the model datum listed on each feature for reported elevations. Model centers identify search areas. Always use the actual coordinates and time of a recovered water level. For profiles return the included CSV, original record, date, method and uncertainty in ft (leave unknown accuracy blank). Import the original stage table separately. A return goes into a new revision. An out-of-period survey needs a separately dated edition.

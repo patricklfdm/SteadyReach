@@ -253,6 +253,7 @@ function scopeFields(parent,scope,atHome=false){
  for(const control of [profile,ends,margin,site,event,rs,error,basis])control.addEventListener('input',()=>{agreement.value='yes';});
  function value(){
   const base={purpose:purpose.value,flow_paths:paths.value};const rows=eventRows();if(rows.length)base.validation_plan=rows;
+  if(scope.event_hydrograph)base.event_hydrograph=scope.event_hydrograph;
   if(agreement.value!=='yes')return base;
   const criteria={dry_ends:ends.value==='yes',site_geometry:site.value==='yes'};
   for(const [key,input] of Object.entries({profile,event,rs,basis}))if(input.value.trim())criteria[key]=input.value.trim();
@@ -321,6 +322,27 @@ function renderFeasibility(parent,data,editable=false){
  }
  if(editable){
   scopeFields(card,data.scope);
+  if(current.model_type==='river'){
+   const g=data.scope.event_hydrograph, box=details(card,'Check flood timing with a USGS discharge record','用 USGS 流量过程核对恒定流假设');
+   box.append(el('p',tr('Use the complete USGS continuous discharge GeoJSON for the event station. Check that the gage represents this reach.','选用事件测站的 USGS 完整连续流量 GeoJSON，先核实测站代表该河段。')));
+   const day=field(box,'method-day','Event date (UTC)','事件日期（UTC）',g?.day||'','date');
+   const profiles=data.rows.find(r=>r.key==='flow')?.facts?.profiles||[];
+   const usable=profiles.filter(p=>p.id&&Number(p.flow_cfs)>0);
+   if(usable.length){
+    const prof=field(box,'method-profile','Event profile and discharge','事件工况及流量',g?.profile||usable[0].id,'select',usable.map(p=>[p.id,p.id+' · '+p.flow_cfs+' cfs',p.id+' · '+p.flow_cfs+' cfs']));
+    const file=field(box,'method-file','USGS continuous discharge file','USGS 连续流量文件','','file');file.accept='.json,.geojson';
+    box.append(button('Check and save event hydrograph','核对并保存事件流量过程',async()=>{
+     if(!file.files[0]||file.files[0].size>8000000)throw Error(tr('Select an event GeoJSON under 8 MB.','请选择 8 MB 内的事件 GeoJSON。'));
+     const p=usable.find(v=>v.id===prof.value),doc=(await encodeFiles(file.files))[0],id=current.id;
+     await api('method-hydrograph',{id,revision:current.revision,day:day.value,profile:p.id,flow_cfs:p.flow_cfs,content:doc.content});
+     await open(id);notify(tr('Event record saved. Review the timing finding in feasibility.','事件原件已保存，请在可行性检查中查看时段判读。'));
+    }));
+   }else box.append(el('p',tr('Save an event discharge first.','请先保存事件流量。')));
+   if(g)box.append(button('Remove this event association','移除此事件关联',async()=>{
+    const id=current.id;await api('method-hydrograph',{id,revision:current.revision,remove:true});await open(id);
+    notify(tr('Event association removed.','已移除事件关联。'));
+   }));
+  }
   if(data.state!=='outside'&&current.intake)card.append(button('Open site materials and public search','打开本站资料与公开搜索',async()=>{
    const dest=document.querySelector('.source-hub');
    if(dest){for(let p=dest;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;dest.scrollIntoView({block:'start'});}

@@ -333,6 +333,8 @@ def binding(m):
     verified_sources(m)
     sources=[item(ROOT/m['project'])]+m.get('attachments',[])+m.get('input_choices',[])
     sources.extend(m.get('intake_source_notes',[]))
+    hydrograph=(m.get('production_scope') or {}).get('event_hydrograph')
+    if hydrograph:sources.append(hydrograph['source'])
     if m.get('road_sample'):sources.append(m['road_sample'])
     if m.get('source_analysis'):sources.append(m['source_analysis'])
     if m.get('terrain',{}).get('raster'):sources.append(m['terrain']['raster'])

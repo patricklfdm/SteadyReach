@@ -147,6 +147,9 @@ def create():
                             result=extent_review.current(extent_review.model_for(key,body))
                         else:
                             result=(extent_review.choices if route=='extent-options' else extent_review.analyze)(key,body)
+                    elif route=='method-hydrograph':
+                        from .method_review import attach
+                        result=attach(key,body)
                     elif route=='survey-packet':
                         from .field_packet import issue
                         result=issue(key,body)

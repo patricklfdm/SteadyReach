@@ -17,6 +17,9 @@ def scope(data):
         raise ValueError('Choose a listed project purpose and flow path / 请选择列表中的用途和过流条件')
     from .purpose_acceptance import criteria
     result = {'purpose': purpose, 'flow_paths': paths}
+    if data.get('event_hydrograph'):
+        from .method_review import validate
+        result['event_hydrograph']=validate(data['event_hydrograph'])
     if data.get('criteria') is not None:
         result['criteria'] = criteria(data['criteria'])
     from datetime import date
@@ -104,6 +107,10 @@ def assess(model, config, geometry, answers, acquisition=None, native=None, reac
         '核对适用的河段边界。异地测站水位需同期传递关系、共同基准与不确定度；正常水深需做敏感性检查。',
         boundaries=boundaries, slopes=slopes, nearby_frequency_stations=nearby, stations=stations,
         search_status=search.get('status'), search_failures=search.get('failures',[]))
+    if river and intent.get('event_hydrograph'):
+        from .method_review import timing
+        en,zh=timing(intent['event_hydrograph'],profiles)
+        add('event_timing','review',en,zh)
     if intent['purpose'] == 'review':
         add('independent_event','review','Reserve a separate event and non-boundary measurements before tuning.',
             '调参前留出独立事件及非边界实测点，用于校核。')
