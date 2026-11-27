@@ -147,6 +147,24 @@ async function main() {
       const {nodeId}=await send('DOM.querySelector',{nodeId:root.nodeId,selector});
       await send('DOM.setFileInputFiles',{nodeId,files});
     }
+    if(mode==='p16-flood'){
+      await buttonByName('Open flood evidence');
+      await fieldValue('flood-year',input.year);
+      await fieldValue('flood-river',input.river);
+      await buttonByName('List USGS events');
+      for(const id of input.ids)await click('#flood-event-'+id);
+      await buttonByName('Download, locate and freeze selected marks');
+      await until('document.querySelector("#flood-evidence")?.textContent.includes('+JSON.stringify(input.mark.toString())+')');
+      const roles=await evaluate('Array.from(document.querySelectorAll("[id^=flood-role-]"),e=>e.id)');
+      if(!roles.length)throw Error('No reviewable flood-mark groups');
+      await fieldValue(roles[0],'context');
+      await buttonByName('Save location roles');
+      await until('!busy');
+      await buttonByName('Open flood evidence');
+      await buttonByName('Replay from local originals');
+      await until('document.getElementById('+JSON.stringify(roles[0])+')?.value==="context"');
+      console.log(JSON.stringify({groups:roles.length,contextSaved:true,mark:input.mark}));return;
+    }
     if(mode==='p11-field-book'){
       await buttonByName('Start from my field table');
       if(input.inspectText){

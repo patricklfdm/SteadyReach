@@ -1,4 +1,58 @@
 'use strict';
+function renderFloodMarks(parent,edition){
+ const box=details(parent,'Find USGS event flood marks','查找 USGS 事件洪痕');box.id='flood-evidence';
+ const call=(op,extra={})=>api('flood-'+op,{id:edition.id,revision:current.revision,...extra});
+ const host=el('div');host.setAttribute('aria-live','polite');
+ box.append(el('p',tr('Search by event year and official river name. Frozen marks can be reviewed offline. Elevations stay hidden during location review.','按事件年份和官方河名查询，冻结后可断网核对。定位时隐藏观测水位。')));
+ const display=(out,p)=>{
+  out.replaceChildren();
+  out.append(el('p',p.river+' · '+p.rows.length+tr(' nearby marks in ',' 条近段洪痕，分为 ')+p.location_groups+tr(' site/coordinate groups. Different groups at the same bridge can still be dependent.',' 个站点／坐标组。同桥的不同组仍可能相关。')));
+  rawPointMap(out,p);
+  if(p.stations.length)table(out,[tr('Registered gage','登记水尺'),'RS',tr('Offset from outlet (m)','与出口距离 (m)'),tr('Datum','基准'),tr('Use','用途')],p.stations.map(s=>[s.station,s.matched_rs??'—',s.distance_to_boundary_center_m??'—',s.datum??'—',s.transfer_required?tr('Background; document an event-specific transfer','背景资料，需同事件传递依据'):tr('Check time and gage zero','核对时刻和水尺零点')]));
+  out.append(el('small',tr('Frozen geometry SHA-256 ','冻结几何 SHA-256 ')+p.geometry_sha256));
+  table(out,[tr('Event / mark / row','事件／洪痕／原始行'),tr('Site / coordinates','站点／经纬度'),tr('Location description','原件位置说明'),tr('Side / bank','桥侧／河岸'),'RS',tr('Distance to cut (m)','至断面距离 (m)'),tr('Datum / quality','基准／质量')],p.rows.map(r=>[
+   [r.event,r.id,r.line].join(' / '),[r.site,...r.lonlat].join(' · '),[r.description,r.location].filter(Boolean).join(' · '),
+   [r.side,r.bank].filter(Boolean).join(' · '),r.rs,String(r.cut_distance_m),[r.datum,r.quality,r.datum_matches?'':tr('Check datum','核对基准')].filter(Boolean).join(' · ')]));
+  for(const s of p.sources)out.append(el('small','USGS '+s.event+' · SHA-256 '+s.sha256+' '));
+  if(!p.rows.length)return;
+  const groups=new Map();
+  const opts=[['unresolved','Review location','待核对位置'],['outlet','Outlet control; exclude from validation','出口控制，不计核验'],['same_crossing','Same crossing; auxiliary only','同桥辅助对照'],['interior_candidate','Interior candidate; verify independence','内点候选，仍需核实独立性'],['context','Background only','仅供背景']];
+  const hints={review_outlet_crossing:tr('The outlet is the nearest section for a mark in this group. Check the bridge face.','本组有洪痕最近于出口断面，请核对桥侧。'),review_gage_crossing:tr('The source identifies a gage at this crossing. Compare the event and bridge face.','原件标明同桥水尺，请核对事件和桥侧。'),review_vertical_reference:tr('Check the vertical datum and its transfer.','核对高程基准与转换依据。'),review_independent_location:tr('Check whether this interior survey was independent of calibration and outlet data.','核对本内点是否独立于调参和出口资料。')};
+  out.append(el('p',tr('Identify the role of each location from its source. Use the original measurement intake for datum, timing, boundary and independent observation checks.','按原件核对各位置用途。通过原始测量表入口进一步核对基准、时刻、边界及内点独立性。')));
+  for(const r of p.rows)if(!groups.has(r.group)){
+   const ids=p.rows.filter(v=>v.group===r.group).map(v=>v.id).join(', ');
+   out.append(el('p',hints[r.suggestion]+(r.referenced_gage?' · USGS '+r.referenced_gage:'')));
+   groups.set(r.group,field(out,'flood-role-'+r.group,r.site+' · '+ids,r.site+' · '+ids,r.role,'select',opts));
+  }
+  out.append(button('Save location roles','保存位置用途',async()=>{
+   const updated=await call('roles',{version:p.version,token:p.token,roles:Object.fromEntries([...groups].map(([k,v])=>[k,v.value]))});
+   display(out,updated);notify(tr('Location roles saved','位置用途已保存'));
+  }));
+ };
+ box.append(button('Open flood evidence','打开洪痕资料',async()=>{
+  const state=await call('inspect');host.replaceChildren();
+  const year=field(host,'flood-year','Year of the flood','洪水发生年份','','text');
+  const river=field(host,'flood-river','Official river name (for example, Floyd River)','官方英文河名（如 Floyd River）','','text');
+  const events=el('div'),out=el('div');
+  year.oninput=()=>events.replaceChildren();
+  host.append(button('List USGS events','查询 USGS 事件',async()=>{
+   const y=year.value.trim(),found=await call('catalog',{year:y});events.replaceChildren();
+   const picks=new Map();
+   if(!found.events.length)events.append(el('p',tr('No events listed for this year. Check the year or use the field table.','本年度无登记事件，可核对年份或使用原始测量表。')));
+   for(const e of found.events)picks.set(e.id,field(events,'flood-event-'+e.id,e.name+' · '+e.start.slice(0,10),e.name+' · '+e.start.slice(0,10),'','checkbox'));
+   if(picks.size)events.append(button('Download, locate and freeze selected marks','下载、定位并冻结所选洪痕',async()=>{
+    const ids=[...picks].filter(([,v])=>v.checked).map(([k])=>k);
+    if(!river.value.trim()||!ids.length)throw Error(tr('Enter the river name and choose an event','请填写河名并勾选事件'));
+    display(out,await call('capture',{year:y,river:river.value,events:ids,catalog_hash:found.catalog_hash}));
+   }));
+  }),events);
+  if(state.versions.length){
+   const v=field(host,'flood-version','Frozen search','冻结查询',state.versions[0],'select',state.versions.map(s=>[s,s,s]));
+   host.append(button('Replay from local originals','本机原件离线重放',async()=>display(out,await call('replay',{version:v.value}))));
+  }
+  host.append(out);
+ }),host);
+}
 function rawPointMap(parent,preview){
  const points=preview.rows.filter(r=>r.xy),cuts=preview.cuts;
  if(!points.length||!cuts.length)return;

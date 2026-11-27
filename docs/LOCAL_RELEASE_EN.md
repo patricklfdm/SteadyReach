@@ -2,6 +2,12 @@
 
 [简体中文](LOCAL_RELEASE_CN.md) · [Production priorities and acceptance criteria](PRODUCTION_ROADMAP_EN.md)
 
+## P16 event flood marks
+
+In a river project with located sections and a centerline, open **Find USGS event flood marks**. Enter the flood year and official river name, select the original event and download the marks. The map uses the surveyed mark coordinates. The table identifies original rows, nearest sections, distances, crossing sides, datums and quality. Review the source before saving a location role. Check event timing, independence and vertical reference before adopting measurements through the field-table intake. Select an earlier frozen search to replay offline. Registered remote gages show their distance to the outlet and the transfer requirement.
+
+In an isolated checkout run `scripts/p16_release.py <P12 checkout> --live --browser --soquel <P11 checkout>` with the project Python. Omitting the optional arguments checks the original event records offline. The Iowa originals, Soquel project and local receipts stay on the workstation. The receipt is under `status/p16`.
+
 ## P14 client handoff and P15 storage
 
 Use an isolated workstation checkout with the P4 Dexter survey, later field return, georeferenced imagery and the configured native tools. For the storage comparison provide another local checkout of commit `8781730`. The driver verifies the old implementation's fingerprints. Substitute the paths to your files and replace `<batch>` with the P14 directory printed at completion.

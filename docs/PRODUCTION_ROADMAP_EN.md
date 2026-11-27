@@ -2,6 +2,20 @@
 
 [简体中文](PRODUCTION_ROADMAP_CN.md)
 
+## P16 through P20 release criteria in priority order
+
+P11 through P15 cover original measurements, native computation, revision selection, bilingual handoff and archive recovery on one workstation. Dexter has a field comparison at RS 500 and 1,540 cfs with missing measurement accuracy. The recipient receives that limitation with the results. A new flood reach still needs evidence for its stated stage accuracy and the applicability of steady 1D flow.
+
+| Priority | Engineering task | Workstation acceptance criteria |
+|---|---|---|
+| 1 · P16 Locate observations | Trace original USGS records to the event, coordinates, river, bridge face, datum, quality, section and proposed use. Review repeated coordinates, common crossings, controls and remote gages. | Reproduce 4, 15 and 9 nearby marks for Floyd 2018, Floyd 2024 and Turkey 2016. Group three coincident Turkey records. Exclude Floyd same-bridge auxiliary records, outlet controls and the remote Soquel gage from independent scores. Replay source hashes and locations offline. |
+| 2 · P17 Isolate causes | Freeze the baseline and change one supported factor per native run, covering terrain vintage, bed assumptions, outlet stage and section spacing. | Reproduce approximately +0.060 ft at the Floyd check with newer terrain and +0.789 ft at Turkey RS 16889.98 for 65→129 sections, with wet ends rising from 8 to 17 sections. Retain the parent when fewer warnings coincide with greater observed error. Give a reason to stop further adjustment. |
+| 3 · P18 Target missing field evidence | Issue map-based requests with locations, section lines, survey scope, dates, vertical reference and affected events. Seek archived surveys first. | At Floyd identify the Division Street crest/gage tie and an independent interior stage. At Turkey locate bed-to-floodplain sections around RS 16311–16889.98, embankment openings and event stages. A genuine returned record reopens only dependent inputs and preserves the parent. Current survey dates remain visible when historical geometry is unknown. |
+| 4 · P19 Assess steady 1D applicability | Check peak timing, boundary influence, lateral conveyance and storage before and after computation. | Identify the peak-record gap at Turkey, the overbank redistribution at Merced and the reach of outlet sensitivity at Pagosa. Agree on flow, location, permitted use, limitations and method follow-up across the results page, both reports and offline recipient instructions. |
+| 5 · P20 Test independent predictions | Register reaches, events, locations, geometry, roughness, boundaries and accuracy limits before revealing check stages. Include high flow or overbank evidence. | At least two reaches and three independent events, each with two independent interior locations. Retain native profiles, individual errors, mean bias, worst location, observation accuracy, wet ends and refinement changes. An event used for subsequent tuning becomes development data. Qualify each supported use with a fresh event. |
+
+P12 specified absolute residual ≤1.00 ft at each point, absolute mean bias ≤0.50 ft, common-section refinement change ≤0.10 ft, section discharge error ≤1 cfs and known outlet error ≤0.01 ft. Wet ends and critical-flow or energy-balance findings require an explanation, and submerged bed geometry and bridge-face stage references require evidence. Set thresholds for each new purpose before inspecting reserved stages. Human first use, independent sign-off and cross-machine qualification remain deferred.
+
 ## P12–P15 workstation decisions
 
 P12 flood-stage accuracy remains open. The closest measured-outlet scenario on the original Floyd geometry still underpredicted the 2024 check by 1.527 ft. Turkey underpredicted the 2016 check by 2.522 ft with 129 sections. P13 uses observed residuals, boundary response and floodplain flow changes to guide revisions.

@@ -90,6 +90,9 @@ def create():
                     key=body['id']
                     if route in ('storage-preview','storage-capacity','storage-archive','storage-retire','storage-restore','storage-pin'):
                         result=edition_storage.perform(ROOT,key,route.removeprefix('storage-'),body)
+                    elif route in ('flood-inspect','flood-catalog','flood-capture','flood-replay','flood-roles'):
+                        from .flood_register import action
+                        result=action(key,body,route.removeprefix('flood-'))
                     elif route in ('raw-inspect','raw-columns','raw-preview','raw-apply'):
                         from .raw_intake import action
                         result=action(key,body,route.removeprefix('raw-'))
