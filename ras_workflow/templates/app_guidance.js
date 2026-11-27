@@ -20,6 +20,81 @@ function assessmentState(value){
  const labels={VERIFIED_MAPPED:['Both mapped packages verified','两个制图包已核验'],VERIFIED_NATIVE_ONLY:['Native files only','仅有原生文件'],STALE:['Refresh required','需更新'],INCOMPLETE:['Incomplete','未完整生成'],UNVERIFIED:['Unverified','尚未核验'],EDITION_MISMATCH:['Edition mismatch','版本不符'],NO_CURRENT_SUBMISSION:['No bound QA submission','无绑定本次结果的 QA 提交'],REVIEW_IN_PROGRESS:['Review in progress','复核中'],DIFFERENT_ISSUE_INVENTORY:['Reviewed issue list differs','复核问题清单与当前不同'],CLOSED_WITH_RECORDED_CONDITIONS:['Closed with recorded conditions','已记录条件并闭合'],REVIEW_REQUIRED:['Review required','待复核'],NOT_TESTED:['No verified trial','尚无已核验的试算'],NOT_CONVERGED:['Unconverged','未收敛'],PENDING:['Pending','待复核'],NOT_PERFORMED:['Not performed','尚未执行']};
  return labels[value]?tr(...labels[value]):value||'—';
 }
+function showFactorDiagnostic(parent){
+ const box=details(parent,'Test one explanation for a stage error','单独检验一种水位偏差原因');box.id='qa-factor';
+ const labels=[['bed','Submerged bed elevation','水下河床高程'],['boundary','Observed outlet stage','实测出口水位'],['terrain','Alternative terrain survey','另一时期地形'],['spacing','Section spacing','断面间距']];
+ const label=k=>{const v=labels.find(r=>r[0]===k);return v?tr(v[1],v[2]):k;};
+ const profiles=current.results.metrics.map(p=>[p.profile_id,p.profile_id,p.profile_id]);
+ if(!profiles.length)return;
+ const pending=current.pending_study_plan?.analysis_kind==='river_factor_diagnostic'?current.pending_study_plan:null;
+ let queue=pending?{plan:pending,token:current.pending_study.sha256}:null;
+ const options=pending?.options||{};
+ const profile=field(box,'factor-profile','Event profile','事件工况',options.profile||profiles[0][0],'select',profiles);
+ const factor=field(box,'factor-kind','Change to test','要检验的变化',options.factor||'bed','select',labels);
+ const fields=el('div');box.append(fields);
+ const basis=field(box,'factor-basis','Source or physical assumption for this change','变化的来源或物理假设',options.basis||'','text');
+ const append=field(box,'factor-append','Include previously previewed factors in this confirmation','本次确认同时运行已预览的其他因素','','checkbox');append.checked=!!pending;append.disabled=!pending;
+ const checks=field(box,'factor-checks','Optional diagnostic stage comparisons (CSV)','可选的诊断水位对照表（CSV）','','file');checks.accept='.csv';
+ box.append(el('small',tr('CSV columns: profile,rs,stage_ft,flow_cfs,vertical_datum,source_record. Use a measured non-outlet stage for this event. An existing screened observation table is used when available.','CSV 列名为 profile,rs,stage_ft,flow_cfs,vertical_datum,source_record。使用同事件非出口实测高程；有已核验内点表时可直接沿用。')));
+ const out=el('div');out.setAttribute('aria-live','polite');
+ let value,source,unit,datum;
+ function controls(){
+  fields.replaceChildren();out.replaceChildren();value=source=unit=datum=null;
+  const k=factor.value;
+  if(k==='bed'||k==='boundary'){
+   const bed=k==='bed';
+   fields.append(el('p',bed?tr('Apply a tapered elevation change inside the banks. Negative lowers the bed, positive raises it. Floodplain elevations stay fixed.','在两岸之间渐变调整河底。负值下切、正值抬高，岸站处变化归零。'):tr('Use the absolute outlet water elevation for the selected event in the project datum.','使用本事件在项目高程基准下的出口绝对水位。')));
+   value=field(fields,'factor-value',bed?'Bed change at midchannel (ft)':'Outlet stage (ft)',bed?'主槽中央高程变化 (ft)':'出口水位 (ft)',k===options.factor?options.value_ft??'':'','number');
+  }else{
+   source=field(fields,'factor-file',k==='terrain'?'Alternative GeoTIFF (15 MB max)':'Optional nested geometry JSON (blank = generate from DEM)',k==='terrain'?'替代 GeoTIFF（最多 15 MB）':'可选加密几何 JSON（留空则自动从 DEM 采样）','','file');
+   source.accept=k==='terrain'?'.tif,.tiff':'.json';
+   if(k==='terrain'){
+    unit=field(fields,'factor-unit','Alternative raster elevation unit','替代地形高程单位','','select',[['','Select unit','选择单位'],['m','Metres','米'],['international foot','International feet','国际英尺'],['US survey foot','US survey feet','美国测量英尺']]);
+    datum=field(fields,'factor-datum','Verified alternative vertical datum','已核实的替代地形高程基准','','text');
+    fields.append(el('small',tr('Both rasters are sampled at the same section points; the existing bed correction is retained.','两份地形在相同断面点采样，沿用原有河床修正。')));
+   }
+  }
+ }
+ factor.onchange=controls;controls();
+ const show=(plan,token)=>{
+  out.replaceChildren();const p=plan.options;
+  out.append(el('p',tr('Each case starts from the parent. Confirmed queue: ','各工况分别从同一父版开始。待确认队列：')+plan.cases.map(c=>label(c.id)).join(' / ')));
+  out.append(el('p',label(p.factor)+' · '+p.profile+' · '+p.flow_cfs+' cfs · '+p.datum+' · '+p.original_sections+' → '+p.trial_sections+tr(' sections',' 条断面')));
+  out.append(el('p',p.basis+' · '+(p.value_ft!=null?p.value_ft+' ft · ':'')+p.checks.length+tr(' comparison records',' 条实测对照记录')));
+  if(p.alternative||p.section_source)out.append(el('p',(p.alternative||p.section_source).original_name+' · SHA-256 '+(p.alternative||p.section_source).sha256));
+  if(p.length_change_ft)out.append(el('p',tr('Total length change, left / channel / right (ft): ','左漫滩／主槽／右漫滩总流程长度变化 (ft)：')+p.length_change_ft.join(' / ')));
+  out.append(button('Confirm trial queue and compute','确认队列并计算',async()=>{
+   await api('study-start',{id:current.id,revision:current.revision,token,confirmed:true});await open(current.id);
+  },'primary'));
+ };
+ for(const event of ['input','change'])box.addEventListener(event,()=>out.replaceChildren());
+ box.append(button('Freeze inputs and preview trial','冻结输入并预览试算',async()=>{
+  const file=async f=>f?.files?.length?(await encodeFiles([f.files[0]]))[0]:null;
+  if(value&&!value.value.trim())throw Error(tr('Enter the requested elevation or change','请填写高程或变化量'));
+  const p=await api('study-prepare',{id:current.id,revision:current.revision,kind:'river_factor_diagnostic',factor:factor.value,profile:profile.value,
+   basis:basis.value,value:value?Number(value.value):null,unit:unit?.value,datum:datum?.value,source:await file(source),checks:await file(checks),append_token:append.checked?queue?.token:null});
+  queue=p;append.checked=true;append.disabled=false;
+  show(p.plan,p.token);
+ }),out);
+ if(pending)show(pending,current.pending_study.sha256);
+ const report=current.factor_diagnostic;if(!report)return;
+ if(report.status==='INCOMPLETE'&&pending&&current.active_study?.study?.sha256===current.pending_study.sha256){
+  box.append(button('Retry the confirmed queue','重试已确认队列',async()=>{
+   await api('study-start',{id:current.id,revision:current.revision,token:current.pending_study.sha256,confirmed:true,retry:true});await open(current.id);
+  }));
+ }
+ for(const r of report.comparisons||[report]){
+ if(!r.max_change){box.append(el('p',label(r.options.factor)+' · '+tr('Trial incomplete. ','试算未完成。')+(r.errors||[]).join(' · '),'warning'));continue;}
+ const m=r.max_change,wet=r.wet_sections;
+ const outcome={RETAIN_PARENT_OBSERVATION_WORSENED:tr('Retain the parent; the trial increased measured stage error.','保留父版；试算增加了实测水位偏差。'),FIELD_CHECK_REQUIRED:tr('Obtain field controls before another adjustment.','继续调整前应补现场控制资料。'),REVIEW_TESTED_FACTOR:tr('Review this factor within its tested event and range.','在本事件和已试范围内复核该因素。')};
+ box.append(el('p',outcome[r.stop],'warning'),el('p',label(r.options.factor)+' · '+r.options.profile+' · RS '+m.rs+' · Δ '+m.delta_ft.toFixed(3)+' ft · '+tr('wet sections ','湿端断面 ')+wet[0].length+' → '+wet[1].length));
+ if(r.checks.length)table(box,['RS',tr('Observed (ft)','实测 (ft)'),tr('Parent error (ft)','父版偏差 (ft)'),tr('Trial error (ft)','试算偏差 (ft)')],r.checks.map(c=>[c.rs,c.observation_ft,c.parent_error_ft.toFixed(3),c.trial_error_ft.toFixed(3)]));
+ box.append(el('p',tr('Native warnings (parent → trial): ','原生警告（父版 → 试算）：')+r.warning_counts.map(v=>v??tr('export unavailable','缺完整导出')).join(' → ')));
+ const all=details(box,'Changes at common sections','共同断面沿程变化');
+ table(all,['RS',tr('Parent (ft)','父版 (ft)'),tr('Trial (ft)','试算 (ft)'),'Δ ft'],r.rows.map(x=>[x.rs,x.parent.wse_ft.toFixed(3),x.trial.wse_ft.toFixed(3),x.delta_ft.toFixed(3)]));
+ for(let i=0;i<2;i++)all.append(el('p',(i?tr('Trial wet sections: ','试算湿端断面：'):tr('Parent wet sections: ','父版湿端断面：'))+(wet[i].join(', ')||'—')));
+ }
+}
 function showFieldSearch(box,a){
  const panel=details(box,'Find records and plan fieldwork','查资料与最小补测清单');
  panel.id='qa-tool-field-search';
@@ -276,7 +351,10 @@ function showResultAssessment(overview,a,box=overview){
    document.getElementById('qa-tool-check-batch')?.dispatchEvent(new CustomEvent('steadyreach-recommend-checks',{detail:a.recommended_checks}));
   }));
   actions.append(button('Prepare QA revision suggestions','根据 QA 创建修订建议',prepareQaRevision),button('Open editable revision tool','打开独立修订入口',()=>openGuidanceTool('revision')));}
- if(a.run_id&&current.model_type==='river')showFieldSearch(box,a);
+ if(a.run_id&&current.model_type==='river'){
+  if(!current.native_review)showFactorDiagnostic(box);
+  showFieldSearch(box,a);
+ }
  const scope=details(box,'Grading scope and evidence','分级范围与核验依据');
  for(let i=0;i<a.levels.length;i++)scope.append(el('p','L'+i+' · '+label(a.levels[i])));
  scope.append(el('p',tr('Grades describe the permitted handoff. Engineering approval and visual map inspection remain separate. Section counts exclude manifest files.','等级描述本版可交付的用途。工程签发和地图目视验收单列判断。文件数不含清单自身。')));

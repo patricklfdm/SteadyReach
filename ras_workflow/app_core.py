@@ -626,6 +626,9 @@ def view(key,detail=True):
         if warning_study['baseline']==m.get('summary') and intact([warning_study['study'],warning_study['review'],warning_study['execution']]+[c['audit'] for c in warning_study['cases']]):
             result['warning_study']=warning_study
     if m.get('latest_spacing') and intact([m['latest_spacing']]):result['spacing_result']=read(ROOT/m['latest_spacing']['path'])
+    if m.get('latest_factor_diagnostic') and intact([m['latest_factor_diagnostic']]):
+        factor=read(ROOT/m['latest_factor_diagnostic']['path'])
+        if factor['baseline']==m.get('summary'):result['factor_diagnostic']=factor
     if m.get('latest_coverage') and intact([m['latest_coverage']]):result['coverage_result']=read(ROOT/m['latest_coverage']['path'])
     if m.get('latest_coverage_exports') and intact([m['latest_coverage_exports']]):
         exports=read(ROOT/m['latest_coverage_exports']['path'])

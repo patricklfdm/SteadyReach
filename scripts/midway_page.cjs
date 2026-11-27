@@ -147,6 +147,32 @@ async function main() {
       const {nodeId}=await send('DOM.querySelector',{nodeId:root.nodeId,selector});
       await send('DOM.setFileInputFiles',{nodeId,files});
     }
+    if(mode==='factor-trial'){
+      await click('#result-tab-review');
+      await until('!!document.querySelector("#qa-factor")');
+      await fieldValue('factor-kind',input.factor);
+      if(await evaluate('document.querySelector("#factor-append").checked'))await click('#factor-append');
+      if(input.factor==='terrain'){
+        await fieldValue('factor-unit','m');
+        await fieldValue('factor-datum','NAVD88');
+      }
+      if(input.source)await selectFiles('#factor-file',[input.source]);
+      if(input.checks)await selectFiles('#factor-checks',[input.checks]);
+      if(input.value!=null)await fieldValue('factor-value',input.value);
+      await fieldValue('factor-basis',input.basis);
+      await buttonByName('Freeze inputs and preview trial');
+      if(input.queue){
+        await fieldValue('factor-kind',input.queue.kind);
+        await fieldValue('factor-value',input.queue.value);
+        await fieldValue('factor-basis',input.queue.basis);
+        await buttonByName('Freeze inputs and preview trial');
+      }
+      const previous=await evaluate('current.latest_factor_diagnostic?.sha256||null');
+      await buttonByName('Confirm trial queue and compute');
+      await until('current.latest_factor_diagnostic?.sha256 && current.latest_factor_diagnostic.sha256!=='+JSON.stringify(previous)+' || (current.status==="FAILED" && current.errors?.length)',2000);
+      if(!await evaluate('current.factor_diagnostic?.status==="DIAGNOSTIC_REVIEW"'))throw Error(await evaluate('JSON.stringify(current.factor_diagnostic?.comparisons?.map(r=>r.errors)||current.errors)'));
+      console.log(await evaluate('JSON.stringify(current.factor_diagnostic.comparisons.map(r=>r.max_change))'));return;
+    }
     if(mode==='p16-flood'){
       await buttonByName('Open flood evidence');
       await fieldValue('flood-year',input.year);

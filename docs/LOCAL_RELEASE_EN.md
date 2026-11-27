@@ -2,6 +2,17 @@
 
 [简体中文](LOCAL_RELEASE_CN.md) · [Production priorities and acceptance criteria](PRODUCTION_ROADMAP_EN.md)
 
+## P17 single-factor stage diagnostics
+
+On a computed river's results review page, open **Test one explanation for a stage error**. Select an event and one physically supported change, then freeze and preview. Queue additional factors for the same parent and event before confirming the batch. Each case starts from the parent geometry.
+
+- For terrain vintage, supply a georeferenced GeoTIFF and verify its elevation units and vertical datum. The two surfaces are sampled at the same section stations, retaining the original bed-to-surface correction.
+- For bed sensitivity, enter a signed change in feet at midchannel. It tapers to zero at the banks. For an existing known-stage outlet, supply the absolute event stage in the parent datum.
+- Refine adjacent sections from the DEM or supply nested geometry JSON in the same CRS, datum and units. Check the retained sections, main-channel length and changes in mapped overbank path lengths.
+- An optional diagnostic comparison CSV uses `profile,rs,stage_ft,flow_cfs,vertical_datum,source_record`. Include non-outlet locations and the original event record. Eligible observations already assigned to a single-profile parent can also be reused. The comparison is retrospective.
+
+Inspect observed errors, signed differences at common sections, wet-limit locations and complete native warning counts. A worse observed error calls for retaining the parent. Unavailable warning exports are marked explicitly. Reproduce the cases in an isolated checkout with `scripts/p17_release.py <P12 checkout>`; `--resume <acceptance directory>` reuses the verified local baselines.
+
 ## P16 event flood marks
 
 In a river project with located sections and a centerline, open **Find USGS event flood marks**. Enter the flood year and official river name, select the original event and download the marks. The map uses the surveyed mark coordinates. The table identifies original rows, nearest sections, distances, crossing sides, datums and quality. Review the source before saving a location role. Check event timing, independence and vertical reference before adopting measurements through the field-table intake. Select an earlier frozen search to replay offline. Registered remote gages show their distance to the outlet and the transfer requirement.
