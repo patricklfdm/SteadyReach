@@ -1,5 +1,18 @@
 # Local production review
 
+## P20 held-out events on new reaches
+
+Use an isolated Windows checkout with HEC-RAS and the report converter configured. Place the USGS originals in `status/p20_sources` under the filenames in `examples/enterprise_pilot/big_river_sources.json`. Keep the compressed DEMs and original CSVs. The commands check all nine publisher files against their registered SHA-256. Use a new output directory inside the checkout and allow space for the native results, reports and archive.
+
+```powershell
+python scripts/p20_release.py freeze --raw status/p20_sources --out status/p20/new_cohort
+python scripts/p20_release.py forecast --raw status/p20_sources --out status/p20/new_cohort
+python scripts/p20_release.py score --raw status/p20_sources --out status/p20/new_cohort
+python scripts/p20_release.py archive --raw status/p20_sources --out status/p20/new_cohort
+```
+
+Registration reads plan coordinates and surveyed terrain, then freezes event roles, source rows and criteria. Forecasting reads only the outlet measurement and computes both spacings. After an interrupted batch, rerunning forecast reuses completed case receipts. Scoring checks both reaches, every event and the native HDFs before reading interior observations. Each residual and unmet criterion is preserved. Archiving builds both Complete and Minimal native packages from the existing coarse results at each site, then verifies the ZIP contents. Start with `START_HERE.txt` and `scores.json` inside `P20_blind_validation.zip`. The archive contains both native spacings, bilingual reports in the Complete packages and the original USGS files. This benchmark uses native-only delivery. [Event results and applicable scope](PRODUCTION_ROADMAP_EN.md)
+
 ## P19 steady-flow applicability
 
 In feasibility for an editable reach, open **Check flood timing with a USGS discharge record**. Select the modeled profile, event date in UTC and the event station’s USGS continuous discharge GeoJSON. The check identifies the station, units, approved records, pagination, event-day gaps and the longest observed interval near the modeled discharge. Verify station applicability and compare the duration with reach travel time. After calculation, the results page, bilingual reports and handoff notes also identify boundary influence, changes in overbank conveyance and conditions that call for a different hydraulic method.

@@ -16,6 +16,22 @@ P11 through P15 cover original measurements, native computation, revision select
 
 P12 specified absolute residual ≤1.00 ft at each point, absolute mean bias ≤0.50 ft, common-section refinement change ≤0.10 ft, section discharge error ≤1 cfs and known outlet error ≤0.01 ft. Wet ends and critical-flow or energy-balance findings require an explanation, and submerged bed geometry and bridge-face stage references require evidence. Set thresholds for each new purpose before inspecting reserved stages. Human first use, independent sign-off and cross-machine qualification remain deferred.
 
+## P16–P20 workstation results
+
+P16 retained original flood-mark IDs, bridge faces, coordinates and datums in offline replay. P17 reproduced two floods in six native runs. At Floyd, using the pier mark as outlet control reduced warnings from 14 to 12 while the check residual increased in magnitude from −1.700 to −2.202 ft. P18 exported mapped requests for both reaches and imported Washington field-book row 438 as an interior observation, carrying forward 126 hydraulic inputs. P19 identified a 24.75 h gap on the Turkey event day, the left overbank change at Merced RS 4700 and the farthest Pagosa section exceeding 0.10 ft under the downstream perturbation at RS 1400. Both report languages carried these findings. The Merced and Pagosa offline handoff text was also checked.
+
+P20 evaluated Site W and Phelps Bend on the Big River, Missouri, using surveyed terrain and field water-surface profiles. Five events were registered by coordinates, date and discharge. Channel and overbank Manning coefficients were fixed at 0.035 and 0.065. Only the outlet measurement set the boundary. Four native runs at two spacings produced ten profiles. Interior elevations were read after sealing all forecasts and native HDF identities. Bias is coarse-grid prediction minus observation in ft. [USGS source data](https://doi.org/10.5066/P9K3ENAX) · [USGS report, figure 3 and table 4](https://doi.org/10.3133/sir20225002)
+
+| Reach and date | Flow (m³/s) | Independent checks | Mean bias (ft) | Maximum absolute error (ft) / RS | Maximum spacing change (ft) | Decision |
+|---|---:|---:|---:|---|---:|---|
+| Site W, 2019-02-26 | 52.4 | 4 | +0.248 | 0.405 / 297.53 | 0.009 | Met numerical screen |
+| Site W, 2020-05-19 | 155 | 4 | +0.095 | 0.137 / 1026.26 | 0.011 | Met numerical screen |
+| Phelps Bend, 2018-12-03 | 29.0 | 7 | +0.081 | 0.354 / 628.26 | 0.003 | Met numerical screen |
+| Phelps Bend, 2019-11-06 | 7.81 | 1 | +0.007 | 0.007 / 350.94 | 0.001 | Insufficient independent locations; flow estimated from nearby gage |
+| Phelps Bend, 2020-03-20 | 198 | 3 | −0.132 | 0.279 / 725.10 | 0.012 | Met numerical screen |
+
+The two spacings contained 15/29 sections at Site W and 16/31 at Phelps Bend. All events had dry section ends and met the registered native discharge and outlet checks. Both grids retained divided-flow warnings at Site W RS 824.09 (155 m³/s) and Phelps Bend RS 350.94 (29 m³/s), and a conveyance-change warning at Phelps Bend RS 183.65 (7.81 m³/s). All four events meeting the numerical criteria had concurrent discharge measurements. The evidence covers two short reaches on the same river at the registered locations and flows. The publisher gives no formal vertical accuracy assessment. Design use or transfer to other watersheds requires further evidence. Historical Floyd and Turkey P12 discrepancies remain open. [Workstation reproduction and archive](LOCAL_RELEASE_EN.md)
+
 ## P12–P15 workstation decisions
 
 P12 flood-stage accuracy remains open. The closest measured-outlet scenario on the original Floyd geometry still underpredicted the 2024 check by 1.527 ft. Turkey underpredicted the 2016 check by 2.522 ft with 129 sections. P13 uses observed residuals, boundary response and floodplain flow changes to guide revisions.

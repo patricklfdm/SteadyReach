@@ -1,5 +1,18 @@
 # 本机生产复核
 
+## P20 新河段留出事件核验
+
+使用独立的 Windows 检出目录及已配置的 HEC-RAS 和报告转换器。按 `examples/enterprise_pilot/big_river_sources.json` 的文件名将 USGS 原件存入 `status/p20_sources`，保留压缩 DEM 和原始 CSV。以下命令会核对九个原件的 SHA-256。验收目录应为本次新建，放在当前检出目录内。开始前留出原生结果、报告和归档所需的空间。
+
+```powershell
+python scripts/p20_release.py freeze --raw status/p20_sources --out status/p20/new_cohort
+python scripts/p20_release.py forecast --raw status/p20_sources --out status/p20/new_cohort
+python scripts/p20_release.py score --raw status/p20_sources --out status/p20/new_cohort
+python scripts/p20_release.py archive --raw status/p20_sources --out status/p20/new_cohort
+```
+
+第一步仅读取平面坐标和实测地形，登记事件、行号、角色和标准。出口与内点分开。第二步先读取出口，按冻结的工况实算两级间距；中断时重复 forecast 可以沿用完整的单次计算回执。第三步先核对两处河段、全部工况和原生 HDF，再读取内点列，保存每个误差和未满足的条件。第四步从已有原生结果生成两处河段各自的完整和最小原生交付包，回读校验归档。打开 `P20_blind_validation.zip`，从 `START_HERE.txt` 和 `scores.json` 开始。包内包含两级原生模型、完整包的双语报告、USGS 原件；本项核验采用原生交付模式。各事件数值及用途见[实测结果](PRODUCTION_ROADMAP_CN.md)。
+
 ## P19 恒定流方法适用性
 
 在可编辑河段的可行性检查中打开「用 USGS 流量过程核对恒定流假设」。选择工况、UTC 事件日期和该测站的 USGS 连续流量 GeoJSON。页面检查测站、单位、批准状态、分页、事件日缺口和接近模型流量的最长连续时段。确认测站与河段的联系，结合传播时间判断用途。计算后的结果页、双语报告和收件说明还会标出边界影响到的断面、版本间漫滩输水变化及应采用其他水力方法的情形。

@@ -1,0 +1,52 @@
+{
+  "data": "https://doi.org/10.5066/P9K3ENAX",
+  "discharge": "https://pubs.usgs.gov/publication/sir20225002/full",
+  "table": 4,
+  "files": [
+    {
+      "file": "BigRiverMO_PHB_dem.tif.zip",
+      "url": "https://www.sciencebase.gov/catalog/file/get/6260324ed34e85fa62b88eb4?f=__disk__98%2Fd0%2Fcd%2F98d0cdfff7944f19edbdb512365dd3846f2bbe4d",
+      "sha256": "cf8db8b55e244e8e0a44c70e3a53c717af76e0683f10e7ac74fe7f27f67f1a0a"
+    },
+    {
+      "file": "BigRiverMO_STW_dem.tif.zip",
+      "url": "https://www.sciencebase.gov/catalog/file/get/6260324ed34e85fa62b88eb4?f=__disk__86%2F97%2Fc1%2F8697c188c4b7ad3e7f9d81500f92ecc386d27608",
+      "sha256": "860a85b042ca720506836f9fb49cbee9e5b2f87c08a04901e7897cb5df136d93"
+    },
+    {
+      "file": "BigRiverMO_dem.xml",
+      "url": "https://www.sciencebase.gov/catalog/file/get/6260324ed34e85fa62b88eb4?f=__disk__d5%2F7e%2F95%2Fd57e9520c30aa06164eb4b9628616ca27f345913",
+      "sha256": "b43bb07e8f7b2fcd32fd996b8d8e7746249acfacbdcb79e3d93ba9f2f532d0c5"
+    },
+    {
+      "file": "BigRiverMO_PHB_20181203_WaterSurfProf.csv",
+      "url": "https://www.sciencebase.gov/catalog/file/get/626033a6d34e85fa62b88ebc?f=__disk__f5%2F2c%2F2a%2Ff52c2a174ab8e6f275b6977d5af85b3e37d80d21",
+      "sha256": "d4ba7334242b9653aed02acdac1cb658612555baef534b9b813065e6737b2826"
+    },
+    {
+      "file": "BigRiverMO_PHB_20191106_WaterSurfProf.csv",
+      "url": "https://www.sciencebase.gov/catalog/file/get/626033a6d34e85fa62b88ebc?f=__disk__93%2F7a%2F30%2F937a308388508115fff6b6173f88f113d34bcc4a",
+      "sha256": "c217c6ba71c1afbb1f47b2c9a52783685f3e248e36a6d99ba7a85c13d4f1d356"
+    },
+    {
+      "file": "BigRiverMO_PHB_20200320_WaterSurfProf.csv",
+      "url": "https://www.sciencebase.gov/catalog/file/get/626033a6d34e85fa62b88ebc?f=__disk__c6%2Ff0%2F72%2Fc6f072427cd0f93c786f73bed671ac879efeaeb1",
+      "sha256": "925dbc5ccbb850a2c603fd787eb245f2f64219371ece93740e5b461ef12c1fed"
+    },
+    {
+      "file": "BigRiverMO_STW_20190226_WaterSurfProf.csv",
+      "url": "https://www.sciencebase.gov/catalog/file/get/626033a6d34e85fa62b88ebc?f=__disk__30%2Fb2%2F82%2F30b282b0e340b705318cbe7853f80cea8fa639fc",
+      "sha256": "0f7a71eb77199688429c258cb15454e3556dc3c718cb6434cde67503b703b2dd"
+    },
+    {
+      "file": "BigRiverMO_STW_20200519_WaterSurfProf.csv",
+      "url": "https://www.sciencebase.gov/catalog/file/get/626033a6d34e85fa62b88ebc?f=__disk__b9%2Faa%2F18%2Fb9aa1810c0b2b7f0880b0ba765709d87691825cc",
+      "sha256": "1389b2e3b9c20093156c4cefe4dd1e6f8d85773508662aa19afde5dcdb19dc47"
+    },
+    {
+      "file": "BigRiverMO_WaterSurfProf.xml",
+      "url": "https://www.sciencebase.gov/catalog/file/get/626033a6d34e85fa62b88ebc?f=__disk__d8%2F4d%2Fb1%2Fd84db141c65d84f0589e688a96d2e7e2cad4959d",
+      "sha256": "5b94c89e3728051c5873d8ad3e19a7c2115353fa171239760718e5f04b33ed55"
+    }
+  ]
+}
