@@ -40,6 +40,14 @@ class ManningPrecision(unittest.TestCase):
         self.assertEqual(float(text[8:16]), .0425)
         self.assertEqual(len(text.rstrip('\n')), 24)
 
+    def test_wide_station_only_discards_insignificant_zeroes(self):
+        fields = native.fixed([25364.25, 12345678, 9999.125]).rstrip('\n')
+        self.assertEqual([fields[i:i+8] for i in range(0,24,8)],
+                         ['25364.25', '12345678', '9999.125'])
+        for value in (25364.251, 123456789):
+            with self.assertRaisesRegex(ValueError, 'overflow'):
+                native.fixed([value])
+
     def test_invalid_or_unrepresentable_coefficient_is_rejected(self):
         for value in [0, 1, float('nan'), 1e-9, .999999999]:
             with self.subTest(value=value), self.assertRaises(ValueError):

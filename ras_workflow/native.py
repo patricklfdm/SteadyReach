@@ -81,6 +81,9 @@ def discover():
 
 def fixed(values,width=8,perline=10):
     ss=[f'{float(v):{width}.3f}' for v in values]
+    # Retain the represented value when a wide station only overflows
+    # because the default format appends insignificant decimal zeroes.
+    ss=[v if len(v)<=width else v.rstrip('0').rstrip('.').rjust(width) for v in ss]
     if any(len(v)>width for v in ss):raise ValueError('Native fixed-width value overflow')
     return '\n'.join(''.join(ss[i:i+perline]) for i in range(0,len(ss),perline))+'\n'
 
