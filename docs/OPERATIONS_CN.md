@@ -1,6 +1,6 @@
 # 安装经过校验的版本与恢复队列
 
-[English](OPERATIONS_EN.md) · [本机发布检查](LOCAL_RELEASE_CN.md) · [项目诊断](ENGINEERING_DECISIONS_CN.md)
+[English](OPERATIONS_EN.md) · [本机发布检查](LOCAL_RELEASE_CN.md) · [项目诊断](ENGINEERING_DECISIONS_CN.md) · [候选发行包](CANDIDATE_CN.md)
 
 ## 批次开始前预估空间
 

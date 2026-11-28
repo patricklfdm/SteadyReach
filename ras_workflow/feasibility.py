@@ -17,11 +17,19 @@ def scope(data):
         raise ValueError('Choose a listed project purpose and flow path / 请选择列表中的用途和过流条件')
     from .purpose_acceptance import criteria
     result = {'purpose': purpose, 'flow_paths': paths}
+    if 'delivery_template' in data:
+        from .delivery_templates import validate
+        result['delivery_template'] = validate(data['delivery_template'])
     if data.get('event_hydrograph'):
         from .method_review import validate
         result['event_hydrograph']=validate(data['event_hydrograph'])
     if data.get('criteria') is not None:
         result['criteria'] = criteria(data['criteria'])
+    if 'delivery_template' in result:
+        rules = result.setdefault('criteria', {})
+        rules['dry_ends'] = True
+        if purpose == 'review':
+            rules['site_geometry'] = True
     from datetime import date
     from .validation_plan import normalize,scope_update
     if data.get('validation_plan'):result['validation_plan']=normalize(data['validation_plan'])

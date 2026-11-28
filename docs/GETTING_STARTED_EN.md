@@ -1,6 +1,6 @@
 # Getting started with SteadyReach
 
-[English](GETTING_STARTED_EN.md) | [简体中文](GETTING_STARTED_CN.md) · [Engineering decisions](ENGINEERING_DECISIONS_EN.md)
+[English](GETTING_STARTED_EN.md) | [简体中文](GETTING_STARTED_CN.md) · [Engineering decisions](ENGINEERING_DECISIONS_EN.md) · [Choose a deliverable](SITE_DELIVERY_EN.md)
 
 On Windows, extract the repository to a writable local folder and double-click **start_workflow.cmd**. Keep its console open. The browser opens the project page. [Installation and prerequisites](WINDOWS_SETUP_EN.md) · [User manual](USER_GUIDE_EN.md)
 

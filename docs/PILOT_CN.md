@@ -1,6 +1,6 @@
 # 单工作站企业试点
 
-[English](PILOT_EN.md) · [管理员操作与恢复](OPERATIONS_CN.md) · [发版验收](LOCAL_RELEASE_CN.md)
+[English](PILOT_EN.md) · [管理员操作与恢复](OPERATIONS_CN.md) · [发版验收](LOCAL_RELEASE_CN.md) · [首次使用计分表](FIRST_PILOT_CN.md)
 
 工程师可在支持的几何范围内试用单河段一维恒定流分析。每套交付包标明选定版本、输入依据、原生 HEC-RAS 结果和待处理的水力问题。双包完整性与现场观测吻合程度分别核对。
 

@@ -103,6 +103,9 @@ function renderFinalReview(){
  const scope=review.inputs?.production_scope||{}, c=scope.criteria;
  const conditions=details(screen,'Delivery conditions for this run','本次运算的交付条件',false);
  conditions.append(el('p',c?tr('These conditions are tied to this edition.','以下条件随本版输入冻结。'):tr('Conditions have not been agreed. Set them in project preparation to assess delivery.','尚未约定条件，可返回项目准备页面设置。')));
+ if(scope.delivery_template&&deliveryTemplates[scope.delivery_template]){
+  const spec=deliveryTemplates[scope.delivery_template];conditions.append(el('strong',tr(...spec.title)),el('p',tr(...spec[scope.purpose])));
+ }
  if(c)table(conditions,[tr('Condition','条件'),tr('Requirement','要求')],[
   [tr('Intended use','用途'),{screening:tr('Screening','初筛'),comparison:tr('Comparison','比较'),review:tr('Engineering review','工程复核')}[scope.purpose]],
   [tr('Profile','工况'),c.profile||tr('All','全部')],...(c.dry_ends?[[tr('Section ends','断面端点'),tr('Dry','端点不过水')]]:[]),
@@ -238,8 +241,8 @@ function scopeFields(parent,scope,atHome=false){
  }
  paths.addEventListener('change',update);update();
  const c=scope.criteria||{},rules=details(box,'Delivery conditions for this purpose','本用途的交付条件',!!scope.criteria);
- const agreement=field(rules,'accept-agreement','Apply these conditions for this run','本次运算采用以下条件',scope.criteria?'yes':'no','select',
-  [['no','Set conditions later','稍后约定'],['yes','Use the listed conditions','采用所列条件']]);
+ const agreement=field(rules,'accept-agreement','Apply these conditions for this run','本次运算采用以下条件',scope.delivery_template?'template':scope.criteria?'yes':'no','select',
+  [['no','Set conditions later','稍后约定'],['template','Adopt the site delivery template','采用本类项目交付模板'],['yes','Use custom conditions','采用自定义条件']]);
  const summary=el('p');rules.append(summary);
  function explain(){
   summary.textContent={screening:tr('Share for conditional screening once the selected checks pass.','所选检查通过后，可结合 QA 限制交付用于条件性初筛。'),
@@ -247,6 +250,26 @@ function scopeFields(parent,scope,atHome=false){
    review:tr('Require documented field geometry or an independent event with an agreed stage tolerance for engineering review.','工程复核请指定场地几何资料，或指定独立实测事件及约定的水位误差限值。')}[purpose.value];
  }
  purpose.addEventListener('change',explain);explain();
+ const contract=el('section',undefined,'card');contract.id='delivery-use-preview';
+ parent.insertBefore(contract,box.parentElement);
+ function templateForSite(){
+  const type=atHome?document.getElementById('model-type')?.value:current.model_type;
+  return Object.entries(deliveryTemplates).find(([,v])=>v.model===type);
+ }
+ function scopePreview(){
+  const match=templateForSite(), expanded=!!contract.querySelector('details')?.open;
+  contract.replaceChildren();contract.hidden=!match;
+  if(!match)return;
+  const spec=match[1], adopted=agreement.value==='template';
+  contract.append(el('h3',tr(...spec.title)),el('p',tr(...spec[purpose.value])));
+  const info=details(contract,'Materials and delivery conditions','资料要求与交付条件',expanded);
+  info.append(el('p',tr(...spec.inputs)),el('p',tr('Check dry section ends for every selected profile. Engineering review also requires source-backed site geometry. The responsible engineer reviews remaining hydraulic limitations.','核查所选各工况的断面湿端。工程复核另需有关联原件的几何资料，由负责工程师核对其余水力限制。')));
+  if(adopted)info.append(el('strong',tr('Template selected for this edition.','本版已选择该模板。')));
+  else info.append(button('Use these delivery conditions','采用这些交付条件',()=>{
+   agreement.value='template';agreement.dispatchEvent(new Event('input',{bubbles:true}));
+   scopePreview();notify(tr('Delivery template selected. Review the conditions before computing.','已选择交付模板，请在计算前核对。'));
+  }));
+ }
  const profile=field(rules,'accept-profile','Modeled profile (blank for all)','计算工况（留空表示全部）',c.profile);
  const ends=field(rules,'accept-ends','Require dry cross-section ends','要求断面端点均高于水位',c.dry_ends?'yes':'no','select',[['no','Optional','不作要求'],['yes','Required','必须满足']]);
  const margin=field(rules,'accept-margin','Minimum road margin, ft (culverts only, optional)','最小道路余高，ft（限涵洞，可选）',c.min_freeboard_ft,'number');
@@ -279,11 +302,25 @@ function scopeFields(parent,scope,atHome=false){
  }));
  protocol.append(el('p',tr('Only interior observations reserved before the run count toward geographic support. If an event informed geometry, roughness or boundary choices, mark it used for tuning. A different independent event is then required.','仅计算前登记的内部观测可用于判定适用范围。若某个事件已用于选择几何、糙率或边界，请标为已用于调参，再补另一个独立事件。')));
  showEvents();stored.addEventListener('input',showEvents);
- for(const control of [profile,ends,margin,site,event,rs,error,basis])control.addEventListener('input',()=>{agreement.value='yes';});
+ function refreshTemplate(){
+  const apply=agreement.value==='template'&&!!templateForSite();
+  ends.disabled=apply;site.disabled=apply&&purpose.value==='review';
+  if(ends.disabled)ends.value='yes';if(site.disabled)site.value='yes';
+  scopePreview();
+ }
+ for(const control of [profile,ends,margin,site,event,rs,error,basis])control.addEventListener('input',()=>{if(agreement.value==='no')agreement.value='yes';});
+ for(const control of [purpose,agreement])control.addEventListener('change',refreshTemplate);
+ agreement.addEventListener('input',refreshTemplate);
+ if(atHome){for(const id of ['model-type','route'])document.getElementById(id)?.addEventListener('change',()=>queueMicrotask(refreshTemplate));}
+ refreshTemplate();
  function value(){
   const base={purpose:purpose.value,flow_paths:paths.value};const rows=eventRows();if(rows.length)base.validation_plan=rows;
   if(scope.event_hydrograph)base.event_hydrograph=scope.event_hydrograph;
-  if(agreement.value!=='yes')return base;
+  if(agreement.value==='no')return base;
+  if(agreement.value==='template'){
+   const match=templateForSite();if(!match)throw Error(tr('Choose a site type first.','请先选择模型类型。'));
+   base.delivery_template=match[0];
+  }
   const criteria={dry_ends:ends.value==='yes',site_geometry:site.value==='yes'};
   for(const [key,input] of Object.entries({profile,event,rs,basis}))if(input.value.trim())criteria[key]=input.value.trim();
   for(const [key,input] of Object.entries({min_freeboard_ft:margin,max_residual_ft:error})){
@@ -300,7 +337,7 @@ function scopeFields(parent,scope,atHome=false){
    current=updated;forgetForm(key,inputs);
   };
   const pending=()=>stageChange('purpose',tr('Delivery conditions','交付条件'),readDraft(key)?1:0,commit);
-  restoreForm(key,inputs);showEvents();update();explain();observeForm(key,inputs,pending);pending();
+  restoreForm(key,inputs);showEvents();update();explain();refreshTemplate();observeForm(key,inputs,pending);pending();
   box.append(button('Save intended use and delivery conditions','保存用途与交付条件',async()=>{
    await save();await commit();pending();await open(current.id);
    notify(tr('Project use and conditions saved.','项目用途和交付条件已保存。'));

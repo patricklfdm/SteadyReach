@@ -395,7 +395,7 @@ def assess(model, path, summary, diagnostics, studies, guidance):
             comparison=compare(dict(parent_revision=origin),summary)
         except EVIDENCE_ERRORS:
             comparison=None
-    result['purpose_decision']=evaluate(summary,reviewed_events,comparison)
+    result['purpose_decision']=evaluate(summary,reviewed_events,comparison,studies)
     from .edition_brief import build as edition_brief
     from .review_decisions import site_steps
     result['review_steps']=site_steps(scope,reviewed_events,studies) if is_river else []

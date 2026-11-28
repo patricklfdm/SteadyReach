@@ -97,6 +97,9 @@ def create(body):
     if (lat is None)!=(lon is None) or route=='coordinates' and lat is None:raise ValueError('Supply latitude and longitude / 请填写经纬度')
     model_type=body.get('model_type','culvert')
     if model_type not in ('culvert','river'):raise ValueError('Choose river or culvert analysis')
+    if project_scope.get('delivery_template'):
+        from .delivery_templates import validate
+        validate(project_scope['delivery_template'], model_type)
     if model_type=='river' and route=='native':raise ValueError('River mode currently starts from coordinates and reviewed sections')
     key='site_'+unique_id().lower();f=folder(key)
     c=template(key,lat if lat is not None else 0.,lon if lon is not None else 0.);c['title']=title;c['model_type']=model_type
@@ -177,7 +180,11 @@ def update(key,body):
         if m.get('active_project') or m.get('summary'):
             raise ValueError('Change the scope on an editable revision / 请在可编辑修订版修改用途')
         from .validation_plan import scope_update
-        m['production_scope'] = scope_update(m.get('production_scope',{}),scope(body['production_scope']))
+        intent = scope(body['production_scope'])
+        if intent.get('delivery_template'):
+            from .delivery_templates import validate
+            validate(intent['delivery_template'], m['model_type'])
+        m['production_scope'] = scope_update(m.get('production_scope',{}),intent)
     allowed={'native_length_unit','vertical_datum','horizontal_crs','dem_vertical_unit','dem_vertical_datum'}
     values=body.get('metadata',{})
     if set(values)-allowed:raise ValueError('Unknown metadata fields')

@@ -250,17 +250,24 @@ function priorityRows(assessment,comparison){
  }
  const errors=(assessment.findings||[]).filter(f=>['OUTPUT_CONSISTENCY','EVIDENCE_GAPS','WARNING_COVERAGE'].includes(f.code));
  for(const f of errors)add(f.code,f.reason.en,f.reason.zh,f.target);
- if(review?.field_regression){const r=review.field_regression;add(r.code,r.en,r.zh,r.action.tool,r.action);}
+ const decision=assessment.edition_brief?.next_decision;
+ if(['KEEP_REFERENCE','CHECK_FIELD_CONTROL','VERIFY_FLOW_PATH','VERIFY_OUTLET_INFLUENCE','VERIFY_BARREL_INVERTS'].includes(decision?.code)){
+  add(decision.code,decision.en,decision.zh,decision.action.tool,decision.action);
+ }
+ if(review?.field_regression&&decision?.code!=='KEEP_REFERENCE'){const r=review.field_regression;add(r.code,r.en,r.zh,r.action.tool,r.action);}
  if(review?.field_regression_error)add('observation-error','Restore the paired observation records before judging the change in field fit.','请先恢复两版可比的观测记录，再判断修订对实测吻合程度的影响。','comparison');
- if(review?.flags?.includes('CHECK_WATER_LEVEL_CHANGE')&&review.maximum_at_verified_center){
+ if(decision?.code!=='VERIFY_FLOW_PATH'&&review?.flags?.includes('CHECK_WATER_LEVEL_CHANGE')&&review.maximum_at_verified_center){
   const v=review.maximum_at_verified_center,delta=Number(v.change).toFixed(3);
   let en=v.profile+' · RS '+v.station+' · signed stage change '+delta+' ft.',zh=v.profile+' · RS '+v.station+' · 水位变化 '+delta+' ft。';
   const split=(review.investigation||[]).find(r=>r.kind==='overbank_share'||r.en.includes('overbank share'));
   if(split){en+=' '+split.en;zh+=' '+split.zh;}
   add('revision-change',en,zh,'comparison');
  }
- else if(review?.investigation){const split=review.investigation.find(r=>r.kind==='overbank_share');if(split)add('revision-change',split.en,split.zh,'comparison');}
- for(const r of assessment.review_steps||[])add(r.code,r.en,r.zh,r.action.tool,r.action);
+ else if(decision?.code!=='VERIFY_FLOW_PATH'&&review?.investigation){const split=review.investigation.find(r=>r.kind==='overbank_share');if(split)add('revision-change',split.en,split.zh,'comparison');}
+ for(const r of assessment.review_steps||[]){
+  if(decision?.code==='VERIFY_OUTLET_INFLUENCE'&&decision.en.startsWith(r.en))continue;
+  add(r.code,r.en,r.zh,r.action.tool,r.action);
+ }
  for(const state of ['exceeded','missing']){
   for(const row of rows.filter(r=>r.state===state&&r.action)){
    const key=row.action.tool;

@@ -157,7 +157,7 @@ def collect(summary_path, comparisons=()):
         from .validation_plan import usable
         river_checks['confidence']=assess(s,rows,reviewed_events,diagnostics,studies,revision)
         if 'events' in river_checks:river_checks['events']=usable(river_checks['events'],s['configuration'].get('production_scope',{}))
-    purpose_decision=evaluate(s,reviewed_events,revision)
+    purpose_decision=evaluate(s,reviewed_events,revision,studies)
     from .review_decisions import site_steps
     steps=site_steps(s['configuration'].get('production_scope') or {},reviewed_events,studies) if h.get('model_type')=='river' else []
     from .edition_brief import build as edition_brief

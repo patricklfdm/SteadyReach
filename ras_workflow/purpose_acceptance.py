@@ -35,7 +35,7 @@ def criteria(raw):
     return result
 
 
-def evaluate(summary, events=(), comparison=None):
+def evaluate(summary, events=(), comparison=None, studies=()):
     scope = summary.get('configuration',{}).get('production_scope') or {}
     from .validation_plan import score,usable,STATES
     planned=score(summary,events)
@@ -60,6 +60,12 @@ def evaluate(summary, events=(), comparison=None):
         if not profiles or not hyd.get('run_id'):
             add('missing','Supply a verified calculation for the selected profile '+str(rules.get('profile',''))+'.',
                 '请补充所选工况的可追溯计算结果 '+str(rules.get('profile',''))+'。')
+        if scope.get('delivery_template') and scope.get('flow_paths') in ('parallel','bridge','unsteady'):
+            add('exceeded','The declared flow paths or structure require a different model scope.',
+                '已声明的过流路径、桥梁或非恒定过程超出本模板适用范围。')
+        if scope.get('delivery_template') and purpose=='review' and scope.get('flow_paths','unknown')=='unknown':
+            add('missing','Confirm a single applicable flow path before engineering review.',
+                '提交工程复核前请确认单主过流路径适用。')
         for p in profiles:
             profile=p['profile_id']
             tool='revision'
@@ -116,6 +122,35 @@ def evaluate(summary, events=(), comparison=None):
         if purpose=='review' and 'max_residual_ft' not in rules and not rules.get('site_geometry'):
             add('missing','Specify field geometry evidence or a held-out stage event and error limit for review.',
                 '请为工程复核指定场地几何资料要求，或约定独立实测水位事件及误差。')
+        if scope.get('delivery_template') and purpose == 'review':
+            if scope['delivery_template'] == 'between_bridges_v1' and 'max_residual_ft' not in rules and not any(r['role']=='holdout' for r in planned):
+                tool='observations'
+                add('missing','Register an independent interior stage and its project tolerance.',
+                    '请登记独立河段内点水位及项目约定容差。')
+            if scope['delivery_template'] == 'between_bridges_v1':
+                from .river_review import response
+                tool='sensitivity'
+                responses=response([s for s in studies if 'cases' in s and 'comparisons' in s])
+                side='upstream' if hyd.get('flow_regime')=='supercritical' else 'downstream'
+                for p in profiles:
+                    profile=p['profile_id']
+                    covered=any(r['profile']==profile and len(r['paths'])==1 and r['paths'][0].split('.')[:2] in
+                                (['boundary_slopes',side],['boundaries',side]) for r in responses)
+                    add('met' if covered else 'missing',profile+' · '+side+' boundary influence '+('tested.' if covered else 'requires a single-factor sensitivity run.'),
+                        profile+' · '+('上游' if side=='upstream' else '下游')+'边界影响'+('已试算。' if covered else '需做单因素敏感性试算。'))
+                profile=None
+            if scope['delivery_template'] == 'single_culvert_v1':
+                proof=summary.get('configuration',{}).get('acceptance_geometry',{}).get('crossing') or {}
+                tool='revision'
+                add('met' if proof.get('documented') else 'missing',
+                    'Crossing control records linked.' if proof.get('documented') else 'Verify the source records for barrel dimensions, length, inverts and road profile.',
+                    '涵洞控制参数已关联原件。' if proof.get('documented') else '请核对并关联洞口净尺寸、涵长、涵底及道路控制线原件。')
+                for p in profiles:
+                    tool='native';profile=p['profile_id']
+                    known=finite((p.get('metrics') or {}).get('roadway_flow_software_cfs'))
+                    add('met' if known else 'missing',profile+' · '+('Native roadway discharge available.' if known else 'Obtain native roadway discharge.'),
+                        profile+' · '+('已有原生道路越流量。' if known else '请补原生道路越流量。'))
+                profile=None
         if 'max_residual_ft' in rules:
             tool='observations'
             event,limit=rules['event'],rules['max_residual_ft']

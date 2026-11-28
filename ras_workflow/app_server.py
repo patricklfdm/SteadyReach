@@ -40,6 +40,10 @@ def create():
         def do_GET(self):
             try:
                 route=self.route()
+                if route=='delivery-templates.js':
+                    from .delivery_templates import TEMPLATES
+                    script='const deliveryTemplates = '+json.dumps(TEMPLATES,ensure_ascii=False)+';'
+                    return self.send(200,script.encode('utf-8'),'application/javascript; charset=utf-8')
                 if route=='east-fork-practice.json':
                     return self.send(200, read(ROOT/'examples/east_fork_wy/practice.json'))
                 if route=='state':return self.send(200,dict(projects=core.listing(),deleted_projects=core.listing(deleted=True),archived_editions=edition_storage.archived(ROOT),scope='Single reach, one box/circular culvert crossing, 1D steady flow'))

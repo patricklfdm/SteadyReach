@@ -1,6 +1,6 @@
 # Single-workstation pilot
 
-[简体中文](PILOT_CN.md) · [Administration and recovery](OPERATIONS_EN.md) · [Release checks](LOCAL_RELEASE_EN.md)
+[简体中文](PILOT_CN.md) · [Administration and recovery](OPERATIONS_EN.md) · [Release checks](LOCAL_RELEASE_EN.md) · [First-use scorecard](FIRST_PILOT_EN.md)
 
 An engineer can use this trial for a single-reach, one-dimensional steady-flow study within the supported geometry. Each package identifies the selected version, input evidence, original HEC-RAS result and outstanding hydraulic questions. Package integrity and field agreement are separate decisions.
 

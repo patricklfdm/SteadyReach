@@ -522,6 +522,9 @@ def apply(session_path,revision,*,direct_start=False,mapping_enabled=None,produc
             if c['production_scope'].get('criteria',{}).get('site_geometry'):
                 from .purpose_acceptance import geometry_record
                 c['acceptance_geometry'] = geometry_record(g,d['answers'],sources)
+                if c['production_scope'].get('delivery_template') == 'single_culvert_v1':
+                    from .delivery_templates import crossing_records
+                    c['acceptance_geometry']['crossing'] = crossing_records(g,d['answers'],sources)
         if direct_start and mapping_enabled is not None:
             if type(mapping_enabled)!=bool:raise ValueError('Explicit GIS boolean required')
             c.setdefault('delivery',{})['mapping_enabled']=mapping_enabled

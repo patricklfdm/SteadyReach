@@ -8,6 +8,7 @@ def build(summary, decision, events, steps=(), comparison=None, studies=()):
     h = summary['hydraulics']
     config = summary.get('configuration') or {}
     scope = config.get('production_scope') or {}
+    model_type = h.get('model_type') or config.get('model_type')
     measured, missing, _ = holdout_stages(usable(events, scope))
     observed = sorted({(str(row['location']['rs']), row['flow_cfs']) for row in measured
                        if (row.get('location') or {}).get('rs') is not None and finite(row.get('flow_cfs'))})
@@ -34,7 +35,7 @@ def build(summary, decision, events, steps=(), comparison=None, studies=()):
     elif h.get('channel_geometry_basis') == 'conditional_surface_dem':
         condition = ('The surface DEM approximates the submerged bed.', '当前以地表 DEM 近似水下河床。')
         follow = ('Survey team: collect dated bed-to-bank sections at the hydraulic controls.', '请测量组补控制断面从河床到岸顶的同期剖面。')
-    elif h.get('model_type') == 'culvert':
+    elif model_type == 'culvert':
         condition = ('Opening and invert elevations control headwater and overtopping.', '洞口几何及进出口涵底高程影响涵前水位与漫顶。')
         follow = ('Structure survey team: check the barrel openings, both inverts and road crest against the model.', '请结构测量组核对各孔洞口、两端涵底和路面顶高程。')
     elif missing:
@@ -46,7 +47,7 @@ def build(summary, decision, events, steps=(), comparison=None, studies=()):
 
     if config.get('case_kind')=='software_validation':
         answer=('Reproduces the reference calculation.', '复算给定参考工况。')
-    elif h.get('model_type')=='culvert':
+    elif model_type=='culvert':
         answer=('Calculates water levels at the crossing.', '计算过水设施处的水位。')
     else:
         answer=('Calculates steady-flow water levels along the reach.', '计算该河段的恒定流水面线。')
@@ -55,12 +56,15 @@ def build(summary, decision, events, steps=(), comparison=None, studies=()):
         return dict(heading=dict(en=en_title, zh=zh_title), en=en, zh=zh)
     from .method_review import conclusions
     from .hydraulic_triage import recommendation
-    next_decision = recommendation(decision, steps, comparison, studies)
+    from .delivery_templates import delivery_row
+    contract = delivery_row(scope)
+    next_decision = recommendation(decision, steps, comparison, studies, summary)
     return dict(run_id=h.get('run_id'), next_decision=next_decision, rows=[
         row('Edition use', '本版用途', answer[0]+' '+decision['en'], answer[1]+decision['zh']),
         row('Flow and field coverage', '流量和实测范围', ' '.join((flows[0],field[0])), flows[1]+field[1]),
         row('Key assumption or limitation', '关键假设或限制', *condition),
         row('Who should follow up', '下一步由谁补什么', *follow),
+        *([contract] if contract else []),
         next_decision,
         *conclusions(summary,steps,comparison),
     ])

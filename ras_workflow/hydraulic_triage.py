@@ -2,7 +2,7 @@
 from .common import finite
 
 
-def recommendation(decision, steps=(), comparison=None, studies=()):
+def recommendation(decision, steps=(), comparison=None, studies=(), summary=None):
     review = (comparison or {}).get('review') or {}
     rows = decision.get('rows') or []
     outstanding = [row for row in rows if row['state'] in ('exceeded', 'missing')]
@@ -50,6 +50,19 @@ def recommendation(decision, steps=(), comparison=None, studies=()):
         return result('VERIFY_FLOW_PATH', dict(tool='comparison'), path_change,
                       'Check connected overbank flow against adjacent sections and opening surveys before accepting the revision.',
                       '选版前，沿相邻断面核对漫滩通道是否连通，并与开口测量比对。')
+    boundary = next((s for s in steps if s.get('code','').startswith('BOUNDARY_DOWNSTREAM_')), None)
+    if boundary:
+        return result('VERIFY_OUTLET_INFLUENCE', boundary['action'], boundary,
+                      'Compare the outlet control at the modeled event and datum before using stage at the affected sections.',
+                      '引用受影响断面的水位前，先核对同事件、同基准的出口控制水位。')
+    config = (summary or {}).get('configuration') or {}
+    hyd = (summary or {}).get('hydraulics') or {}
+    if (hyd.get('model_type') or config.get('model_type')) == 'culvert' and hyd.get('run_id') and not (config.get('acceptance_geometry') or {}).get('documented'):
+        evidence = dict(en='Source-backed inlet and outlet elevations for all barrel groups are unverified in this edition.',
+                        zh='本版尚未证实每组涵孔两端涵底与原件一致。')
+        return result('VERIFY_BARREL_INVERTS', dict(tool='invert-request'), evidence,
+                      'Request each end on the model datum. Headwater and road overtopping remain conditional until the controls are checked.',
+                      '按模型高程基准逐组索取进出口涵底；核实这些控制高程前，涵前水位与漫顶评价按条件性结果使用。')
     if outstanding and all(r['state']=='missing' and (r.get('action') or {}).get('tool')=='observations' for r in outstanding):
         row = outstanding[0]
         return result('COMPLETE_FIELD_EVIDENCE', row.get('action'), row,
