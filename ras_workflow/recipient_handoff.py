@@ -7,6 +7,7 @@ import shutil
 from tempfile import TemporaryDirectory
 from urllib.parse import quote
 
+from .interface_style import embedded_interface_style
 from . import app_core, handoff, result_guidance, site_delivery
 from .common import ROOT, digest, item, lock, read, rel, safe_path
 from .delivery_pair import check, verified_member
@@ -24,6 +25,7 @@ def page(language, model, assessment, folders, receipt, pair, review, selection=
     result=['<!doctype html><html lang="'+t('en','zh-CN')+'"><meta charset="utf-8">',
             '<meta name="viewport" content="width=device-width, initial-scale=1"><title>'+heading+'</title>',
             '<style>body{font:1rem/1.55 system-ui,sans-serif;max-width:52rem;margin:auto;padding:2rem;color:#182e36}h1,h2{line-height:1.2}code{overflow-wrap:anywhere}li{margin:.45rem 0}@media print{nav{display:none}}</style>',
+            embedded_interface_style(), '<body class="sr-reading">',
             '<nav>'+link(t('Start_zh-CN.html','Start_EN.html'),t('中文版','English'))+'</nav><main><h1>'+heading+'</h1>',
             '<p>L'+str(assessment['level'])+' · '+escape(assessment['title'][language])+'</p>',
             '<p>'+escape(assessment['use_guide']['allowed'][language])+'</p>',
@@ -125,7 +127,7 @@ def page(language, model, assessment, folders, receipt, pair, review, selection=
                    '<p id="verify-status" role="status">'+t('Awaiting folder selection','请选择待校验目录')+'</p></section>',
                    '<script>'+verify_js+'</script>'])
     result.append('<p>'+t('Transfer this entire folder. Its Complete and Minimal subfolders contain the selected edition. Open the model and GIS files in their desktop applications.',
-                          '请整体转交本目录。Complete 和 Minimal 子目录均属于所选版本，模型及 GIS 文件可用相应的桌面软件打开。')+'</p></main></html>')
+                          '请整体转交本目录。Complete 和 Minimal 子目录均属于所选版本，模型及 GIS 文件可用相应的桌面软件打开。')+'</p></main></body></html>')
     return '\n'.join(result)
 
 

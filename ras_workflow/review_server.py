@@ -55,6 +55,7 @@ def create(project=None, session=None):
                     mimes={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.pdf':'application/pdf'}
                     return self.send(200,p.read_bytes(),mimes.get(suffix,'application/octet-stream'),p.name if suffix not in mimes else None)
                 assets={'report_options.js':('report_options.js','application/javascript; charset=utf-8'),'':('review.html','text/html; charset=utf-8'),'project_actions.js':('project_actions.js','application/javascript; charset=utf-8'),'review.js':('review.js','application/javascript; charset=utf-8'),'review.css':('review.css','text/css; charset=utf-8')}
+                assets['interface.css'] = ('interface.css', 'text/css; charset=utf-8')
                 if route not in assets:return self.send(404,dict(error='Not found'))
                 filename,mime=assets[route];self.send(200,(ROOT/'ras_workflow/templates'/filename).read_bytes(),mime)
             except (ValueError,KeyError,TypeError,OSError,RuntimeError) as e:self.send(409,dict(error=str(e)))

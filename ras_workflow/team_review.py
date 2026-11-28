@@ -1,4 +1,5 @@
 """Formal local submissions and offline station comments for a family of editions."""
+from .interface_style import embedded_interface_style
 from . import app_core as core
 from .common import ROOT, digest, intact, lock, read, save, utc
 from .revision_inputs import bound_inputs, hydraulic_inputs, station_key
@@ -106,7 +107,7 @@ def offline_form(key, expected_head):
     request={k:current[k] for k in ('schema','edition','head','stations','dependencies')}
     encoded=json.dumps(request,ensure_ascii=False).replace('<',r'\u003c')
     template=Path(__file__).parent/'templates/team_form.html'
-    return dict(html=template.read_text(encoding='utf-8').replace('__REVIEW_REQUEST__',encoded))
+    return dict(html=template.read_text(encoding='utf-8').replace('__INTERFACE_STYLE__',embedded_interface_style()).replace('__REVIEW_REQUEST__',encoded))
 
 
 def text_field(value, limit, name):

@@ -76,7 +76,27 @@ const expansionState=new Map();
 function details(parent,en,zh,open=false,stateKey=en){const d=el('details');const key=(current?.id||'home')+'|'+(finalReview?'review':'edit')+'|'+(parent.closest('[data-key]')?.dataset.key||'')+'|'+stateKey;d.open=expansionState.get(key)??open;d.addEventListener('toggle',()=>expansionState.set(key,d.open));d.append(el('summary',tr(en,zh)));const b=el('div');d.append(b);parent.append(d);return b;}
 function check(parent,en,zh,value,onchange){const l=el('label',undefined,'check'),i=el('input');i.type='checkbox';i.checked=value;l.append(i,el('span',tr(en,zh)));i.onchange=()=>onchange(i.checked);parent.append(l);return i;}
 function table(parent,head,rows){const wrap=el('div',undefined,'scroll'),t=el('table'),hr=el('tr');head.forEach(h=>hr.append(el('th',h)));t.append(hr);for(const row of rows){const r=el('tr');for(const v of row)r.append(el('td',v??'—'));t.append(r);}wrap.append(t);parent.append(wrap);}
-function shell(step){$('#steps').replaceChildren();[tr('1 · Project','1 · 建立项目'),tr('2 · Prepare model','2 · 准备模型'),tr('3 · Confirm inputs','3 · 开算确认'),tr('4 · Results','4 · 查看结果')].forEach((s,i)=>{const label=el('span',s,i===step?'active':'');if(i===step)label.setAttribute('aria-current','step');$('#steps').append(label);});document.documentElement.lang=lang==='zh'?'zh-CN':'en';$('#language').textContent=lang==='zh'?'English':'简体中文';$('#subtitle').textContent=tr('HEC-RAS · Local computation','HEC-RAS · 本机计算');$('#foot').textContent=tr('1D steady rivers and culverts. Actual HEC-RAS results; assumptions and unresolved checks remain visible. No engineering certification is implied.','1D 恒定流河道与涵洞分析。使用真实 HEC-RAS；保留估计项与未闭合检查，不自动认定设计合格。');$('#screen').replaceChildren();}
+function shell(step){
+ const steps=$('#steps');
+ steps.replaceChildren();
+ const labels=[tr('Project','建立项目'),tr('Prepare model','准备模型'),tr('Confirm inputs','开算确认'),tr('Results','查看结果')];
+ labels.forEach((title,index)=>{
+  const item=el('li');
+  if(index===step)item.setAttribute('aria-current','step');
+  const number=el('span',String(index+1),'step-number');
+  number.setAttribute('aria-hidden','true');
+  item.append(number,el('span',title,'step-title'));
+  steps.append(item);
+ });
+ document.documentElement.lang=lang==='zh'?'zh-CN':'en';
+ $('#journey').setAttribute('aria-label',tr('Workflow progress','流程进度'));
+ $('#skip-content').textContent=tr('Skip to workspace','跳至工作区');
+ $('#language').textContent=tr('简体中文','English');
+ $('#language').lang=tr('zh-CN','en');
+ $('#subtitle').textContent=tr('HEC-RAS · Local computation','HEC-RAS · 本机计算');
+ $('#foot').textContent=tr('1D steady rivers and culverts. Actual HEC-RAS results; assumptions and unresolved checks remain visible. No engineering certification is implied.','1D 恒定流河道与涵洞分析。使用真实 HEC-RAS；保留估计项与未闭合检查，不自动认定设计合格。');
+ $('#screen').replaceChildren();
+}
 const stateLabel=s=>({NEW:tr('New','新建'),PROCESSING:tr('Processing','处理中'),INPUTS_READY:tr('Model draft','模型草稿'),RESULTS_READY:tr('Computed · review limitations','已计算 · 请查看限制'),RESULTS_READY_MAP_PENDING:tr('Computed · map export needs attention','已计算 · 地图导出待处理'),NEEDS_ATTENTION:tr('Needs attention · draft retained','需处理 · 草稿已保留'),ABANDONED:tr('Abandoned · files retained','已放弃 · 文件保留'),INTERRUPTED:tr('Interrupted · retry available','已中断 · 可重试')}[s]||s);
 function rememberView(view){window.history?.replaceState({steadyReach:view},'');}
 async function resumePage(){
@@ -109,14 +129,13 @@ async function home(){
  dirty=false;mapData=null;shell(0);
  const screen=$('#screen');
  screen.append(el('h1',tr('Projects','项目')),el('p',tr('Start with a location, a surveyed river package, or a HEC-RAS model. Review inputs together before computing.','从坐标、实测河道资料包或已有 HEC-RAS 工程开始，集中核对参数后再计算。')));
- const saved=el('section');
+ const saved=el('section',undefined,'project-library');
  await renderSavedProjects(saved);
  if(viewRequest!==request)return;
  const hasProjects=!!saved.querySelector('[data-project-id]');
- if(!hasProjects)renderPractice(screen);
  const card=details(screen,'Start a new project','新建项目',!hasProjects,'new-project');
  screen.append(saved);
- if(hasProjects)renderPractice(screen);
+ renderPractice(screen);
  const form=el('div',undefined,'grid project-intake');card.append(form);
  const route=field(form,'route','Starting information','起始资料','coordinates','select',[
   ['coordinates','Coordinates / partial information','坐标／部分资料'],['native','Existing HEC-RAS model','已有 HEC-RAS 工程'],['survey','Georeferenced river survey package','已整理的实测河道资料包']]);
@@ -285,6 +304,40 @@ function indexEditions(projects,deleted){
  }
  return numbers;
 }
+let projectFilter='';
+function projectSearch(parent,entries){
+ const label=el('label',undefined,'project-search');
+ label.append(el('span',tr('Find a project','查找项目')));
+ const input=el('input');
+ input.type='search';
+ input.placeholder=tr('Project name or version ID','项目名称或版本编号');
+ input.value=projectFilter;
+ label.append(input);
+ const count=el('small');
+ count.setAttribute('role','status');
+ const clear=el('button',tr('Clear filter','清除筛选'));
+ clear.type='button';
+ const tools=el('div',undefined,'library-tools');
+ tools.append(label,clear,count);
+ parent.append(tools);
+ const filter=()=>{
+  projectFilter=input.value;
+  const term=projectFilter.trim().toLowerCase();
+  let visible=0;
+  for(const {group,node} of entries){
+   const match=!term||[familyTitle(group),group.id,...group.versions.flatMap(v=>[v.title,v.id])]
+      .some(value=>String(value||'').toLowerCase().includes(term));
+   node.hidden=!match;
+   if(match)visible++;
+  }
+  clear.hidden=!input.value;
+  count.textContent=visible===0?tr('No matching projects','没有匹配的项目'):
+    tr('Projects shown: ','显示项目数：')+visible+' / '+entries.length;
+ };
+ input.addEventListener('input',filter);
+ clear.onclick=()=>{input.value='';filter();input.focus();};
+ return filter;
+}
 async function renderSavedProjects(parent){
  const data=await api('state');parent.replaceChildren();
  parent.append(el('h2',tr('Saved projects','已保存的项目')));
@@ -292,10 +345,15 @@ async function renderSavedProjects(parent){
  if(!available.length)parent.append(el('p',tr('No saved projects yet.','暂无已保存项目。'),'muted'));
  const deleted=data.deleted_projects||[];
  const sequenceById=indexEditions(available,deleted);
- for(const group of savedProjectGroups(available,deleted)){
+ const groups=Array.from(savedProjectGroups(available,deleted));
+ const entries=[];
+ const applyFilter=groups.length>1?projectSearch(parent,entries):null;
+ if(!applyFilter)projectFilter='';
+ for(const group of groups){
   const title=familyTitle(group);
   const count=group.versions.length;
   const entry=details(parent,title+' · '+count+(count===1?' version':' versions'),title+' · '+count+' 个版本',false,'project-group/'+group.id);
+  entries.push({group,node:entry.parentElement});
   if(!group.original)entry.append(el('p',tr('Original project unavailable · ','本机缺少原项目记录 · ')+group.id,'muted'));
   else if(group.versions[0].id!==group.id)entry.append(el('p',tr('The original project is in Deleted projects.','原项目已移至回收站。'),'muted'));
   for(const project of group.versions){
@@ -305,6 +363,7 @@ async function renderSavedProjects(parent){
    else renderProjectCard(entry,project,false,parent,project.id===group.id,caption);
   }
  }
+ if(applyFilter)applyFilter();
  if(deleted.length){
   const trash=details(parent,'Deleted projects ('+deleted.length+')','回收站（'+deleted.length+'）',false,'deleted-projects');
   trash.append(el('p',tr('Deleted projects keep their files on this computer and can be restored. These files still use disk space and remain available to related revisions.','回收站保留本机项目文件，可随时恢复。文件仍占用磁盘空间，关联修订版可继续使用。'),'muted'));
@@ -365,22 +424,29 @@ async function open(id){const request=++viewRequest,changed=current?.id!==id,was
  }
  current=next;pendingChanges.clear();edited={};metaEdits={};classEdits={};dirty=false;render();if(changed)window.scrollTo(0,0);if(current.status==='PROCESSING')poll=setTimeout(()=>pollProject(id),2500);else if(wasProcessing)notify(current.job?.status==='FAILED'?(current.errors||[]).join('\n'):current.job?.action==='automatic-prepare'?tr('Automatic draft saved. Review the highlighted interpretations, then confirm all calculation inputs.','自动草稿已保存。请核对集中列出的判断项，然后确认全部运算参数。'):current.results?tr('Calculation and export task finished. Review the results and delivery status.','任务已完成，请查看计算结果和交付状态。'):tr('Preparation finished. Review the model inputs.','资料准备完成，请核对模型输入。'),current.job?.status==='FAILED');}
 function projectHeading(m){
- if(!m.parent_revision)return m.title;
+ return editionHeading(m).join(' · ');
+}
+function editionHeading(m){
+ if(!m.parent_revision)return [m.title];
  const info=readDraft(draftKey('edition',m.id))||{},root=info.rootTitle||m.title.replace(/(?:\s*·\s*(?:revision|QA draft))+$/gi,'').trim();
- return root+' · '+versionCaption(m,root,info.sequence);
+ return [root,versionCaption(m,root,info.sequence)];
 }
 function updateProcessing(m){
  const region=document.getElementById('task-progress');
  region.replaceChildren();region.append(el('p',m.phase?.startsWith('CHECK_BATCH_')?checkStepName(m.phase.slice(12).toLowerCase()):({RUN:tr('Starting HEC-RAS','正在启动 HEC-RAS'),HEC_RAS_REPORTS_DELIVERY:tr('Calculating and preparing reports and maps','正在计算并制作报告与地图'),PREPARE:tr('Preparing model inputs','正在准备模型输入')})[m.phase]||m.phase));if(m.check_batch_progress)renderCheckBatchProgress(region,m.check_batch_progress);if(m.study_progress)renderStudyProgress(region,m.study_progress);
  document.getElementById('task-record').textContent=JSON.stringify(m.job,null,2);
 }
-function render(){const m=current;rememberView({project:m.id,page:'model'});shell(m.results?3:m.status==='PROCESSING'&&m.job?.action==='run'?2:1);const screen=$('#screen');screen.append(button('← Projects','← 项目列表',async()=>{await save();await home();notify();}),el('h1',projectHeading(m)),el('p',batchHeadline(m)||stateLabel(m.status),batchHeadline(m)?'warning':'status'));if(!m.results||m.status==='PROCESSING')renderPilotClock(screen);if(m.status==='ABANDONED'){screen.append(el('p',tr('Inputs and results are retained. Create a new project to restart.','输入和结果已保留，需要重新开始时请建立新项目。')));return;}if(m.status==='PROCESSING'){
+function render(){const m=current;rememberView({project:m.id,page:'model'});shell(m.results?3:m.status==='PROCESSING'&&m.job?.action==='run'?2:1);const screen=$('#screen');
+ const [title,edition]=editionHeading(m);
+ screen.append(button('← Projects','← 项目列表',async()=>{await save();await home();notify();},'back-link'),el('h1',title));
+ if(edition)screen.append(el('p',edition,'edition-details'));
+ screen.append(el('p',batchHeadline(m)||stateLabel(m.status),batchHeadline(m)?'warning':'status'));if(['ABANDONED','PROCESSING'].includes(m.status))renderPilotClock(screen);if(m.status==='ABANDONED'){screen.append(el('p',tr('Inputs and results are retained. Create a new project to restart.','输入和结果已保留，需要重新开始时请建立新项目。')));return;}if(m.status==='PROCESSING'){
  const region=el('section');region.id='task-progress';region.setAttribute('aria-label',tr('Task progress','任务进度'));
  screen.append(el('div',undefined,'progress'),el('p',tr('Working locally. You may close this browser tab; keep the launcher running.','正在本机处理。可关闭浏览器标签页，请保留启动程序。')),region);
  const record=el('pre');record.id='task-record';details(screen,'Technical details','技术详情').append(record);updateProcessing(m);return;
  }
  if(m.results&&m.status!=='ABANDONED'){renderResults(screen);return;}
- const nextStep=el('div');screen.append(nextStep);
+ const nextStep=el('div');screen.append(nextStep);renderPilotClock(screen);
  renderTaskRecovery(nextStep,m);
  if(!m.native_review&&typeof renderIntakeEvidence==='function')renderIntakeEvidence(screen,m);
  if(m.calculation_recovery&&m.calculation_recovery.mode!=='REVIEW_INPUTS'&&!m.results?.run_id)return;if(m.feedback_spec&&(m.job?.status==='FAILED'||!m.results)){screen.append(button('Resume confirmed field check','继续已确认的现场情景',async()=>{await api('field/resume',{id:m.id,confirmed:true});await open(m.id);}));if(!m.results)return;}if(m.summary){screen.append(el('p',tr('L0 · The saved calculation evidence is unavailable. Restore the matching summary before reviewing results.','L0 · 保存的计算证据不可用。请恢复对应的汇总文件后再复核结果。'),'warning'));}if(m.feasibility?.state==='outside'){renderFeasibility(screen,m.feasibility,true);return;}
@@ -538,7 +604,9 @@ function renderResults(screen){
  const issues=r.diagnostics?.issues||[],groups={};for(const i of issues)(groups[i.code]??=[]).push(i);const qa=guidanceTarget(details(pages.review,'Automatic checks and warnings ('+issues.length+')','自动检查与警告（'+issues.length+'）',false),'qa');for(const[code,rows]of Object.entries(groups)){const b=details(qa,code+' · '+rows.length,code+' · '+rows.length);table(b,['Profile','RS','Severity','Action'],rows.map(i=>[i.profile,i.station,i.severity,i.recommended_action]));}qa.append(el('p',tr('Full native warning-table coverage: ','完整原生警告表覆盖状态：')+warningCoverageLabel(r.diagnostics?.warning_coverage)));
  renderResultTools(pages.review,pages.delivery);
  const delivery=pages.delivery;
- const files=el('section');delivery.prepend(files);
+ const files=el('section',undefined,'delivery-files');
+ const packages=el('section',undefined,'delivery-files');
+ delivery.prepend(files,packages);
  files.append(el('h2',tr('Reports','报告')));
  const reports=current.report_files||[];
  const pdf=el('div',undefined,'actions');files.append(pdf);
@@ -550,16 +618,17 @@ function renderResults(screen){
   (f.name.toLowerCase().endsWith('.pdf')?pdf:other).append(a);
  }
  if(!reports.length)files.append(el('p',tr('Report files are pending.','报告文件待生成。'),'warning'));
- files.append(guidanceTarget(el('h2',tr('Delivery packages','交付包')),'recipient'));
+ packages.append(guidanceTarget(el('h2',tr('Delivery packages','交付包')),'recipient'));
  if(d){
-  files.append(el('p',tr('Delivery status: ','交付状态：')+deliveryState(d.status),d.status==='INCOMPLETE'?'warning':'status'));
+  packages.append(el('p',tr('Delivery status: ','交付状态：')+deliveryState(d.status),d.status==='INCOMPLETE'?'warning':'status'));
+  const packageLinks=el('div',undefined,'actions');packages.append(packageLinks);
   for(const key of ['minimal','complete'])if(d[key]){
-   files.append(button(key==='minimal'?'Open Minimal':'Open Complete',key==='minimal'?'打开最小交付包':'打开完整交付包',()=>api('open-folder',{id:current.id,path:d[key].path})));
+   packageLinks.append(button(key==='minimal'?'Open Minimal':'Open Complete',key==='minimal'?'打开最小交付包':'打开完整交付包',()=>api('open-folder',{id:current.id,path:d[key].path})));
   }
-  if(d.minimal&&d.complete&&!current.exports_need_refresh)renderRecipientHandoff(files);
-  renderDeliveryRecovery(files,d);
- }else files.append(el('p',tr('Delivery packages are pending.','交付包待生成。'),'warning'));
- const actions=details(pages.delivery,'Export again without solving','重新导出（不重新求解）');actions.append(button('Regenerate reports','重新生成报告',async()=>{await api('report',{id:current.id});await open(current.id);}),button('Regenerate delivery','重新生成交付包',async()=>{await api('delivery',{id:current.id});await open(current.id);}));
+  if(d.minimal&&d.complete&&!current.exports_need_refresh)renderRecipientHandoff(packages);
+  renderDeliveryRecovery(packages,d);
+ }else packages.append(el('p',tr('Delivery packages are pending.','交付包待生成。'),'warning'));
+ const retry=details(pages.delivery,'Export again without solving','重新导出（不重新求解）');const actions=el('div',undefined,'actions');retry.append(actions);actions.append(button('Regenerate reports','重新生成报告',async()=>{await api('report',{id:current.id});await open(current.id);}),button('Regenerate delivery','重新生成交付包',async()=>{await api('delivery',{id:current.id});await open(current.id);}));
  renderPilotClock(delivery);renderHandoff(delivery);
  const technical=details(pages.review,'Technical details / provenance','技术详情／来源记录');
  technical.append(el('pre',JSON.stringify({summary:current.summary,job:current.job,results:r},null,2)));

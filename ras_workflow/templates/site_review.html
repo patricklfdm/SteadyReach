@@ -6,9 +6,11 @@
 #left[aria-pressed="true"],#right[aria-pressed="true"]{background:#17617b;color:#fff;border-color:#103f50;box-shadow:inset 0 0 0 2px #fff}
 button:focus-visible{outline:3px solid #d77700;outline-offset:3px}
 button:disabled{opacity:.55;cursor:default}
-</style>
+</style>__INTERFACE_STYLE__
+<body class="sr-map">
+<a class="sr-skip" href="#workspace-main"><span lang="en">Skip to workspace</span><span lang="zh-CN">跳至工作区</span></a>
 <header><button id="language" style="float:right">简体中文</button><h1 id="heading">Site input review</h1><div id="project"></div></header>
-<main><section class="card"><div class="badge" id="scope"></div><p class="muted" id="legend"></p><svg id="map" viewBox="0 0 700 700" role="img" aria-label="Candidate geometry map"></svg><p id="mapnote" class="muted"></p><details><summary id="gapheading"></summary><ul id="gaps"></ul></details></section>
+<main id="workspace-main" tabindex="-1"><section class="card"><div class="badge" id="scope"></div><p class="muted" id="legend"></p><svg id="map" viewBox="0 0 700 700" role="img" aria-label="Candidate geometry map"></svg><p id="mapnote" class="muted"></p><details><summary id="gapheading"></summary><ul id="gaps"></ul></details></section>
 <section class="card"><label id="chooseLabel" for="items"></label><select id="items"></select><pre id="evidence"></pre><svg id="profile" viewBox="0 0 650 210" role="img" aria-label="Sampled section"></svg><p id="bankhelp" class="muted"></p><div class="actions"><button id="left"></button><button id="right"></button><button id="clear"></button></div><div id="banks"></div><label id="decisionLabel" for="decision"></label><select id="decision"></select><label id="candidateLabel" for="candidate"></label><select id="candidate"></select><label id="noteLabel" for="note"></label><textarea id="note"></textarea><label id="reviewerLabel" for="reviewer"></label><input id="reviewer"><label id="basisLabel" for="basis"></label><textarea id="basis"></textarea><div class="actions"><button id="export"></button><button id="import"></button><input type="file" id="file" accept=".json" hidden></div><p id="status" role="status"></p><p class="muted" id="instructions"></p></section></main>
 <div class="actions" style="margin:0 28px"><button id="restoreDraft"></button><button id="discardDraft"></button></div><p id="draftStatus" class="muted" style="margin:0 28px 16px" role="status"></p>
 <p id="fileHelp" class="muted" style="margin:0 28px 20px" role="note"></p>
@@ -39,4 +41,4 @@ updateLanguage();
 __REVIEW_STATE__
 updateLanguage();
 refreshDraftLanguage();
-</script></html>
+</script></body></html>

@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SteadyReach · Offline review</title>
-<style>body{font:1rem/1.5 system-ui;max-width:48rem;margin:2rem auto;padding:0 1rem;color:#19363d}label,input,select,textarea{display:block}label{margin:1rem 0}input,textarea,select{font:inherit;padding:.4rem;max-width:95%}textarea{width:95%}button{font:inherit;padding:.6rem 1rem}code{overflow-wrap:anywhere}</style>
+<style>body{font:1rem/1.5 system-ui;max-width:48rem;margin:2rem auto;padding:0 1rem;color:#19363d}label,input,select,textarea{display:block}label{margin:1rem 0}input,textarea,select{font:inherit;padding:.4rem;max-width:95%}textarea{width:95%}button{font:inherit;padding:.6rem 1rem}code{overflow-wrap:anywhere}</style>__INTERFACE_STYLE__
+<body class="sr-reading">
 <h1>Review a submitted edition / 复核已提交的版本</h1><p id="run"></p><code id="hash"></code>
 <form><label>Reviewer / 复核人<input id="actor" maxlength="100" required></label>
 <label>Station / 断面<select id="station"><option value="">Entire edition / 整版</option></select></label>
@@ -19,4 +20,4 @@ document.querySelector('form').onsubmit=e=>{e.preventDefault();const deps=Array.
  const reply={schema:r.schema,edition:r.edition,head:r.head,action:byId('action').value,note:byId('note').value,actor:byId('actor').value,station:byId('station').value,dependencies:deps};
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(reply,null,2)],{type:'application/json'}));a.download='Reply_'+r.edition.run+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
  byId('message').textContent='Send the saved reply to the modeler / 请将保存的回传文件交给建模人';};
-</script></html>
+</script></body></html>

@@ -301,6 +301,7 @@ def create():
                 route=self.route()
                 if route=='state':return self.send(200,controller.state())
                 assets={'':('launcher.html','text/html'),'launcher.js':('launcher.js','application/javascript'),'launcher.css':('launcher.css','text/css')}
+                assets['interface.css'] = ('interface.css', 'text/css')
                 if route not in assets:return self.send(404,{'error':'Not found'})
                 name,mime=assets[route];self.send(200,(ROOT/'ras_workflow/templates'/name).read_bytes(),mime+'; charset=utf-8')
             except (ValueError,OSError,KeyError,TypeError) as e:self.send(409,{'error':str(e)})

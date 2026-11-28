@@ -11,6 +11,7 @@ from pathlib import Path
 
 import h5py
 
+from .interface_style import embedded_interface_style
 from .common import ROOT, digest, intact, item, read, rel, safe_path, save, utc
 from .qa import BASE, compare, diagnostics, verified_profiles
 
@@ -178,7 +179,7 @@ def prepare(summary_path, output, baseline=None, warnings=None, baseline_warning
             if r['figure']:lines.append(f"![{i['code']}]({r['figure']})")
         (folder/f'REVIEW_{lang}.md').write_text('\n'.join(lines),encoding='utf-8')
     body=''.join('<details><summary>'+html.escape(f"{r['issue']['code']} | {r['issue']['profile']} | RS {r['issue']['station']} | {r['observation']}")+ '</summary><p>'+html.escape(r['issue']['recommended_action'])+'</p><pre>'+html.escape(str(r['issue']['evidence']))+'</pre>'+ (f'<img src="{r["figure"]}" alt="Computed section/profile">' if r['figure'] else '')+'</details>' for r in ledger)
-    (folder/'index.html').write_text('<!doctype html><html lang="en"><meta charset="utf-8"><title>QA review</title><style>body{font:16px system-ui;max-width:1100px;margin:32px auto;padding:12px}details{padding:14px;border-bottom:1px solid #bbb}img{max-width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style><h1>QA review / 水力审核</h1><p>REVIEW_REQUIRED · NOT_ASSESSED</p><p>Run '+html.escape(hyd['run_id'])+'</p><p><a href="REVIEW_EN.md">English</a> · <a href="REVIEW_CN.md">简体中文</a> · <a href="decisions.template.json">Decision template</a></p>'+body+'</html>',encoding='utf-8')
+    (folder/'index.html').write_text('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QA review</title><style>body{font:16px system-ui;max-width:1100px;margin:32px auto;padding:12px}details{padding:14px;border-bottom:1px solid #bbb}img{max-width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style>'+embedded_interface_style()+'<body class="sr-reading"><h1>QA review / 水力审核</h1><p>REVIEW_REQUIRED · NOT_ASSESSED</p><p>Run '+html.escape(hyd['run_id'])+'</p><p><a href="REVIEW_EN.md">English</a> · <a href="REVIEW_CN.md">简体中文</a> · <a href="decisions.template.json">Decision template</a></p>'+body+'</body></html>',encoding='utf-8')
     save(folder/'manifest.json',dict(files=[item(p) for p in folder.rglob('*') if p.is_file() and 'native_warning_review' not in p.relative_to(folder).parts],sources=sources))
     return result
 

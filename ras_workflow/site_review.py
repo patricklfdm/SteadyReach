@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 from pyproj import CRS, Transformer
 
+from .interface_style import embedded_interface_style
 from .common import ROOT, finite, intact, item, read, rel, safe_path, save, utc
 from .inputs import load, gate
 from .source_review import verified_candidates, rows
@@ -20,7 +21,7 @@ def render_html(packet, spec):
     template=(ROOT/'ras_workflow/templates/site_review.html').read_text(encoding='utf-8')
     state=(ROOT/'ras_workflow/templates/review_state.js').read_text(encoding='utf-8')
     data=json.dumps(dict(packet=packet,spec=spec),ensure_ascii=False,allow_nan=False).replace('<','\\u003c').replace('>','\\u003e').replace('&','\\u0026')
-    return template.replace('__REVIEW_STATE__',state).replace('__REVIEW_DATA__',data)
+    return template.replace('__INTERFACE_STYLE__',embedded_interface_style()).replace('__REVIEW_STATE__',state).replace('__REVIEW_DATA__',data)
 
 
 def register_view(project_id, page, packet_path):
@@ -41,11 +42,11 @@ def write_index():
         valid=intact([r['page'],r['packet']])
         link='<a href="'+quote(r['page']['path'])+'">'+html.escape(name)+'</a>' if valid else html.escape(name)+' — changed/missing / 已改变或缺失'
         entries.append('<li>'+link+' <small>'+html.escape(r['updated_utc'])+'</small></li>')
-    page='''<!doctype html><html lang="en"><meta charset="utf-8"><title>Review workspaces</title>
-<style>body{font:17px Segoe UI,Arial;max-width:900px;margin:40px auto;padding:20px;color:#183340}li{margin:20px 0}a{color:#17617b}small{display:block;color:#52666e}button{padding:8px}</style>
+    page='''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Review workspaces</title>
+<style>body{font:17px Segoe UI,Arial;max-width:900px;margin:40px auto;padding:20px;color:#183340}li{margin:20px 0}a{color:#17617b}small{display:block;color:#52666e}button{padding:8px}</style>'''+embedded_interface_style()+'''<body class="sr-reading">
 <button onclick="const cn=document.documentElement.lang==='en';document.documentElement.lang=cn?'zh-CN':'en';document.getElementById('en').hidden=cn;document.getElementById('cn').hidden=!cn;this.textContent=cn?'English':'简体中文'">简体中文</button>
 <div id="en"><h1>Latest review workspaces</h1><p>Choose a project. Drafts and decisions belong to their exact review packet. Export JSON before moving to another computer.</p></div>
-<div id="cn" hidden><h1>最新审核工作区</h1><p>选择项目。草稿与决定绑定具体审核包；换电脑前请导出 JSON。</p></div><ul>'''+''.join(entries)+'</ul></html>'
+<div id="cn" hidden><h1>最新审核工作区</h1><p>选择项目。草稿与决定绑定具体审核包；换电脑前请导出 JSON。</p></div><ul>'''+''.join(entries)+'</ul></body></html>'
     (ROOT/'REVIEW.html').write_text(page,encoding='utf-8')
     return ROOT/'REVIEW.html'
 

@@ -62,6 +62,7 @@ def create(path):
                 route=self.route()
                 if route=='state':return self.send(200,view(path))
                 assets={'':('native_import.html','text/html'),'native_import.js':('native_import.js','application/javascript'),'intake.css':('intake.css','text/css')}
+                assets['interface.css'] = ('interface.css', 'text/css')
                 if route not in assets:return self.send(404,dict(error='Not found'))
                 filename,mime=assets[route];self.send(200,(ROOT/'ras_workflow/templates'/filename).read_bytes(),mime+'; charset=utf-8')
             except (ValueError,OSError,KeyError) as e:self.send(409,dict(error=str(e)))

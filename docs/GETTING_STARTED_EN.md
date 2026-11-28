@@ -4,6 +4,8 @@
 
 On Windows, extract the repository to a writable local folder and double-click **start_workflow.cmd**. Keep its console open. The browser opens the project page. [Installation and prerequisites](WINDOWS_SETUP_EN.md) · [User manual](USER_GUIDE_EN.md)
 
+On your first visit the new project form is open. On return, expand a saved project to see its original and revisions. With multiple projects, search by name or version ID. The four steps on the left (at the top on narrow screens) mark your current stage.
+
 1. Choose **Coordinates / partial information** for a site pin, photos, PDFs or loose survey sheets. The preparation page searches public sources and accepts your files. Choose **Georeferenced river survey package** if you have `survey.json` and its listed files, or **Existing HEC-RAS model** for supported steady culvert files.
 2. On **Prepare model**, follow the first suggested action. Check the river or crossing, sections and proposed banks on the map. Review estimated inputs or obtain measurements where the source is missing.
 3. Choose **Review calculation inputs**. **View checks to resolve** takes you to the blockers. After correcting inputs, save and refresh the list. When checks pass, **Go to final confirmation** takes you to the checkbox. Confirm and run when you have reviewed the assumptions.

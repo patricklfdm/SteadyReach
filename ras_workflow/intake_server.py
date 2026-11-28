@@ -44,6 +44,7 @@ def create(session_path):
                 if route=='state':return self.send(200,intake.view(session_path))
                 if route=='intake_native.js':return self.send(200,(ROOT/'ras_workflow/templates/intake_native.js').read_bytes(),'application/javascript; charset=utf-8')
                 assets={'geometry_setup.js':('geometry_setup.js','application/javascript; charset=utf-8'),'':('intake.html','text/html; charset=utf-8'),'intake.js':('intake.js','application/javascript; charset=utf-8'),'intake.css':('intake.css','text/css; charset=utf-8'),'geometry_review.js':('geometry_review.js','application/javascript; charset=utf-8')}
+                assets['interface.css'] = ('interface.css', 'text/css; charset=utf-8')
                 if route not in assets:return self.send(404,dict(error='Not found'))
                 filename,mime=assets[route];return self.send(200,(ROOT/'ras_workflow/templates'/filename).read_bytes(),mime)
             except Exception as e:self.send(400,dict(error=str(e)))
