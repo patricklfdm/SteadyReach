@@ -532,7 +532,18 @@ def regenerate(key,action):
     # Persist the report first so a later mapping failure is recoverable.
     report_generate(summary,out/'reports');m['latest_reports']=rel(out/'reports')
     m['latest_reports_binding']=report_refresh_binding(m)
-    previous=m.get('latest_delivery') or m.get('previous_delivery') or (read(ROOT/m['engine_state']).get('delivery') if m.get('engine_state') else None)
+    receipts=[m.get('latest_delivery'),m.get('previous_delivery')]
+    def usable(receipt):
+        return receipt and receipt.get('complete') and receipt.get('minimal') and receipt.get('status') in (
+            'READY_FOR_REVIEW','READY_NATIVE_ONLY','READY')
+    previous=next((receipt for receipt in receipts if usable(receipt)),None)
+    if not previous and m.get('engine_state'):
+        receipt=read(ROOT/m['engine_state']).get('delivery')
+        previous=receipt if usable(receipt) else None
+    if previous is None:
+        # Older mapped receipts can supply an export source before pair manifests existed.
+        previous=next((r for r in receipts if r and not r.get('status') and r.get('mapped')
+                       and (r.get('complete') or {}).get('path')),None)
     m['previous_delivery']=previous
     m['exports_need_refresh']=True;m.pop('latest_delivery',None)
     persist(m,'REPORT_REFRESHED')
@@ -655,6 +666,9 @@ def view(key,detail=True):
         from .app_parameters import attention, rows, objects
         context = objects(m)
         result['intake']['fields']=rows(m, context)
+        if m.get('intake_return'):
+            from .return_scope import assess as assess_return
+            result['intake']['return_scope']=assess_return(m,result['intake']['fields'])
         feasibility_inputs = (context[3], context[4], context[2]['answers'])
         if result.get('preparation_result'):
             result['intake']['current_attention'] = attention(m, result['intake']['fields'])

@@ -24,6 +24,9 @@ def create():
             if not url.path.startswith(prefix) or url.query:raise ValueError('Invalid session')
             return unquote(url.path[len(prefix):])
         def send(self,code,value,mime='application/json; charset=utf-8',download=None):
+            if code>=400 and isinstance(value,dict) and 'error' in value:
+                from .project_support import classify
+                value=dict(value,incident=classify(value['error'],urlsplit(self.path).path.rsplit('/',1)[-1]))
             raw=value if isinstance(value,bytes) else json.dumps(value,ensure_ascii=False,allow_nan=False).encode()
             self.send_response(code)
             if download:
@@ -53,6 +56,7 @@ def create():
                     if path.suffix.lower() not in ('.pdf','.docx','.json','.txt','.csv','.png','.jpg','.jpeg'):raise ValueError('Unsupported artifact')
                     return self.send(200,path.read_bytes(),mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
                 assets={'app_warning_study.js':('app_warning_study.js','application/javascript; charset=utf-8'),'app_field_feedback.js':('app_field_feedback.js','application/javascript; charset=utf-8'),'app_floodplain.js':('app_floodplain.js','application/javascript; charset=utf-8'),'app_observations.js':('app_observations.js','application/javascript; charset=utf-8'),'observation-template.csv':('observation-template.csv','text/csv; charset=utf-8'),'app_river_checks.js':('app_river_checks.js','application/javascript; charset=utf-8'),'app_check_batch.js':('app_check_batch.js','application/javascript; charset=utf-8'),'app_spacing_review.js':('app_spacing_review.js','application/javascript; charset=utf-8'),'app_atlas.js':('app_atlas.js','application/javascript; charset=utf-8'),'app_guidance.js':('app_guidance.js','application/javascript; charset=utf-8'),'app_sensitivity.js':('app_sensitivity.js','application/javascript; charset=utf-8'),'app_geometry_auto.js':('app_geometry_auto.js','application/javascript; charset=utf-8'),'app_results.js':('app_results.js','application/javascript; charset=utf-8'),'app_automation.js':('app_automation.js','application/javascript; charset=utf-8'),'app_map.js':('app_map.js','application/javascript; charset=utf-8'),'app_section_repair.js':('app_section_repair.js','application/javascript; charset=utf-8'),'':('app.html','text/html; charset=utf-8'),'app.js':('app.js','application/javascript; charset=utf-8'),'app_editor.js':('app_editor.js','application/javascript; charset=utf-8'),'app_sources.js':('app_sources.js','application/javascript; charset=utf-8'),'app.css':('app.css','text/css; charset=utf-8')}
+                assets['app_support.js'] = ('app_support.js', 'application/javascript; charset=utf-8')
                 assets['interface.css'] = ('interface.css', 'text/css; charset=utf-8')
                 assets['app_practice.js']=('app_practice.js','application/javascript; charset=utf-8')
                 assets['app_extent.js']=('app_extent.js','application/javascript; charset=utf-8')
@@ -117,6 +121,13 @@ def create():
                     elif route=='handoff-export':
                         from .recipient_handoff import export
                         result=export(key,body)
+                    elif route in ('support-preview','support-export'):
+                        from . import project_support
+                        result=(project_support.preview if route=='support-preview' else project_support.export)(key,body)
+                    elif route=='work-metrics':
+                        from .release_metrics import metrics
+                        core.model(key)
+                        result=metrics(core.folder(key))
                     elif route=='pilot-clock':
                         from .pilot_session import update
                         result=update(key,body)
@@ -248,13 +259,14 @@ def create():
                         if not path.is_dir() or not path.is_relative_to(core.folder(key)):raise ValueError('Choose this project\'s output folder')
                         os.startfile(path);result={'opened':rel(path)}
                     else:return self.send(404,dict(error='Unknown action'))
-                from .operator_log import classify, record
+                from .operator_log import classify, confirmation_id, record
                 counts = classify(route,body)
                 if counts is not None:
                     try:
                         record(core.folder(m['id'] if route=='create' else result['id'] if route=='revision' else key),route,counts,
                                'workflow_page' if self.headers.get('X-SteadyReach-Client')=='page' else 'local_api',
-                               field_names=body.get('values',{}).keys() if route=='save' and body.get('values') else None)
+                               field_names=body.get('values',{}).keys() if route=='save' and body.get('values') else None,
+                               confirmation=confirmation_id(route,body))
                     except OSError as error:
                         result=dict(result,operation_log_warning=str(error))
                 self.send(200,result)

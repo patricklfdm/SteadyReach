@@ -50,9 +50,20 @@ def classify(route, body):
     return dict(counts)
 
 
-def record(folder, route, counts, client, field_names=None):
+def confirmation_id(route, body):
+    """Recognise retries of the same reviewed calculation or study, without recording its inputs."""
+    from .common import digest
+    token = body.get('review_token') if route == 'start' else body.get('token')
+    if route in ('start','study-start','checks-start') and isinstance(token,str) and token:
+        return digest([route, token])
+    return None
+
+
+def record(folder, route, counts, client, field_names=None, confirmation=None):
     path = folder/'operator_actions'/(unique_id()+'.json')
     event=dict(route=route,counts=counts,at=utc(),client=client)
+    if confirmation:
+        event['confirmation_id'] = confirmation
     if field_names is not None:
         from .common import digest
         event['submitted_fields']=[digest(name) for name in sorted(set(field_names))]
@@ -65,6 +76,7 @@ def inventory(folder, through=None):
     unreadable = 0
     fields=Counter()
     tracked_saves=0
+    confirmations=Counter()
     for file in files:
         try:
             event = read(file)
@@ -81,13 +93,17 @@ def inventory(folder, through=None):
         totals.update(counts)
         actions[route] += 1
         clients[client] += 1
+        if event.get('confirmation_id'):
+            confirmations[event['confirmation_id']]+=1
         if route=='save' and 'submitted_fields' in event:
             fields.update(event['submitted_fields'])
             tracked_saves+=1
     return dict(recorded_requests=sum(actions.values()),unreadable=unreadable,coverage='PARTIAL_HISTORY' if unreadable else 'FROM_CREATION' if actions['create'] or actions['revision'] else
                 'RECORDED_REQUESTS_ONLY' if actions else 'NO_RECORDED_HISTORY',
                 counts=dict(totals),routes=dict(actions),clients=dict(clients),tracked_field_saves=tracked_saves,
-                repeat_field_submissions=sum(n-1 for n in fields.values()) if tracked_saves else None)
+                repeat_field_submissions=sum(n-1 for n in fields.values()) if tracked_saves else None,
+                tracked_confirmations=sum(confirmations.values()),
+                repeated_confirmations=sum(n-1 for n in confirmations.values()) if confirmations else None)
 
 
 def lineage(model):

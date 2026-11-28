@@ -399,7 +399,7 @@ def assess(model, path, summary, diagnostics, studies, guidance):
     from .edition_brief import build as edition_brief
     from .review_decisions import site_steps
     result['review_steps']=site_steps(scope,reviewed_events,studies) if is_river else []
-    result['edition_brief']=edition_brief(summary,result['purpose_decision'],reviewed_events,result['review_steps'],comparison)
+    result['edition_brief']=edition_brief(summary,result['purpose_decision'],reviewed_events,result['review_steps'],comparison,studies)
     result['evidence_hash'] = digest({k:v for k,v in result.items() if k!='assessed_utc'})
     return result
 

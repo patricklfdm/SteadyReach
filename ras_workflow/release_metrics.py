@@ -15,6 +15,12 @@ def metrics(project,session=None):
     folder=Path(project)
     tasks=[read(p) for p in sorted((folder/'tasks').glob('*/task.json'))]
     elapsed=[seconds(t) for t in tasks]
+    by_action={}
+    for task,duration in zip(tasks,elapsed):
+        action=task.get('action') or 'unknown'
+        by_action.setdefault(action,[]).append(duration)
+    stage_times={action:dict(attempts=len(times),completed_seconds=round(sum(t for t in times if t is not None),2),
+                             untimed=sum(t is None for t in times)) for action,times in by_action.items()}
     attempts=[]
     for path in sorted((folder/'approved').glob('*/jobs/*/summary.json')):
         r=read(path)
@@ -56,7 +62,7 @@ def metrics(project,session=None):
     return dict(project_id=folder.name,tasks=len(tasks),machine_task_seconds=round(sum(elapsed),2) if tasks and None not in elapsed else None,
         native_solver_wall_seconds=sum(solver) if solver and None not in solver else None,
         compute_call_wall_seconds=sum(compute) if compute and None not in compute else None,
-        unfinished_interval=session.get('open'),
+        unfinished_interval=session.get('open'), machine_by_action=stage_times,
         pilot_checkpoints=session.get('checkpoints',[]),human_acceptance='NOT_ASSESSED',
         active_engineer_seconds=result.get('engineer'),external_wait_seconds=result.get('external_wait'),
         developer_interventions=len(interventions) if interventions is not None and not marker_only else None,

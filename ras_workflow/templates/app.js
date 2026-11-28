@@ -62,12 +62,20 @@ async function saveAll(keys=null){
 }
 
 function notify(text='',error=false,tone='info'){$('#notice').setAttribute('role',error?'alert':'status');$('#notice').hidden=!text;$('#notice').textContent=text;$('#notice').className=error?'error':tone;}
-async function api(route,body){const r=await fetch(route,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Workflow-Token':token,'X-SteadyReach-Client':'page'},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw Error(data.error||r.status);return data;}
+async function api(route,body){const r=await fetch(route,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Workflow-Token':token,'X-SteadyReach-Client':'page'},body:JSON.stringify(body)});const data=await r.json();if(!r.ok){
+  if(current&&current.id===body?.id&&data.incident&&!route.startsWith('support-'))
+   supportIncident={id:current.id,revision:current.revision,page:supportPage(),incident:data.incident,route};
+  throw Error(data.error||r.status);
+ }
+ if(body?.id&&supportIncident?.id===body.id&&supportIncident.route===route)supportIncident=null;
+ return data;}
 async function task(fn,label=tr('Working','正在处理'),source=null){
  if(busy)return;busy=true;const prior=new Map([...document.querySelectorAll('button,input,select,textarea')].map(b=>[b,b.disabled]));
  const working=label+'…',old=source?.textContent;notify(working,false,'working');document.body.setAttribute('aria-busy','true');prior.forEach((v,b)=>b.disabled=true);if(source){source.textContent=working;source.classList.add('working');}
  try{if(savePromise)await savePromise;if(pendingMapSave&&pendingMapSave!==fn)await pendingMapSave();await fn();if($('#notice').textContent===working)notify(label+(current?.status==='PROCESSING'?tr(' — started; follow progress below',' — 已启动，请查看下方进度'):''));}
- catch(e){notify(e.message,true);if(e.input)requestAnimationFrame(()=>{e.input.focus();e.input.scrollIntoView({block:'nearest'});});}
+ catch(e){notify(e.message,true);if(current&&supportIncident?.id===current.id){
+  $('#notice').append(button('Preview support details','查看诊断详情',()=>openSupport()));
+ }if(e.input)requestAnimationFrame(()=>{e.input.focus();e.input.scrollIntoView({block:'nearest'});});}
  finally{busy=false;document.body.removeAttribute('aria-busy');prior.forEach((v,b)=>{if(b.isConnected)b.disabled=v;});if(source?.isConnected){source.textContent=old;source.classList.remove('working');}}
 }
 function button(en,zh,fn,cls){const b=el('button',tr(en,zh),cls);b.type='button';b.onclick=()=>task(fn,tr(en,zh),b);return b;}
@@ -96,6 +104,7 @@ function shell(step){
  $('#subtitle').textContent=tr('HEC-RAS · Local computation','HEC-RAS · 本机计算');
  $('#foot').textContent=tr('1D steady rivers and culverts. Actual HEC-RAS results; assumptions and unresolved checks remain visible. No engineering certification is implied.','1D 恒定流河道与涵洞分析。使用真实 HEC-RAS；保留估计项与未闭合检查，不自动认定设计合格。');
  $('#screen').replaceChildren();
+ renderSupportEntry();
 }
 const stateLabel=s=>({NEW:tr('New','新建'),PROCESSING:tr('Processing','处理中'),INPUTS_READY:tr('Model draft','模型草稿'),RESULTS_READY:tr('Computed · review limitations','已计算 · 请查看限制'),RESULTS_READY_MAP_PENDING:tr('Computed · map export needs attention','已计算 · 地图导出待处理'),NEEDS_ATTENTION:tr('Needs attention · draft retained','需处理 · 草稿已保留'),ABANDONED:tr('Abandoned · files retained','已放弃 · 文件保留'),INTERRUPTED:tr('Interrupted · retry available','已中断 · 可重试')}[s]||s);
 function rememberView(view){window.history?.replaceState({steadyReach:view},'');}
@@ -462,7 +471,8 @@ function render(){const m=current;rememberView({project:m.id,page:'model'});shel
   summary.append(el('h2',tr('Ready for input review','可以核对运算输入')),el('p',m.native?tr('The selected native plan is available for review.','所选原生计划已就绪。'):m.intake.section_count+tr(' cross sections prepared. Check the flow, boundaries and assumptions before running.',' 条断面已就绪。开算前请核对流量、边界和假设。')),reviewInputs());
  }
  renderPreparationActions(nextStep,preparation);
- const requests=siteEvidenceRequests(m.intake?.fields||[]);
+ renderDecisionQueue(nextStep,m);
+ const requests=siteEvidenceRequests(decisionFields(m.intake));
  if(requests.length&&!m.native){
   const panel=details(screen,'Request site records or measurements','集中索取现场资料与补测');
   panel.append(el('p',tr('One worksheet per source includes gaps and values that need verification. Enter new measurements in value. Current values are provided for reference.','按资料来源生成索取表，合并缺项和待核对的已采用值。新测量填入 value 列，current_value 列供参考。')));

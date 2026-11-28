@@ -12,7 +12,8 @@ class EditionBrief(unittest.TestCase):
         records=[stage,dict(stage,date='2018-01-01',location={'rs':'401'}),dict(stage,role='boundary',location={'rs':'100'})]
         result=build(summary,dict(en='Review',zh='复核'),records)
         self.assertEqual(result['run_id'],'native')
-        self.assertEqual(len(result['rows']),4)
+        self.assertEqual(result['rows'][-1],result['next_decision'])
+        self.assertEqual(result['next_decision']['code'],'REGISTER_CRITERIA')
         self.assertIn('RS 500 @ 51 cfs',result['rows'][1]['en'])
         self.assertIn('测量负责人',result['rows'][3]['zh'])
         for private in ('401','RS 100','private-file-name'):

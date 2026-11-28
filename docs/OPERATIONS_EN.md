@@ -1,6 +1,6 @@
 # Install a verified release and recover a queue
 
-[简体中文](OPERATIONS_CN.md) · [Local release checks](LOCAL_RELEASE_EN.md)
+[简体中文](OPERATIONS_CN.md) · [Local release checks](LOCAL_RELEASE_EN.md) · [Project diagnostics](ENGINEERING_DECISIONS_EN.md)
 
 ## Estimate disk space before a batch
 

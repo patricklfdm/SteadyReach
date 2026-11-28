@@ -82,6 +82,64 @@ function downloadParameterTemplate(fields=current.intake?.fields||[],name='param
  notify(fields.length+tr(' rows exported. Enter values, units, elevation datum where applicable, and the source; mark estimates as assumed. Import the CSV in Site materials to review the candidates.',' 行已导出。请填写数值、单位、适用的高程基准和来源，估计值标为 assumed；将 CSV 导回现场资料后核对候选。'));
 }
 
+function decisionQueue(fields){
+ const requests=new Set(siteEvidenceRequests(fields).map(f=>f.key));
+ const groups={conflict:[],measure:[],candidate:[],decision:[],assumption:[]};
+ for(const f of fields){
+  if(f.source_conflict&&(f.required||!f.missing))groups.conflict.push(f);
+  else if(f.required&&f.missing){
+   if(f.parameter_candidates?.length)groups.candidate.push(f);
+   else if(requests.has(f.key))groups.measure.push(f);
+   else groups.decision.push(f);
+  }else if(!f.missing&&(requests.has(f.key)||f.evidence_class==='assumed'))groups.assumption.push(f);
+ }
+ return groups;
+}
+function decisionFields(intake){
+ const fields=intake?.fields||[];
+ if(intake?.return_scope?.mode!=='CHANGES_ONLY')return fields;
+ const affected=new Set(intake.return_scope.affected.map(r=>r.key));
+ return fields.filter(f=>affected.has(f.key));
+}
+function renderDecisionQueue(parent,model){
+ const fields=model.intake?.fields||[];
+ if(!fields.length)return;
+ const returned=model.intake.return_scope,scoped=returned?.mode==='CHANGES_ONLY';
+ const active=decisionFields(model.intake);
+ const groups=decisionQueue(active);
+ if(scoped){
+  const listed=new Set(Object.values(groups).flat().map(f=>f.key));
+  groups.changed=active.filter(f=>!listed.has(f.key));
+ }
+ const total=Object.values(groups).reduce((n,rows)=>n+rows.length,0);
+ if(!total&&!scoped)return;
+ const queue=details(parent,'Input decisions and field requests ('+total+')','待判断参数与补测清单（'+total+'）');
+ if(scoped)queue.append(el('p',returned.retained.length+tr(' previous input confirmations carried forward.',' 项原参数已沿用确认。')));
+ if(scoped&&returned.removed?.length)queue.append(el('p',tr('Removed from this edition: ','本版移除：')+returned.removed.join(' · ')));
+ const names={changed:['Verify changed inputs','核对变更项'],conflict:['Resolve source conflicts','消解来源冲突'],measure:['Obtain field records','索取现场原件或补测'],
+  candidate:['Review proposed values','核对候选值'],decision:['Supply remaining inputs','补充其他输入'],assumption:['Check adopted assumptions for the intended use','核对已采用假设的适用用途']};
+ for(const [kind,rows] of Object.entries(groups)){
+  if(!rows.length)continue;
+  const [en,zh]=names[kind],box=details(queue,en+' ('+rows.length+')',zh+'（'+rows.length+'）');
+  const fill=()=>{
+   if(!box.parentElement.open||box.childElementCount)return;
+   for(const f of rows){
+    const row=el('div',undefined,'parameter');box.append(row);
+    row.append(el('strong',tr(f.label.en,f.label.zh)));
+    const group=siteRequests[siteRequestKind(f.key)];
+    const why=group?tr(group[2],group[3]):tr('Review the value against the source and the selected model scope.','对照原件和本次用途核对该值。');
+    row.append(el('p',why),el('small',[f.key,f.unit,f.evidence_class,sourceStatus(f.acquisition?.status||'NOT_ATTEMPTED')].filter(Boolean).join(' · ')));
+    row.append(button('Inspect input and evidence','查看输入与依据',async()=>{
+     if(!document.getElementById('input-'+f.key))await showFinalReview(false);
+     revealParameter(f.key);
+    }));
+   }
+   if(kind==='measure')box.append(button('Export these field requests','导出这组待测项',()=>downloadParameterTemplate(rows,'field_requests.csv')));
+  };
+  box.parentElement.addEventListener('toggle',fill);fill();
+ }
+}
+
 function renderPreparationActions(parent,actions){
  if(!actions.length)return;
  const labels={
@@ -99,7 +157,7 @@ function renderPreparationActions(parent,actions){
  const box=el('section',undefined,'card');parent.append(box);
  box.append(el('h2',tr('What should I do next?','现在先做什么？')));
  const show=async key=>{
-  if(!document.getElementById('input-'+key))await showFinalReview();
+  if(!document.getElementById('input-'+key))await showFinalReview(false);
   revealParameter(key);
  };
  function render(host,action){

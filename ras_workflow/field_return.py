@@ -38,7 +38,9 @@ def targets(geom, scenario):
 
 def context(key,body):
     m=core.model(key);core.require_idle(m)
-    if m.get('native_review') or not m.get('summary') or m['summary']['sha256']!=body.get('summary_hash') or not intact([m['summary']]):
+    if m.get('summary') and (m['summary']['sha256']!=body.get('summary_hash') or not intact([m['summary']])):
+        raise ValueError('Edition mismatch: reopen the calculated edition and download its worksheet / 回传表与计算版本不匹配，请重新打开对应版本并下载补测表')
+    if m.get('native_review') or not m.get('summary'):
         raise ValueError('Reopen the calculated workflow edition / 请打开对应的已计算版本')
     s=read(ROOT/m['summary']['path'])
     c,g,_=bound_inputs(s)
@@ -62,8 +64,10 @@ def changes(content,fields,g,summary_hash,documented):
     for raw in reader:
         if None in raw or None in raw.values():raise ValueError('Malformed worksheet row')
         k=raw['field']
-        if k in seen or k not in fields or raw['request_summary']!=summary_hash:
-            raise ValueError('Unknown, repeated or stale field / 字段重复或来自其他版本')
+        if raw['request_summary']!=summary_hash:
+            raise ValueError('Edition mismatch: download the worksheet from this calculation / 回传表来自其他计算，请下载本版补测表')
+        if k in seen or k not in fields:
+            raise ValueError('Unknown or repeated field / 字段未知或重复')
         seen.add(k);row=fields[k]
         if json.loads(raw['station_axis_ft'])!=row['axis'] or json.loads(raw['prior'])!=row['prior'] or raw['location']!=row['location']:
             raise ValueError('Location or previous geometry changed / 原断面、站距或原值已改变')

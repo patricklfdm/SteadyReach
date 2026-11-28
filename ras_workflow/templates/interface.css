@@ -87,6 +87,8 @@ dialog::backdrop { background: #17333f75; }
   background: white; border: 1px solid var(--sr-line); border-radius: var(--sr-radius);
   margin: clamp(12px,4vw,48px) auto; padding: clamp(18px,4vw,48px); overflow-wrap: anywhere;
 }
+.support-area { max-width: 1160px; margin: 1rem auto; padding: 0 20px; }
+#notice button { margin-inline-start: 1em; }
 .sr-reading h2 { margin-top: 1.6em; }
 .sr-reading details { background: #f7fafb; margin-block: .6em; border-radius: 8px; }
 .sr-reading :is(input,select,textarea) { padding: .55em .7em; }

@@ -48,6 +48,13 @@ class RefreshTests(unittest.TestCase):
         self.assertNotIn('latest_delivery', self.saved[-1])
         self.assertTrue(app_core.current_refreshed_reports(self.saved[-1]))
 
+    def test_retry_reuses_last_ready_pair_after_a_partial_export(self):
+        ready=dict(status='READY_FOR_REVIEW',mapped=True,complete={'path':'before/Complete'},minimal={'path':'before/Minimal'})
+        self.model.update(previous_delivery=ready,latest_delivery=dict(status='INCOMPLETE',mapped=True,complete={'path':'partial'}))
+        _, _, call=self.run_refresh('delivery')
+        self.assertEqual(call.kwargs['reuse_package'],'before/Complete')
+        self.assertEqual(self.saved[-1]['previous_delivery'],ready)
+
     def test_changed_result_or_study_hides_previous_reports(self):
         self.run_refresh('report')
         current=self.saved[-1]

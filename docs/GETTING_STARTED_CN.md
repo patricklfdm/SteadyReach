@@ -1,6 +1,6 @@
 # SteadyReach 首次使用指南
 
-[English](GETTING_STARTED_EN.md) | [简体中文](GETTING_STARTED_CN.md)
+[English](GETTING_STARTED_EN.md) | [简体中文](GETTING_STARTED_CN.md) · [工程判断与故障处理](ENGINEERING_DECISIONS_CN.md)
 
 在 Windows 上，把仓库解压到可写的本机文件夹，双击 **start_workflow.cmd**，保持控制台窗口打开。浏览器会显示项目首页。[安装和软件要求](WINDOWS_SETUP_CN.md) · [用户手册](USER_GUIDE_CN.md)
 

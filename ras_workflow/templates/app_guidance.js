@@ -161,6 +161,7 @@ async function openInvertRequest(panel){
  }));
 }
 
+let stationControlSequence=0;
 function purposeAction(parent,row){
  const a=row.action;if(!a)return;
  const tool=a.tool==='revision'&&current.native_review?'native':a.tool;
@@ -174,7 +175,7 @@ function purposeAction(parent,row){
  if(target==='comparison'&&!current.comparison)target=current.native_review?'native':'revision';
  if(target==='field-feedback'&&current.native_review)target='native';
  const stations=a.stations||[];
- const station=stations.length?field(parent,'qa-wet-'+a.profile,'Wet cross section','过水端点断面',String(stations[0]),'select',stations.map(s=>[String(s),'RS '+s,'RS '+s])):null;
+ const station=target==='atlas'&&stations.length?field(parent,'qa-wet-'+(++stationControlSequence),'Wet cross section','过水端点断面',String(stations[0]),'select',stations.map(s=>[String(s),'RS '+s,'RS '+s])):null;
  parent.append(button(...(labels[target]||labels.revision),()=>{
   openGuidanceTool(target);
   if(station)document.getElementById('qa-tool-atlas').dispatchEvent(new CustomEvent('steadyreach-inspect-section',{detail:{profile:a.profile,rs:station.value}}));
@@ -279,6 +280,7 @@ function showResultAssessment(overview,a,box=overview){
     brief.append(el('h3',tr('About this run','本次计算说明')),el('code',a.edition_brief.run_id));
     const list=el('dl');brief.append(list);
     for(const item of a.edition_brief.rows){list.append(el('dt',label(item.heading)),el('dd',label(item)));}
+    if(a.edition_brief.next_decision?.action)purposeAction(brief,a.edition_brief.next_decision);
     panel.append(el('p',tr(d.note_en,d.note_zh)));
   }else{panel.append(el('h3',label(d)),el('p',tr(d.note_en,d.note_zh)));}
   const orderedPriorities=priorityRows(a,current.comparison), priorities=orderedPriorities.slice(0,3);

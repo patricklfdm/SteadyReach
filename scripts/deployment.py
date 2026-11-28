@@ -186,16 +186,43 @@ def select(control,token,rollback=False):
     return event
 
 
+def support(control,token):
+    """Produce a shareable check of the active installation and its retained native results."""
+    if len(token)!=64 or any(c not in '0123456789abcdef' for c in token):
+        raise ValueError('Invalid migration token')
+    with lock(control/'deployment.lock'):
+        record=read(control/'migrations'/(token+'.json'))
+        plan={k:record[k] for k in ('source','target','source_version','target_version','archive','archive_sha256','software')}
+        if digest(plan)!=token:raise ValueError('Migration receipt changed')
+        pointer=read(control/'ACTIVE.json')
+        active=Path(pointer['path'])
+        if str(active) not in (record['source'],record['target']):raise ValueError('Unrelated active installation')
+        side='source' if str(active)==record['source'] else 'target'
+        with idle(active):
+            active_version=version(active)
+            same_code=active_version==record[side+'_version']
+            actual=inventory(active) if same_code else None
+        return dict(schema='deployment_support_1',migration=token,active=side,software_build=active_version['code'],
+                    matches_registered_version=same_code,
+                    matches_registered_projects=actual==record['projects'] if actual is not None else None,
+                    backup_matches=Path(record['archive']).is_file() and sha(Path(record['archive']))==record['archive_sha256'],
+                    project_count=len(record['projects']),
+                    history=[e['action'] for e in pointer.get('history',[]) if e.get('migration')==token
+                             and e.get('action') in ('SWITCH','ROLLBACK')])
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__);commands=parser.add_subparsers(dest='action',required=True)
     new=commands.add_parser('prepare')
     for n in ('previous','candidate','control','archive','release','trusted-key'):new.add_argument('--'+n,type=Path,required=True)
-    for a in ('switch','rollback','open'):
+    for a in ('switch','rollback','support','open'):
         cmd=commands.add_parser(a);cmd.add_argument('--control',type=Path,required=True)
         if a!='open':cmd.add_argument('--token',required=True)
     args=parser.parse_args()
     if args.action=='prepare':
         print(json.dumps(prepare(*(getattr(args,n).resolve() for n in ('previous','candidate','control','archive','release','trusted_key'))),indent=2))
+    elif args.action=='support':
+        print(json.dumps(support(args.control.resolve(),args.token),indent=2))
     elif args.action=='open':
         root=Path(read(args.control/'ACTIVE.json')['path'])
         raise SystemExit(subprocess.call([str(root/'.venv/Scripts/python.exe'),str(root/'app.py'),'serve'],cwd=root))

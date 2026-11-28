@@ -1,6 +1,6 @@
 # Source-linked preparation and one final confirmation
 
-**English** | [简体中文](AUTOMATION_CN.md) | [No-model guide](NO_MODEL_GUIDE_EN.md)
+**English** | [简体中文](AUTOMATION_CN.md) | [No-model guide](NO_MODEL_GUIDE_EN.md) · [Engineering decisions](ENGINEERING_DECISIONS_EN.md)
 
 For a reach without structures, choose **River reach (bridges excluded)** and follow the [river guide](RIVER_REACH_EN.md). It removes culvert/road fields and requires channel-bed representation and active boundary conditions. The crossing-specific steps below apply to culvert projects.
 

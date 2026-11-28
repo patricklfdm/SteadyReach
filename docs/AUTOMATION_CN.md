@@ -1,6 +1,6 @@
 # 资料关联、集中准备与一次最终确认
 
-[English](AUTOMATION_EN.md) | **简体中文** | [无已有模型指南](NO_MODEL_GUIDE_CN.md)
+[English](AUTOMATION_EN.md) | **简体中文** | [无已有模型指南](NO_MODEL_GUIDE_CN.md) · [工程判断与故障处理](ENGINEERING_DECISIONS_CN.md)
 
 完成首次计算后，先查看自动准备的下一项复核。没有优先处理的覆盖修订时，也可在 **结果 → 集中准备检查与交付** 中请求适用的敏感性和加密预览。核对范围并确认一次，程序连续运行检查，再更新报告及两种交付包。范围、排除条件和恢复方式见[一次确认检查与交付](RESULTS_REVIEW_CN.md#一次确认检查与交付)。
 

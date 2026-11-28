@@ -153,6 +153,7 @@ def evaluate(summary, events=(), comparison=None):
                     add('exceeded' if abs(row['residual_ft'])>limit else 'met',
                         where_at+f'Observed / modeled {values}. Modeled minus observed {delta}. Investigation limit {limit*.3048:.3f} m. '+src,
                         where_at+f'实测／计算 {values}。计算减实测 {delta}，调查门槛 {limit*.3048:.3f} m。'+src)
+                    rows[-1]['field_check']=dict(rs=station,profile=row.get('profile'),residual_ft=row['residual_ft'],limit_ft=limit)
                 peak=max(abs(r['residual_ft']) for r in measured)
                 add('met' if peak<=limit else 'exceeded',where+f' · Peak absolute stage error {peak:.3f} ft (limit {limit:g} ft).',
                     where+f' · 最大绝对水位误差 {peak:.3f} ft（限值 {limit:g} ft）。')
@@ -165,6 +166,8 @@ def evaluate(summary, events=(), comparison=None):
         tool='observations';profile=result['profile']
         add('met' if state=='WITHIN' else 'exceeded' if state=='EXCEEDED' else 'missing',
             prefix+STATES[state][0],prefix+STATES[state][1],[result['rs']])
+        if finite(result.get('residual_ft')):
+            rows[-1]['field_check']=dict(rs=result['rs'],profile=result['profile'],residual_ft=result['residual_ft'],limit_ft=result['tolerance_ft'])
     state = ('REVISE' if any(r['state']=='exceeded' for r in rows) else
              'NEED_EVIDENCE' if any(r['state']=='missing' for r in rows) else 'CONDITIONS_MET')
     labels = {'REVISE':('Revise before intended-use delivery','修订后再按约定用途交付'),

@@ -132,6 +132,22 @@ function renderPilotClock(parent){
  async function showClock(action='read',revision=null){
   const info=await api('pilot-clock',{id:current.id,action,timer_revision:revision});
   timer.replaceChildren();
+  timer.append(button('Show measured workload','查看已记录的工作量',async()=>{
+   const r=await api('work-metrics',{id:current.id});
+   const old=timer.querySelector('.work-metrics');if(old)old.remove();
+   const box=el('div',undefined,'work-metrics');timer.append(box);
+   const log=r.interaction_receipts,unknown=tr('Unmeasured','未测量');
+   table(box,[tr('Recorded on this edition','本版本已有记录'),tr('Value','数值')],[
+    [tr('Recorded requests','已记录请求数'),log.recorded_requests],
+    [tr('Repeated confirmation of the same run or study token','同一运算或试算确认凭据的重复请求'),log.repeated_confirmations??unknown],
+    [tr('Repeat field submissions','重复提交字段数'),log.repeat_field_submissions??unknown],
+    [tr('Timed engineering work (s)','已计工程操作（秒）'),r.active_engineer_seconds??unknown],
+    [tr('Waiting for records (s)','等资料（秒）'),r.external_wait_seconds??unknown],
+    [tr('Native solver wall time (s)','原生求解器用时（秒）'),r.native_solver_wall_seconds??unknown],
+    [tr('Compute call within solver time (s)','其中实际计算调用（秒）'),r.compute_call_wall_seconds??unknown]]);
+   box.append(el('small',tr('Request counts include retries. Timing uses completed records; an unmeasured interval stays unknown.','请求数包含重试。耗时取自已完成记录；未计时保留为未知。')));
+   table(box,[tr('Machine task','机器任务'),tr('Attempts','次数'),tr('Timed seconds','有计时的秒数'),tr('Untimed','缺少计时')],Object.entries(r.machine_by_action).map(([k,v])=>[k,v.attempts,v.attempts===v.untimed?unknown:v.completed_seconds,v.untimed]));
+  }));
   const labels={engineer:tr('Engineering work','工程师操作'),external_wait:tr('Waiting for data','等外部资料')};
   timer.append(el('p',(info.open?labels[info.open.kind]+' · '+new Date(info.open.started_utc).toLocaleString():tr('Paused','已暂停'))+
    ' · '+tr('Recorded intervals','已记录时段')+' '+info.intervals.length+' · '+tr('Recorded developer interventions','已记录的开发者介入')+' '+info.developer_interventions.length));
