@@ -522,6 +522,9 @@ def report_refresh_binding(m):
     binding={key:m.get(key) for key in ('summary','latest_study','latest_spacing','latest_coverage','latest_coverage_exports')}
     for key in ('river_observations','observed_event_history','latest_geometry_comparison','latest_warning_study','extent_review','extent_decision'):
         if m.get(key):binding[key]=m[key]
+    if m.get('active_issue') or (m.get('parent_revision') or {}).get('issue'):
+        from .iteration_choice import latest
+        binding['issue_choice'] = (latest(m) or {}).get('token')
     return binding
 
 
@@ -580,6 +583,12 @@ def view(key,detail=True):
         parent_file=folder(parent['project_id'])/'app.json'
         if parent_file.is_file():
             parent['inherited_sources']=[r['sha256'] for r in read(parent_file).get('attachments',[])]
+    follow_ref = m.get('active_issue') or parent.get('issue')
+    if follow_ref and intact([follow_ref]):
+        tracked = read(ROOT/follow_ref['path'])
+        result['tracked_issue'] = tracked
+        if tracked.get('summary') == m.get('summary'):
+            result['active_issue_token'] = digest(tracked['issue'])
     if m.get('public_reach') and intact([m['public_reach']]):
         result['reach_proposal']=read(ROOT/m['public_reach']['path'])
     if m.get('active_check_batch'):

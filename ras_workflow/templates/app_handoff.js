@@ -21,9 +21,11 @@ function renderRecipientHandoff(parent){
  const state=el('p');state.id='recipient-action';
  function reflect(){
   const choice=current.iteration_choice?.choice;
-  const blocked=['parent','wait','unavailable'].includes(choice);
+  const awaitingChoice=(current.active_issue||current.parent_revision?.issue)&&!['parent','current','wait','unavailable'].includes(choice);
+  const blocked=awaitingChoice||['parent','wait','unavailable'].includes(choice);
   action.hidden=blocked;state.hidden=!blocked;output.replaceChildren();
   state.textContent=choice==='parent'?tr('The previous edition was selected. Open it under Summary to hand off its files.','已选用上一版。请从结果总览打开该基准版，再交接其文件。'):tr('Waiting for field records. Resume review under Summary before handoff.','正在等现场资料。资料就绪后可从结果总览继续复核并交接。');
+  if(awaitingChoice)state.textContent=tr('Choose the working edition in the results summary.','请先在结果总览中选择工作版。');
   if(choice==='unavailable')state.textContent=tr('Check the saved choice under Summary before handoff.','交接前请在结果总览重新核对使用版本。');
  }
  state.addEventListener('iteration-updated',reflect);reflect();

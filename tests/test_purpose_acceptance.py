@@ -42,8 +42,10 @@ class PurposeAcceptance(unittest.TestCase):
 
     def test_comparison_requires_shared_verified_centers_for_selected_profile(self):
         def check(rows):
-            return self.result({},'comparison',comparison={'status':'COMPARISON_NOT_ACCEPTANCE','profiles':rows})
-        self.assertEqual(check([{'profile':'Q100','verified_center_count':1}]),'CONDITIONS_MET')
+            return self.result({},'comparison',comparison={'status':'COMPARISON_NOT_ACCEPTANCE','profiles':rows,
+                'cross_sections':[dict(profile='Q100',station='100',location_status='SAME_CENTER')]})
+        self.assertEqual(check([{'profile':'Q100','verified_center_count':1}]),'NEED_EVIDENCE')
+        self.assertEqual(check([{'profile':'Q100','matched_sections':1,'verified_center_count':1}]),'CONDITIONS_MET')
         self.assertEqual(check([{'profile':'Q500','verified_center_count':10}]),'NEED_EVIDENCE')
         self.assertEqual(check([{'profile':'Q100','verified_center_count':0}]),'NEED_EVIDENCE')
 

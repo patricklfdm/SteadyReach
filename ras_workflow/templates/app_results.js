@@ -39,6 +39,7 @@ function renderIterationChoices(parent,assessment,primary){
  const model=current, comparison=model.comparison;
  if(!assessment.run_id||assessment.level===0)return;
  const box=details(parent,'Choose an edition or pause this review','选择使用版本或暂停复核',false,'iteration-choice');
+ guidanceTarget(box,'iteration');
  const status=el('p');status.setAttribute('role','status');
  const saved={current:tr('Working edition: this run','工作版本：本次计算'),parent:tr('Working edition: previous calculation','工作版本：上一次计算'),wait:tr('Review paused for field records','复核已暂停，等待现场资料'),review:tr('Review in progress','正在复核'),unavailable:tr('The saved edition choice needs review. Choose again before handoff.','上次使用版本的记录需要核对，请重新选择后交接。')};
  // Keep the decision visible even when the actions are collapsed.
@@ -69,6 +70,7 @@ function renderIterationChoices(parent,assessment,primary){
   const record=await api('iteration-choice',{id:model.id,revision:model.revision,summary_hash:model.summary.sha256,previous:model.iteration_choice?.token||null,choice,reason:reason.value});
   if(choice==='current'||choice==='review')sessionStorage.removeItem('selected-baseline/'+model.summary.sha256);
   model.iteration_choice=record;show(record);
+  if(model.active_issue||model.parent_revision?.issue){await open(model.id);notify(tr('Choice saved. Refresh reports and delivery from this run.','选版已保存。请用本次计算刷新报告和交付包。'));return;}
   document.getElementById('recipient-action')?.dispatchEvent(new Event('iteration-updated'));
   notify(saved[choice],false,'success');
  }
@@ -106,12 +108,15 @@ function renderIterationChoices(parent,assessment,primary){
  if(model.model_type==='river'&&!model.native_review)box.append(button('Prepare a field data request','准备现场索资清单',()=>openGuidanceTool('field-feedback')));
  if(model.delivery?.complete&&model.delivery?.minimal&&!model.exports_need_refresh)box.append(button('Prepare handoff for the selected use','按所选用途准备交接',async()=>{
   if(model.iteration_choice?.choice==='parent'){
-   const target=model.iteration_choice.selected;await open(target.project_id);
+   const target=model.iteration_choice.selected;
+   sessionStorage.setItem('selected-baseline/'+target.summary.sha256,JSON.stringify({id:model.id,token:model.iteration_choice.token}));
+   await open(target.project_id);
    if(current?.summary?.sha256!==target.summary.sha256){await open(model.id);throw Error(tr('Baseline changed. Check the edition again.','基准版已变化，请重新核对所选版本。'));}
    openGuidanceTool('recipient');await createTransferFolder(document.getElementById('transfer-status'));return;
   }
   if(model.parent_revision&&!comparable)throw Error(tr('Verify a comparable baseline before selecting this revision.','请先核对可比基准，再选用此修订版交接。'));
   if(model.iteration_choice?.choice==='wait')throw Error(tr('Resume this review when field records are ready.','现场资料就绪后，请先点击“继续复核本版”。'));
+  if((model.active_issue||model.parent_revision?.issue)&&model.iteration_choice?.choice!=='current')throw Error(tr('Select the working edition first.','请先明确选择工作版本。'));
   if(model.iteration_choice?.choice!=='current'&&(comparable||!model.parent_revision))await saveChoice('current');
   openGuidanceTool('recipient');
   await createTransferFolder(document.getElementById('transfer-status'));

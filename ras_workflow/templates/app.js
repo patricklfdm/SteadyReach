@@ -449,6 +449,7 @@ function render(){const m=current;rememberView({project:m.id,page:'model'});shel
  const [title,edition]=editionHeading(m);
  screen.append(button('← Projects','← 项目列表',async()=>{await save();await home();notify();},'back-link'),el('h1',title));
  if(edition)screen.append(el('p',edition,'edition-details'));
+ if(!m.results&&m.tracked_issue){const t=m.tracked_issue;screen.append(el('p',tr('Investigation from run ','本次跟进的原运行 ')+t.run+' · '+tr(t.issue.en,t.issue.zh),'status'));}
  screen.append(el('p',batchHeadline(m)||stateLabel(m.status),batchHeadline(m)?'warning':'status'));if(['ABANDONED','PROCESSING'].includes(m.status))renderPilotClock(screen);if(m.status==='ABANDONED'){screen.append(el('p',tr('Inputs and results are retained. Create a new project to restart.','输入和结果已保留，需要重新开始时请建立新项目。')));return;}if(m.status==='PROCESSING'){
  const region=el('section');region.id='task-progress';region.setAttribute('aria-label',tr('Task progress','任务进度'));
  screen.append(el('div',undefined,'progress'),el('p',tr('Working locally. You may close this browser tab; keep the launcher running.','正在本机处理。可关闭浏览器标签页，请保留启动程序。')),region);

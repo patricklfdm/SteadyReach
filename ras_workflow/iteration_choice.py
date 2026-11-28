@@ -33,7 +33,7 @@ def choose(key, body):
         raise ValueError('Reopen the current result before choosing an edition. / 请重新打开当前结果后选择版本。')
     prior = latest(model) or {}
     choice = body.get('choice')
-    if body.get('previous') != prior.get('token') and choice != prior.get('choice'):
+    if body.get('previous') != prior.get('token') and (choice != prior.get('choice') or body.get('reason',prior.get('reason','')) != prior.get('reason','')):
         raise ValueError('The review choice changed in another tab. Reopen the result. / 复核选择已更新，请重开结果。')
     if choice not in ('current', 'parent', 'wait', 'review'):
         raise ValueError('Unknown review choice')
@@ -60,4 +60,7 @@ def choose(key, body):
     record = dict(choice=choice, summary=summary, selected=selected, reason=reason,token=unique_id(),utc=utc())
     record['history']=history+[{k:record[k] for k in ('choice','token','selected','utc')}]
     save(core.folder(key) / 'review' / 'iteration_choice.json', record)
+    if model.get('active_issue') or (parent or {}).get('issue'):
+        model['exports_need_refresh'] = True
+        core.persist(model, 'ISSUE_EDITION_CHOSEN', dict(choice=choice, token=record['token']))
     return record

@@ -277,6 +277,34 @@ function priorityRows(assessment,comparison){
  for(const f of assessment.next_actions||[])if(f.target&&f.reason)add(f.target,f.reason.en,f.reason.zh,f.target);
  return items;
 }
+function renderIssueFollowup(parent,assessment){
+ const brief=assessment.edition_brief;
+ const panel=details(parent,'Follow this issue through edition selection','从本问题跟进到选版',!!current.active_issue);
+ const progress=el('p');progress.setAttribute('role','status');panel.append(progress);
+ const actions=el('div',undefined,'actions');panel.append(actions);
+ function draw(linked){
+  actions.replaceChildren();
+  progress.textContent=linked?tr('Linked to this run. A returned record or editable revision will carry this question forward.','问题已关联本次运行。导入补测或创建修订版时将沿用此问题。'):tr('Keep the source run and its question with the next revision.','将本次计算及所查问题随下一修订版保留。');
+  if(!linked){
+   actions.append(button('Track this issue','跟进此问题',async()=>{
+    const ref=await api('follow-issue',{id:current.id,revision:current.revision,summary_hash:current.summary.sha256,issue_token:brief.issue_token});
+    current.active_issue=ref;current.active_issue_token=brief.issue_token;draw(true);
+   }));return;
+  }
+  if(brief.next_decision.code==='VERIFY_OUTLET_INFLUENCE'||brief.next_decision.code==='VERIFY_FLOW_PATH'){
+   const outlet=brief.next_decision.code==='VERIFY_OUTLET_INFLUENCE';
+   actions.append(button(outlet?'Request the event boundary record':'Request floodplain and opening surveys',outlet?'索取同期边界记录':'索取漫滩断面和开口测量',()=>openGuidanceTool('field-feedback')));
+  }else purposeAction(actions,{action:{tool:brief.followup.tool}});
+  actions.append(button('Review returned evidence','核对回传资料',()=>openGuidanceTool('return')),
+   button('Prepare a revision','准备修订并确认重算',()=>openGuidanceTool('revision')),
+   button('Choose an edition or wait','选版或等待资料',()=>openGuidanceTool('iteration')));
+ }
+ draw(current.active_issue_token===brief.issue_token);
+ if(current.parent_revision?.issue){
+  panel.append(button('Compare with the source run','核对原运行与本修订',()=>openGuidanceTool('comparison')),
+   button('Select the working edition','选择工作版本',()=>openGuidanceTool('iteration')));
+ }
+}
 function showResultAssessment(overview,a,box=overview){
  const label=s=>tr(s.en,s.zh),ordered=a.next_actions||a.findings,primary=ordered[0];
  overview.append(el('h2',tr('Delivery assessment','结果交付评估')+' · L'+a.level+' · '+label(a.title)));
@@ -288,6 +316,7 @@ function showResultAssessment(overview,a,box=overview){
     const list=el('dl');brief.append(list);
     for(const item of a.edition_brief.rows){list.append(el('dt',label(item.heading)),el('dd',label(item)));}
     if(a.edition_brief.next_decision?.action)purposeAction(brief,a.edition_brief.next_decision);
+    if(!current.native_review && a.level>0 && a.edition_brief.issue_token)renderIssueFollowup(brief,a);
     panel.append(el('p',tr(d.note_en,d.note_zh)));
   }else{panel.append(el('h3',label(d)),el('p',tr(d.note_en,d.note_zh)));}
   const orderedPriorities=priorityRows(a,current.comparison), priorities=orderedPriorities.slice(0,3);
@@ -422,6 +451,8 @@ function renderGuidance(parent,reviewPage=parent){
    if(!request){request=api('qa-guidance',{id,summary_hash:hash,include_assessment:true});guidanceRequests.set(key,request);}
    const data=await request;
    if(!content.isConnected||current?.id!==id||current.summary?.sha256!==hash||current.revision!==edition)return;
+   current.station_use_limits=data.assessment?.purpose_decision?.use_limits;
+   document.getElementById('qa-tool-atlas')?.dispatchEvent(new Event('station-use-ready'));
    assessment.replaceChildren();
    secondary.replaceChildren();if(data.assessment)showResultAssessment(assessment,data.assessment,secondary);
    content.replaceChildren();

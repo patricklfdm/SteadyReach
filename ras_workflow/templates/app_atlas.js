@@ -34,9 +34,22 @@ function atlasMap(parent,row,lookup,crs,imagery){
  parent.append(el('p',tr('Local projected plan (north up): ','局部投影平面（北向上）：')+(crs||'—')+tr('. Blue segments are section/WSE intersections, not connected flow paths or inundation. Yellow dots are model banks.','. 蓝色线段为断面与计算水位的交集，不代表相连过流路径或淹没范围；黄点为模型岸站。'),'muted'));
 }
 
+function stationUseNotes(limits,profile,rs){
+ if(!Array.isArray(limits))return [tr('Location-specific use assessment is pending.','本断面的用途评估尚待核验。')];
+ const at=values=>(values||[]).some(s=>Number(s)===Number(rs));
+ const notes=[];
+ for(const rule of limits.filter(r=>r.profile===profile)){
+  if(rule.threshold_ft!==undefined && at(rule.stations))notes.push(tr('Verify the '+rule.side+' event boundary before citing this stage','引用此水位前请核对同期'+(rule.side==='upstream'?'上游':'下游')+'边界')+' · Δ > '+rule.threshold_ft+' ft');
+  if(at(rule.control_stations))notes.push(tr(rule.en,rule.zh));
+  if(at(rule.excluded))notes.push(tr('No verified revision difference at this section.','此断面缺少可核验的两版差值。'));
+  if(at(rule.verified))notes.push(tr('The two editions have a verified common section center.','两版已核实本断面中心位置一致。'));
+ }
+ return notes;
+}
 function renderResultAtlas(parent){
  const box=guidanceTarget(details(parent,'Computed section review / warning locations','计算断面复核／警告定位'),'atlas'),output=el('div');box.append(output);
  const id=current.id,hash=current.summary.sha256;let loading=false,loaded=false,pendingSection=null,visitSection=null;
+ box.addEventListener('station-use-ready',()=>{for(const node of box.querySelectorAll('.station-use-notes')){node.replaceChildren();for(const note of stationUseNotes(current.station_use_limits,node.dataset.profile,node.dataset.rs))node.append(el('p',note,'warning'));}});
  box.addEventListener('steadyreach-inspect-section',event=>{
   pendingSection=event.detail;
   if(visitSection)visitSection();else void load();
@@ -96,6 +109,9 @@ function renderResultAtlas(parent){
    for(const row of rows){const panel=details(list,row.profile+' · RS '+row.rs+' · '+row.issues.length+' messages',row.profile+' · RS '+row.rs+' · '+row.issues.length+' 条信息');nodes.set(row.section_id,panel);let drawn=false;
     const detail=()=>{if(drawn||!panel.parentElement.open)return;drawn=true;
      table(panel,[tr('Metric','指标'),tr('Native result','原生结果')],[['WSE ft',atlasNumber(row.wse_ft)],['EGL ft',atlasNumber(row.egl_ft)],[tr('Critical WSE ft','临界水位 ft'),atlasNumber(row.critical_wse_ft)],[tr('Channel velocity ft/s','主槽流速 ft/s'),atlasNumber(row.velocity_fts)],['Fr',atlasNumber(row.froude)],[tr('Minimum error ft','最小误差 ft'),atlasNumber(row.min_error_ft)],[tr('Left / right bank ft','左／右岸站 ft'),row.banks_ft.map(atlasNumber).join(' / ')],[tr('Left / right edge exceedance ft','左／右端点超出水深 ft'),[row.left_excess_ft,row.right_excess_ft].map(atlasNumber).join(' / ')]]);
+     const use=el('div');panel.append(use);
+     function showUse(){use.replaceChildren();for(const note of stationUseNotes(current.station_use_limits,row.profile,row.rs))use.append(el('p',note,'warning'));}
+     showUse();use.dataset.profile=row.profile;use.dataset.rs=row.rs;use.classList.add('station-use-notes');
      for(const issue of row.issues){panel.append(el('p',issue.code+' · '+issue.severity,'warning'));panel.append(el('p',issue.evidence?.native_message||issue.recommended_action));}
      atlasSectionPlot(panel,row);
      if(row.wet_intervals_ft===null)panel.append(el('p',tr('WSE unavailable; no wet-interval inference was made.','水位不可用，未推算湿区。'),'warning'));else table(panel,[tr('Geometric wet interval','几何湿区'),tr('From ft','起点 ft'),tr('To ft','终点 ft'),tr('Width ft','宽度 ft')],row.wet_intervals_ft.map(([a,b],i)=>[i+1,atlasNumber(a),atlasNumber(b),atlasNumber(b-a)]));

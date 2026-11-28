@@ -8,6 +8,12 @@ Open **Input decisions and field requests** in model preparation. Resolve contra
 
 A field-return edition compares each input with its confirmed parent. The decision list shows affected fields and the number of confirmations carried forward. A return that adds evidence can leave every hydraulic value unchanged. If the parent confirmation cannot be verified, the workflow opens a full review.
 
+## Follow the main issue to an edition decision
+
+In Results, expand **Follow this issue through edition selection** and choose **Track this issue** to bind the question to the source run. Request evidence or pause. Review the returned worksheet and original records, check the affected inputs in a separate revision, then confirm the calculation. Preparation, confirmation and reporting retain the original question and run ID. Identify an unmeasured perturbation as an assumption.
+
+Compare the affected controls and explicitly choose the working revision, retain the previous run or wait for records. Refresh reports and delivery from the existing calculation after choosing a working edition. Open a selected baseline through the edition choice to transfer its files. Quote revision differences only at listed common centers. Added, removed, shifted and unverified stations limit reach-wide comparisons. Engineering review of a mixed-flow reach requires separate upstream and downstream perturbations covering the native sections for each requested profile. Results and the section atlas identify affected locations. Verify the event boundary before citing a sensitive stage.
+
 ## After a run
 
 Read **Next engineering decision** on the results summary. The bilingual technical reports and offline handoff include the same advice for the selected evidence snapshot. Refresh the reports and delivery after adding observations or a study. Compare the run identifiers before sending a package.

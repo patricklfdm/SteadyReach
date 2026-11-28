@@ -112,6 +112,9 @@ def create():
                     elif route in ('handoff-inspect','handoff-repair'):
                         from . import handoff
                         result=(handoff.inspection if route=='handoff-inspect' else handoff.repair)(key,body)
+                    elif route=='follow-issue':
+                        from .issue_followup import start
+                        result=start(key,body)
                     elif route=='iteration-choice':
                         from .iteration_choice import choose
                         result=choose(key,body)

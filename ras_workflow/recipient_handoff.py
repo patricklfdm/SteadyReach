@@ -167,6 +167,8 @@ def export(key, body):
             raise ValueError('Reopen the selected baseline from the revision. / 请从修订版重新打开选用的基准版。')
         return selected
     chosen=selection()
+    if (model.get('active_issue') or (model.get('parent_revision') or {}).get('issue')) and chosen.get('choice') not in ('parent','current'):
+        raise ValueError('Select a working edition before handoff / 请先在结果总览明确选择工作版再交接')
     receipt=handoff.bound_package(model)
     if (model['revision']!=body.get('revision') or not receipt or model.get('exports_need_refresh')
             or receipt['summary']!=model.get('summary') or body.get('summary_hash')!=receipt['summary']['sha256']):
@@ -189,6 +191,10 @@ def export(key, body):
         reports=read(folders['complete']/'Evidence/report_manifest.original.json')
         data=reports['data']
         report_data=read(verified_member(folders['complete']/'Reports',Path(data['path']).name,data['sha256']))
+        live = assessment.get('edition_brief') or {}
+        packed = report_data.get('edition_brief') or {}
+        if live.get('issue_token') and (packed.get('rows') != live['rows'] or report_data.get('purpose_decision') != assessment.get('purpose_decision')):
+            raise ValueError('The package contains an earlier use assessment. Regenerate reports and delivery from this run. / 包内用途结论已过期，请沿用本次计算重新生成报告和交付包。')
         review=(report_data.get('revision_comparison') or {}).get('review') or {}
         field_names={r['source_file'] for r in report_data.get('river_checks',{}).get('events',[]) if r.get('source_file')}
         evidence={r['sha256'] for r in report_data.get('sources',[]) if r.get('role') in ('survey_source','returned_observations') and Path(r['path']).name in field_names}

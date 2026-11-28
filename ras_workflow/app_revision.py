@@ -39,6 +39,8 @@ def create_draft(parent,body,preparation_task=None,field_return=None):
         d['geometry_edit_sources']=d.get('geometry_edit_sources',[])+source['sources']
         c,g=source['config'],source['geometry']
         source_base=source['config_path'].parent
+    from .issue_followup import active
+    issue = active(parent)
     key2=field_return['id'] if field_return else 'site_'+unique_id().lower()
     folder=core.folder(key2);folder.mkdir(parents=True)
     c=copy.deepcopy(c);g=copy.deepcopy(g)
@@ -64,6 +66,9 @@ def create_draft(parent,body,preparation_task=None,field_return=None):
     title=parent['title']+' / '+source['case_id'] if source else parent['title']
     origin=source['summary'] if source else parent['summary']
     c['revision_origin']=dict(project_id=parent['id'],summary=origin)
+    if issue:
+        c['revision_origin']['issue'] = issue
+        c['revision_origin']['issue_summary'] = parent['summary']
     c.update(project_id=key2,title=title+' · revision',geometry='geometry.json',model_proposal_pending=True)
     from .bank_reach import refresh as refresh_retained_banks
     refresh_retained_banks(g)
@@ -85,6 +90,7 @@ def create_draft(parent,body,preparation_task=None,field_return=None):
         m['intake_return']=dict(mode=field_return['mode'],fields=[r['key'] for r in field_return['rows'] if field_return['mode']=='geometry'],
             sources=field_return['sources'],confirmation=confirmed,review=prior_review,
             summary=parent['summary'],parent_project=parent['project'])
+    m.pop('active_issue', None)
     m.pop('compiled_checkpoint',None)
     m.pop('latest_question',None)
     m.pop('latest_factor_diagnostic',None)
@@ -97,6 +103,8 @@ def create_draft(parent,body,preparation_task=None,field_return=None):
              status='INPUTS_READY',phase='EDIT_REVISION',errors=[],created_utc=utc(),
              parent_revision=dict(project_id=parent['id'],summary=origin,app=item(core.folder(parent['id'])/'app.json'),
                                   inherited_sources=[r['sha256'] for r in parent.get('attachments', [])],created_utc=utc()))
+    if c['revision_origin'].get('issue'):
+        m['parent_revision']['issue'] = issue
     if source:
         m['parent_revision'].update(geometry=source['geometry_source'],study=source['analysis'],case_id=source['case_id'])
         m['terrain']=source['terrain']

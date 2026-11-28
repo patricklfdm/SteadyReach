@@ -23,10 +23,21 @@ def parent_mosaic(configuration,crs,bounds):
     from .site_delivery import latest,cached_imagery
     try:
         path=safe_path(ROOT,entry['path'])
-        parent=read(path)['configuration']
+        parent_summary=read(path)
+        parent=parent_summary['configuration']
         if parent.get('project_id')!=origin.get('project_id'):
             return None
         package=latest(path)
+        if package is None:
+            # Older runs kept the first delivery next to their sealed summary.
+            original = path.parent/'delivery'/'delivery.json'
+            if not original.is_file():
+                return None
+            package = read(original)
+            full = package.get('complete') or {}
+            if (safe_path(ROOT, full['path']) != original.parent/'Complete' or not intact([full['manifest']])
+                    or package.get('run_id') != parent_summary['hydraulics']['run_id']):
+                return None
         if not package or not package.get('mapped') or package.get('summary')!=entry:
             return None
         acquired=cached_imagery(package['complete']['path'],crs,bounds,allow_new_extent=True)

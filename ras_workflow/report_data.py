@@ -13,6 +13,9 @@ def collect(summary_path, comparisons=()):
     if s.get('hydraulic_results') and (not intact([s['hydraulic_results']]) or read(ROOT/s['hydraulic_results']['path'])!=h):
         raise ValueError('Report summary differs from sealed hydraulic extraction')
     sources=[item(summary_path),h['raw_hdf'],h['raw_controller']]
+    issue_ref = (s.get('configuration', {}).get('revision_origin') or {}).get('issue')
+    if issue_ref and intact([issue_ref]):
+        sources.append(issue_ref)
     controller=read(ROOT/h['raw_controller']['path'])
     rows=[]
     with h5py.File(ROOT/h['raw_hdf']['path']) as f:

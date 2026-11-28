@@ -46,8 +46,8 @@ def add(document,data,cn):
     if s['configuration'].get('case_kind')=='software_validation':
         document.add_paragraph(tr('Use for software regression with the stated reference inputs.','可用于给定参考输入的软件回归。'))
         return
-    document.add_paragraph(tr('Use these profiles to review water levels at the modeled flows and compare alternatives. Engineering acceptance requires review of the site evidence and the accuracy needed for the intended use.',
-                              '可据此核对指定流量下的水位、比较备选方案。工程接受取决于场地资料及拟定用途所需精度。'))
+    document.add_paragraph(tr('Apply the edition-specific location and use limits above when quoting water levels or comparing alternatives.',
+                              '引用水位或比较方案时，请遵守上列本版的位置及用途限制。'))
     if h.get('channel_geometry_basis')=='conditional_surface_dem':
         document.add_paragraph(tr('Material assumption: surface DEM elevations stand in for the submerged channel. Verify channel bathymetry at the controlling sections.',
                                   '重要假设为使用地表 DEM 近似水下河床。请核对控制断面的河床测量。'))

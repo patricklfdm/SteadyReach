@@ -100,6 +100,7 @@ function renderFinalReview(){
   jump.onclick=()=>{const target=document.getElementById(review.ready?(dirty||!finalReview?.ready?'review-confirmation':'confirm-parameters'):'review-issues');target.focus({preventScroll:true});target.scrollIntoView({block:'center'});};
   screen.append(jump);
  }
+ if(current.tracked_issue){const t=current.tracked_issue;screen.append(el('p',tr('Reason for this revision','本次修订跟进的问题')+' · '+t.run+' · '+tr(t.issue.en,t.issue.zh)));}
  const scope=review.inputs?.production_scope||{}, c=scope.criteria;
  const conditions=details(screen,'Delivery conditions for this run','本次运算的交付条件',false);
  conditions.append(el('p',c?tr('These conditions are tied to this edition.','以下条件随本版输入冻结。'):tr('Conditions have not been agreed. Set them in project preparation to assess delivery.','尚未约定条件，可返回项目准备页面设置。')));

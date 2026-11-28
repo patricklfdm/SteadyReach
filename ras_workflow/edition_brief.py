@@ -1,5 +1,5 @@
 """A recipient-safe description of the computed edition shared by screen and reports."""
-from .common import finite
+from .common import finite, digest
 from .river_observations import holdout_stages
 from .validation_plan import usable
 
@@ -59,12 +59,18 @@ def build(summary, decision, events, steps=(), comparison=None, studies=()):
     from .delivery_templates import delivery_row
     contract = delivery_row(scope)
     next_decision = recommendation(decision, steps, comparison, studies, summary)
-    return dict(run_id=h.get('run_id'), next_decision=next_decision, rows=[
+    from .issue_followup import inherited_row, route, selection_row
+    source_issue = inherited_row(summary)
+    selected = selection_row(summary)
+    followup = route(next_decision)
+    return dict(run_id=h.get('run_id'), next_decision=next_decision, issue_token=digest(next_decision), followup=followup, rows=[
         row('Edition use', '本版用途', answer[0]+' '+decision['en'], answer[1]+decision['zh']),
         row('Flow and field coverage', '流量和实测范围', ' '.join((flows[0],field[0])), flows[1]+field[1]),
         row('Key assumption or limitation', '关键假设或限制', *condition),
         row('Who should follow up', '下一步由谁补什么', *follow),
         *([contract] if contract else []),
-        next_decision,
-        *conclusions(summary,steps,comparison),
+        *([source_issue] if source_issue else []), followup,
+        *([selected] if selected else []),
+        *decision.get('use_limits', []),
+        *conclusions(summary,steps,comparison), next_decision,
     ])

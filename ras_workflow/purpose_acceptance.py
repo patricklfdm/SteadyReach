@@ -42,6 +42,21 @@ def evaluate(summary, events=(), comparison=None, studies=()):
     events=usable(events,scope)
     purpose = scope.get('purpose','screening')
     rules = scope.get('criteria')
+    if rules is not None:
+        rules = criteria(rules)
+    from .use_limits import comparison_coverage, control_changes, boundary_limits, boundary_rows
+    hyd = summary.get('hydraulics') or {}
+    inventory = None
+    if studies and scope.get('delivery_template') == 'between_bridges_v1' and purpose == 'review':
+        from .qa import verified_profiles
+        try:
+            inventory = verified_profiles(hyd)
+        except (ValueError, OSError, KeyError, TypeError):
+            pass
+    limits = boundary_limits(studies, inventory)
+    requested = (rules or {}).get('profile')
+    computed = {p['profile_id'] for p in hyd.get('profiles', []) if not requested or p['profile_id'] == requested}
+    use_rows = [row for row in boundary_rows(limits) if row['profile'] in computed]
     rows = []
     tool='revision'
     profile=None
@@ -50,12 +65,10 @@ def evaluate(summary, events=(), comparison=None, studies=()):
         if state!='met':
             row['action']=dict(tool=tool,profile=profile,stations=list(stations or []))
         rows.append(row)
-    hyd = summary.get('hydraulics') or {}
     if rules is None:
         add('missing','Set acceptance conditions on an editable edition and confirm before running.',
             '请在可编辑版本设置用途验收条件，确认后计算。')
     else:
-        rules = criteria(rules)
         profiles = [p for p in hyd.get('profiles',[]) if not rules.get('profile') or p['profile_id']==rules['profile']]
         if not profiles or not hyd.get('run_id'):
             add('missing','Supply a verified calculation for the selected profile '+str(rules.get('profile',''))+'.',
@@ -101,12 +114,23 @@ def evaluate(summary, events=(), comparison=None, studies=()):
         profile=None
         if purpose=='comparison':
             tool='comparison'
-            comparable={p['profile'] for p in (comparison or {}).get('profiles',[]) if p.get('verified_center_count',0)>0}
-            valid = (comparison or {}).get('status')=='COMPARISON_NOT_ACCEPTANCE' and bool(profiles) and all(
-                p['profile_id'] in comparable for p in profiles)
-            add('met' if valid else 'missing',
-                'Comparable baseline and revision available.' if valid else 'Supply a computed baseline and comparable revised profiles.',
-                '已有基准版及可比修订版。' if valid else '请补已计算基准版及可比的修订版工况。')
+            for p in profiles:
+                profile = p['profile_id']
+                coverage = comparison_coverage(comparison, profile)
+                add(coverage['state'], coverage['en'], coverage['zh'], coverage['excluded'])
+                use_rows.append(dict(heading=dict(en='Extent of comparison', zh='方案可比范围'),
+                                     profile=profile, **coverage))
+                for control in control_changes(comparison, profile):
+                    add('missing',control['en'],control['zh'],control['control_stations'])
+                    use_rows.append(control)
+            profile = None
+            unpaired = sorted(set((comparison or {}).get('unmatched_previous_profiles', [])) |
+                              set((comparison or {}).get('unmatched_current_profiles', [])))
+            if not requested and unpaired:
+                names = ', '.join(unpaired)
+                en, zh = 'No paired calculation for profiles '+names+'.', '以下工况缺少对应计算：'+names+'。'
+                add('missing',en,zh)
+                use_rows.append(dict(heading=dict(en='Unpaired profiles',zh='缺少配对的工况'),en=en,zh=zh))
         if rules.get('site_geometry'):
             tool='field-feedback' if hyd.get('model_type')=='river' else 'invert-request'
             evidence=summary.get('configuration',{}).get('acceptance_geometry',{})
@@ -128,16 +152,20 @@ def evaluate(summary, events=(), comparison=None, studies=()):
                 add('missing','Register an independent interior stage and its project tolerance.',
                     '请登记独立河段内点水位及项目约定容差。')
             if scope['delivery_template'] == 'between_bridges_v1':
-                from .river_review import response
-                tool='sensitivity'
-                responses=response([s for s in studies if 'cases' in s and 'comparisons' in s])
-                side='upstream' if hyd.get('flow_regime')=='supercritical' else 'downstream'
+                tool = 'sensitivity'
+                required = {'mixed': ('upstream', 'downstream'), 'subcritical': ('downstream',),
+                            'supercritical': ('upstream',)}.get(hyd.get('flow_regime'))
+                if not required:
+                    add('missing', 'Verify the native flow regime to identify the controlling boundaries.',
+                        '请核对原生流态，以确定需要检验的控制边界。')
                 for p in profiles:
-                    profile=p['profile_id']
-                    covered=any(r['profile']==profile and len(r['paths'])==1 and r['paths'][0].split('.')[:2] in
-                                (['boundary_slopes',side],['boundaries',side]) for r in responses)
-                    add('met' if covered else 'missing',profile+' · '+side+' boundary influence '+('tested.' if covered else 'requires a single-factor sensitivity run.'),
-                        profile+' · '+('上游' if side=='upstream' else '下游')+'边界影响'+('已试算。' if covered else '需做单因素敏感性试算。'))
+                    profile = p['profile_id']
+                    for side in required or ():
+                        covered = limits.get((profile, side), {}).get('complete', False)
+                        en = profile+' · '+side+' boundary '+('tested independently.' if covered else 'needs a single-factor test covering the native sections.')
+                        zh = profile+' · '+('上游' if side=='upstream' else '下游')+'边界'+('已完成独立单因素试算。' if covered else '需单独试算，并覆盖本工况原生断面。')
+                        add('met' if covered else 'missing', en, zh)
+                        use_rows.append(dict(heading=dict(en='Required boundary check', zh='必要边界试算'), profile=profile, side=side, en=en, zh=zh))
                 profile=None
             if scope['delivery_template'] == 'single_culvert_v1':
                 proof=summary.get('configuration',{}).get('acceptance_geometry',{}).get('crossing') or {}
@@ -209,8 +237,10 @@ def evaluate(summary, events=(), comparison=None, studies=()):
               'NEED_EVIDENCE':('Collect evidence before intended-use delivery','补齐资料后再按约定用途交付'),
               'CONDITIONS_MET':('Purpose conditions met','已满足约定的用途条件')}
     allowed=PURPOSE[purpose]
-    return dict(state=state,purpose=purpose,criteria=rules,rows=rows,
-                en=labels[state][0]+' · '+allowed[0],zh=labels[state][1]+' · '+allowed[1],
+    localized=any(r.get('stations') or r.get('excluded') or r.get('control_stations') for r in use_rows)
+    return dict(state=state,purpose=purpose,criteria=rules,rows=rows,use_limits=use_rows,
+                en=labels[state][0]+' · '+allowed[0]+(' · See the station-specific limits.' if localized else ''),
+                zh=labels[state][1]+' · '+allowed[1]+(' · 请按断面适用范围引用。' if localized else ''),
                 note_en='Apply the hydraulic QA limitations and verify the matching packages before release. Open items may be shared for diagnostic review.',
                 note_zh='交付前须核对水力 QA 的适用限制和对应交付包。有未闭合事项时，可转交诊断资料供复核。')
 
