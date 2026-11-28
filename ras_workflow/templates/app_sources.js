@@ -106,9 +106,9 @@ function controllingInputs(groups,modelType){
  function rank(f){
   if(f.source_conflict)return 0;
   const k=f.key;
-  if(modelType==='culvert'&&/\\.(us_invert_ft|ds_invert_ft)$/.test(k))return 1;
+  if(modelType==='culvert'&&/\.(us_invert_ft|ds_invert_ft)$/.test(k))return 1;
   if(modelType==='river'&&(/channel_geometry_basis|boundar(y|ies)/.test(k)))return 1;
-  if(/vertical_datum|flow_cfs|structure\\.road\\.elevation_ft/.test(k))return 2;
+  if(/vertical_datum|flow_cfs|structure\.road\.elevation_ft/.test(k))return 2;
   return f.required&&f.missing?3:4;
  }
  return all.filter(f=>rank(f)<4).sort((a,b)=>rank(a)-rank(b)||Number(b.missing)-Number(a.missing)).slice(0,3);
@@ -128,10 +128,18 @@ function renderDecisionQueue(parent,model){
  const priority=controllingInputs(groups,model.model_type);
  if(priority.length){
   const top=el('section',undefined,'card');parent.append(top);top.append(el('h3',tr('Check these inputs first','优先核对这些输入')));
-  for(const f of priority)top.append(button(f.label.en+(f.unit?' · '+f.unit:''),f.label.zh+(f.unit?' · '+f.unit:''),async()=>{
-   if(!document.getElementById('input-'+f.key))await showFinalReview(false);
-   revealParameter(f.key);
-  }));
+  for(const f of priority){
+   const item=el('div',undefined,'parameter');top.append(item);
+   const status=f.source_conflict?tr('Conflicting sources','来源冲突'):f.missing?tr('Missing input','缺少输入'):originName(f.evidence_class);
+   item.append(el('strong',tr(f.label.en,f.label.zh)),el('small',[status,f.unit].filter(Boolean).join(' · ')));
+   const why=siteRequests[siteRequestKind(f.key)];
+   if(why)item.append(el('p',tr(why[2],why[3])));
+   else if(f.help)item.append(el('p',tr(f.help.en,f.help.zh)));
+   item.append(button('Inspect input and source','查看参数及来源',async()=>{
+    if(!document.getElementById('input-'+f.key))await showFinalReview(false);
+    revealParameter(f.key);
+   }));
+  }
  }
  const queue=details(parent,'Input decisions and field requests ('+total+')','待判断参数与补测清单（'+total+'）');
  if(scoped)queue.append(el('p',returned.retained.length+tr(' previous input confirmations carried forward.',' 项原参数已沿用确认。')));

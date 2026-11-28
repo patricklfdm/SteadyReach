@@ -264,6 +264,15 @@ function scopeFields(parent,scope,atHome=false){
   contract.append(el('h3',tr(...spec.title)),el('p',tr(...spec[purpose.value])));
   const info=details(contract,'Materials and delivery conditions','资料要求与交付条件',expanded);
   info.append(el('p',tr(...spec.inputs)),el('p',tr('Check dry section ends for every selected profile. Engineering review also requires source-backed site geometry. The responsible engineer reviews remaining hydraulic limitations.','核查所选各工况的断面湿端。工程复核另需有关联原件的几何资料，由负责工程师核对其余水力限制。')));
+  if(!atHome&&current){
+   const sections=current.intake?.section_count, records=current.attachments?.length||0;
+   info.append(el('p',tr('Carry forward the existing inputs when only the purpose changes.','仅变更用途时可沿用现有输入。')+' '+
+    [records+tr(' source files',' 份资料'),Number.isInteger(sections)?sections+tr(' prepared sections',' 条已有断面'):null].filter(Boolean).join(' · ')));
+   const gaps=(current.feasibility?.rows||[]).filter(r=>['missing','conflict','conditional','outside'].includes(r.status));
+   for(const row of gaps)info.append(el('p',tr('Check before use: ','使用前核对：')+tr(row.en,row.zh),'warning'));
+   if(purpose.value==='comparison')info.append(el('p',current.parent_revision?tr('A parent edition is linked. Compare matching profiles after this revision runs.','已关联父版，修订计算后核验匹配工况。'):tr('A computed baseline and a linked revision are still needed for an alternative comparison.','比较方案需已有计算基准及关联修订版。')));
+   if(purpose.value==='review')info.append(el('p',tr('Confirm the evidence requirements above on this edition. A previously prepared section or attachment alone does not verify its accuracy.','请在本版核对上述工程复核资料条件。已有断面或附件仍需核实精度及来源。')));
+  }
   if(adopted)info.append(el('strong',tr('Template selected for this edition.','本版已选择该模板。')));
   else info.append(button('Use these delivery conditions','采用这些交付条件',()=>{
    agreement.value='template';agreement.dispatchEvent(new Event('input',{bubbles:true}));

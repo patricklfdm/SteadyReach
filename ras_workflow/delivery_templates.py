@@ -28,7 +28,7 @@ TEMPLATES = {
 
 
 def validate(template, model=None):
-    if template not in TEMPLATES or (model and TEMPLATES[template]['model'] != model):
+    if not isinstance(template, str) or template not in TEMPLATES or (model and TEMPLATES[template]['model'] != model):
         raise ValueError('Choose the delivery template for this model type / 请选择与模型类型一致的交付模板')
     return template
 
@@ -48,13 +48,15 @@ def crossing_records(geometry, answers, sources):
         ref = record.get('source')
         declared = answer.get('evidence_class') in ('reported', 'user_reported_measurement', 'as_built')
         tied = model_datum not in ('', 'UNKNOWN', 'UNSPECIFIED', 'NONE', 'LOCAL') and datum(record.get('datum')) == model_datum
-        if not (declared and value is not None and record.get('value') == value and ref and ref in sources and (not elevation or tied)):
+        if not (declared and value is not None and record.get('value') == value and isinstance(ref, dict) and ref in sources and (not elevation or tied)):
             missing.append(key)
-        elif ref.get('sha256') not in checked:
-            if intact([ref]):
-                checked.add(ref['sha256'])
-            else:
-                missing.append(key)
+        else:
+            identity = (ref.get('path'), ref.get('sha256'), ref.get('size_bytes'))
+            if identity not in checked:
+                if intact([ref]):
+                    checked.add(identity)
+                else:
+                    missing.append(key)
 
     groups = structure.get('groups') or []
     for index, group in enumerate(groups):
